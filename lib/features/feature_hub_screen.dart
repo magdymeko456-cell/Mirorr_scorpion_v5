@@ -857,10 +857,10 @@ class _DialoguePanelState extends State<_DialoguePanel> {
   String? _notice;
   bool _isBusy = false;
   bool _isTranslating = false;
-  bool _hasCompletedTranslation = false;
-  bool _loadedTarget = false;
-  bool _loadedSource = false;
-  int _sessionId = 0;
+  bool _loadedLanguagePreferences = false;
+  String _dialogueRightLanguage = 'en';  // لغة هدف الترجمة (المربع الأيمن)
+  bool _isChangingSpeaker = false;
+  LanguagePreferences? _languagePreferences;
 
   DeviceSpeechRecognitionService get _recognitionService =>
       widget.recognitionService;
@@ -879,17 +879,10 @@ class _DialoguePanelState extends State<_DialoguePanel> {
     super.didChangeDependencies();
     if (_loadedTarget && _loadedSource) return;
     final preferences = context.read<LanguagePreferences>();
-    if (!_loadedSource) {
-      _sourceLanguage = preferences.deviceLanguageCode;
-      _loadedSource = true;
-    }
-    if (!_loadedTarget) {
-      _targetLanguage = preferences.translationTargetLanguage;
-      if (!TranslationLanguageCatalog.labels.containsKey(_targetLanguage)) {
-        _targetLanguage = 'ar';
-      }
-      _loadedTarget = true;
-    }
+    _languagePreferences = preferences;
+    _dialogueRightLanguage = preferences.translationTargetLanguage;
+    _loadedLanguagePreferences = true;
+    preferences.addListener(_onPreferencesChanged);
   }
 
   void _refresh() {
@@ -905,19 +898,29 @@ class _DialoguePanelState extends State<_DialoguePanel> {
     return stopped;
   }
 
-  Future<void> _startRecognition() async {
-    final session = ++_sessionId;
-    final started = await _recognitionService.start(
-      languageCode: _sourceLanguage,
-      onText: (recognizedText) {
-        if (!mounted || session != _sessionId) return;
-        _source.text = recognizedText;
-        _queueTranslation(recognizedText);
-      },
-    );
-    if (mounted && !started && _recognitionService.message != null) {
-      setState(() => _notice = _recognitionService.message);
-    }
+  Future<void> _selectDialogueSourceLanguage(String code) async {
+    final wasListening = _recognitionService.isListening;
+    if (wasListening && !await _recognitionService.cancelAndWait()) return;
+    if (!mounted) return;
+    setState(() {
+      _dialogueLeftLanguage = code;
+      _source.clear();
+      _translated.clear();
+      _hasCompletedDialogueTranslation = false;
+      _notice = null;
+    });
+    if (wasListening) await _toggleMicrophone();
+  }
+
+  Future<void> _selectLeftTargetLanguage(String code) async {
+    final wasListening = _recognitionService.isListening;
+    if (wasListening && !await _recognitionService.cancelAndWait()) return;
+    if (!mounted) return;
+    setState(() => _dialogueRightLanguage = code);
+    await context.read<LanguagePreferences>().setTranslationTargetLanguage(code);
+    if (!mounted) return;
+        _queueTranslation(_source.text, sourceLanguageCode: _dialogueLeftLanguage);
+    if (wasListening) await _toggleMicrophone();
   }
 
   Future<void> _toggleMicrophone() async {
@@ -1059,6 +1062,7 @@ class _DialoguePanelState extends State<_DialoguePanel> {
       text: value,
       sourceLanguageCode: sourceLanguage,
       targetLanguageCode: targetLanguage,
+      sourceLanguageCode: sourceLanguageCode ?? _dialogueLeftLanguage,
       onProgress: (progress) {
         if (mounted && value.trim() == _source.text.trim()) {
           setState(() => _notice = _translationProgressMessage(progress));
@@ -1128,9 +1132,9 @@ class _DialoguePanelState extends State<_DialoguePanel> {
                 children: [
                   Expanded(
                     child: _DialogueLanguageMenu(
-                      value: _sourceLanguage,
-                      label: 'لغة المصدر (المايك)',
-                      onChanged: _selectSourceLanguage,
+                      value: _dialogueLeftLanguage,
+                      label: AppLocalizations.of(context)!.micSourceNow,
+                      onChanged: _selectDialogueSourceLanguage,
                     ),
                   ),
                   IconButton(
