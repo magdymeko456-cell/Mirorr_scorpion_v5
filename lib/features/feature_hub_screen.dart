@@ -1133,7 +1133,7 @@ class _DialoguePanelState extends State<_DialoguePanel> {
                     ),
                   ),
                   IconButton(
-                    tooltip: 'تبديل اللغتين',
+                    tooltip: AppLocalizations.of(context)!.dialogueSwapSpeakerTooltip,
                     icon: const Icon(Icons.swap_horiz, color: RoyalColors.gold),
                     onPressed: _isBusy ? null : _swapLanguages,
                   ),
