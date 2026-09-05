@@ -561,16 +561,6 @@ return ListView(
             ),
           ),
         ),
-        const SizedBox(height: 8),
-        Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 280),
-            child: _DeviceSpeechLanguageLabel(
-              languageCode: deviceLanguage,
-              label: 'لغة المايك — من الجهاز',
-            ),
-          ),
-        ),
         const SizedBox(height: 10),
         _TranslationEditor(
           controller: _input,
@@ -578,10 +568,9 @@ return ListView(
           readOnly: false,
           actionsOnRight: false,
           onTap: _beginFreshTranslationIfNeeded,
-          onChanged: (value) => _queueTranslation(
-            value,
-            sourceLanguageCode: deviceLanguage,
-          ),
+          // ML Kit detects the language of typed/pasted text. The microphone
+          // path supplies the device language explicitly in _toggleMicrophone.
+          onChanged: (value) => _queueTranslation(value),
           actions: [
             _EditorAction(
               icon: _recognitionService.isListening ? Icons.stop_circle_outlined : Icons.mic,
@@ -712,54 +701,6 @@ class _TranslationLanguageMenu extends StatelessWidget {
   }
 }
 
-class _DeviceSpeechLanguageLabel extends StatelessWidget {
-  const _DeviceSpeechLanguageLabel({
-    required this.languageCode,
-    required this.label,
-  });
-
-  final String languageCode;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final languageLabel =
-        TranslationLanguageCatalog.labels[languageCode] ?? languageCode;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1B2838),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.28)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.mic_none, size: 14, color: Colors.cyanAccent),
-              const SizedBox(width: 5),
-              Expanded(
-                child: Text(
-                  label,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: RoyalColors.muted, fontSize: 11),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 5),
-          Text(
-            languageLabel,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _TranslationEditor extends StatelessWidget {
   const _TranslationEditor({
     required this.controller,
@@ -855,7 +796,7 @@ class _DialoguePanelState extends State<_DialoguePanel> {
   final _speechService = SystemTtsService(storageKey: 'dialoguepanelstate');
   Timer? _translationDebounce;
 
-  // يبدأ المصدر بلغة الجهاز/اللغة المحفوظة، ثم يبقى مستقلاً وقابلاً للاختيار.
+  // الحوار يلتقط الكلام بلغة الجهاز؛ المستخدم يختار لغة الترجمة فقط.
   String _sourceLanguage = 'en';
   String _targetLanguage = 'ar';
   String? _notice;
@@ -881,7 +822,7 @@ class _DialoguePanelState extends State<_DialoguePanel> {
     super.didChangeDependencies();
     if (_loadedTarget) return;
     final preferences = context.read<LanguagePreferences>();
-    _sourceLanguage = preferences.translationSourceLanguage;
+    _sourceLanguage = preferences.deviceLanguageCode;
     _targetLanguage = preferences.translationTargetLanguage;
     if (!TranslationLanguageCatalog.labels.containsKey(_targetLanguage)) {
       _targetLanguage = 'ar';
@@ -941,27 +882,6 @@ class _DialoguePanelState extends State<_DialoguePanel> {
     }
   }
 
-  Future<void> _selectSourceLanguage(String code) async {
-    if (_isBusy || code == _sourceLanguage) return;
-    final wasListening = _recognitionService.isListening;
-    setState(() => _isBusy = true);
-    try {
-      if (wasListening && !await _finishRecognitionSession()) return;
-      if (!mounted) return;
-      setState(() {
-        _sourceLanguage = code;
-        _source.clear();
-        _translated.clear();
-        _hasCompletedTranslation = false;
-        _notice = null;
-      });
-      await context.read<LanguagePreferences>().setTranslationSourceLanguage(code);
-      if (wasListening) await _startRecognition();
-    } finally {
-      if (mounted) setState(() => _isBusy = false);
-    }
-  }
-
   Future<void> _selectTargetLanguage(String code) async {
     if (_isBusy) return;
     final wasListening = _recognitionService.isListening;
@@ -972,31 +892,6 @@ class _DialoguePanelState extends State<_DialoguePanel> {
       setState(() => _targetLanguage = code);
       await context.read<LanguagePreferences>().setTranslationTargetLanguage(code);
       if (_source.text.trim().isNotEmpty) _queueTranslation(_source.text);
-      if (wasListening) await _startRecognition();
-    } finally {
-      if (mounted) setState(() => _isBusy = false);
-    }
-  }
-
-  Future<void> _swapLanguages() async {
-    if (_isBusy) return;
-    final wasListening = _recognitionService.isListening;
-    setState(() => _isBusy = true);
-    try {
-      if (!await _finishRecognitionSession()) return;
-      final oldSource = _sourceLanguage;
-      final oldTarget = _targetLanguage;
-      if (!mounted) return;
-      setState(() {
-        _sourceLanguage = oldTarget;
-        _targetLanguage = oldSource;
-        _source.clear();
-        _translated.clear();
-        _hasCompletedTranslation = false;
-        _notice = 'تم تبديل لغة المايك واللغة الهدف.';
-      });
-      await context.read<LanguagePreferences>().setTranslationTargetLanguage(_targetLanguage);
-      await context.read<LanguagePreferences>().setTranslationSourceLanguage(_sourceLanguage);
       if (wasListening) await _startRecognition();
     } finally {
       if (mounted) setState(() => _isBusy = false);
@@ -1109,20 +1004,8 @@ class _DialoguePanelState extends State<_DialoguePanel> {
                 children: [
                   Expanded(
                     child: _DialogueLanguageMenu(
-                      value: _sourceLanguage,
-                      label: AppLocalizations.of(context)!.micSourceNow,
-                      onChanged: _selectSourceLanguage,
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: AppLocalizations.of(context)!.dialogueSwapSpeakerTooltip,
-                    onPressed: _isBusy ? null : _swapLanguages,
-                    icon: const Icon(Icons.swap_horiz_rounded, color: RoyalColors.gold, size: 28),
-                  ),
-                  Expanded(
-                    child: _DialogueLanguageMenu(
                       value: _targetLanguage,
-                      label: AppLocalizations.of(context)!.translationLangNow,
+                      label: 'لغة الترجمة',
                       onChanged: _selectTargetLanguage,
                     ),
                   ),
@@ -1508,9 +1391,9 @@ class _DocumentsPanelState extends State<_DocumentsPanel> {
       children: [
         const _SectionNotice(title: 'عدسة وPDF ومستندات محلية', detail: 'تستخرج العدسة أو المستند النص محلياً، ثم تكتشف لغته وتترجمه دائماً إلى لغة جهازك. لا توجد لغة هدف قابلة للتغيير في هذا القسم.'),
         const SizedBox(height: 20),
-        _DeviceSpeechLanguageLabel(
-          languageCode: context.watch<LanguagePreferences>().deviceLanguageCode,
-          label: 'الترجمة إلى لغة جهازك',
+        Text(
+          'الترجمة إلى لغة جهازك: ${TranslationLanguageCatalog.labels[context.watch<LanguagePreferences>().deviceLanguageCode] ?? context.watch<LanguagePreferences>().deviceLanguageCode}',
+          style: const TextStyle(color: RoyalColors.muted),
         ),
         const SizedBox(height: 12),
         Card(
