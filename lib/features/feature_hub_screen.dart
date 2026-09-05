@@ -849,7 +849,9 @@ class _DialoguePanelState extends State<_DialoguePanel> {
   final _speechService = SystemTtsService(storageKey: 'dialoguepanelstate');
   Timer? _translationDebounce;
 
-  // الحوار يلتقط الكلام بلغة الجهاز؛ المستخدم يختار لغة الترجمة فقط.
+  // اليمين (المصدر/المحرر العلوي) يُهيَّأ افتراضياً من لغة الجهاز ثم يصبح
+  // متغيراً مستقلاً يختاره المستخدم. المايك يلتقط بلغة المصدر دائماً،
+  // وليس بلغة الجهاز.
   String _sourceLanguage = 'en';
   String _targetLanguage = 'ar';
   String? _notice;
@@ -857,6 +859,7 @@ class _DialoguePanelState extends State<_DialoguePanel> {
   bool _isTranslating = false;
   bool _hasCompletedTranslation = false;
   bool _loadedTarget = false;
+  bool _loadedSource = false;
   int _sessionId = 0;
 
   DeviceSpeechRecognitionService get _recognitionService =>
@@ -868,19 +871,25 @@ class _DialoguePanelState extends State<_DialoguePanel> {
     _recognitionService.addListener(_refresh);
     _speechService.addListener(_refresh);
     _speechService.initialize();
+    _loadPersistedDialogueLanguages();
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_loadedTarget) return;
+    if (_loadedTarget && _loadedSource) return;
     final preferences = context.read<LanguagePreferences>();
-    _sourceLanguage = preferences.deviceLanguageCode;
-    _targetLanguage = preferences.translationTargetLanguage;
-    if (!TranslationLanguageCatalog.labels.containsKey(_targetLanguage)) {
-      _targetLanguage = 'ar';
+    if (!_loadedSource) {
+      _sourceLanguage = preferences.deviceLanguageCode;
+      _loadedSource = true;
     }
-    _loadedTarget = true;
+    if (!_loadedTarget) {
+      _targetLanguage = preferences.translationTargetLanguage;
+      if (!TranslationLanguageCatalog.labels.containsKey(_targetLanguage)) {
+        _targetLanguage = 'ar';
+      }
+      _loadedTarget = true;
+    }
   }
 
   void _refresh() {
@@ -944,6 +953,68 @@ class _DialoguePanelState extends State<_DialoguePanel> {
       if (!mounted) return;
       setState(() => _targetLanguage = code);
       await context.read<LanguagePreferences>().setTranslationTargetLanguage(code);
+      if (_source.text.trim().isNotEmpty) _queueTranslation(_source.text);
+      if (wasListening) await _startRecognition();
+    } finally {
+      if (mounted) setState(() => _isBusy = false);
+    }
+  }
+
+  Future<void> _loadPersistedDialogueLanguages() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final s = prefs.getString('dialogue_source_lang');
+      if (s != null &&
+          s != _sourceLanguage &&
+          TranslationLanguageCatalog.labels.containsKey(s)) {
+        _sourceLanguage = s;
+        if (mounted) setState(() {});
+      }
+    } catch (_) {
+      // لا يعطّل التطبيق عند تعذر القراءة.
+    }
+  }
+
+  Future<void> _selectSourceLanguage(String code) async {
+    if (_isBusy) return;
+    final wasListening = _recognitionService.isListening;
+    setState(() => _isBusy = true);
+    try {
+      if (wasListening && !await _finishRecognitionSession()) return;
+      if (!mounted) return;
+      setState(() => _sourceLanguage = code);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('dialogue_source_lang', code);
+      if (_source.text.trim().isNotEmpty) _queueTranslation(_source.text);
+      if (wasListening) await _startRecognition();
+    } finally {
+      if (mounted) setState(() => _isBusy = false);
+    }
+  }
+
+  Future<void> _swapLanguages() async {
+    if (_isBusy) return;
+    final wasListening = _recognitionService.isListening;
+    setState(() => _isBusy = true);
+    try {
+      if (wasListening && !await _finishRecognitionSession()) return;
+      if (!mounted) return;
+      final oldSource = _sourceLanguage;
+      setState(() {
+        _sourceLanguage = _targetLanguage;
+        _targetLanguage = oldSource;
+        // النص المترجم يصبح مصدراً قابلاً للترجمة العكسية بعد التبديل.
+        _source.text = _translated.text;
+        _translated.clear();
+        _hasCompletedTranslation = false;
+      });
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('dialogue_source_lang', _sourceLanguage);
+      if (mounted) {
+        await context
+            .read<LanguagePreferences>()
+            .setTranslationTargetLanguage(_targetLanguage);
+      }
       if (_source.text.trim().isNotEmpty) _queueTranslation(_source.text);
       if (wasListening) await _startRecognition();
     } finally {
@@ -1055,6 +1126,18 @@ class _DialoguePanelState extends State<_DialoguePanel> {
             children: [
               Row(
                 children: [
+                  Expanded(
+                    child: _DialogueLanguageMenu(
+                      value: _sourceLanguage,
+                      label: 'لغة المصدر (المايك)',
+                      onChanged: _selectSourceLanguage,
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'تبديل اللغتين',
+                    icon: const Icon(Icons.swap_horiz, color: RoyalColors.gold),
+                    onPressed: _isBusy ? null : _swapLanguages,
+                  ),
                   Expanded(
                     child: _DialogueLanguageMenu(
                       value: _targetLanguage,
