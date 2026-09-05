@@ -1,0 +1,530 @@
+From 0cbf520faa3b59cd087b4cfb3f9d55939bc7a4e1 Mon Sep 17 00:00:00 2001
+From: magdymeko456-cell
+ <2.88837127e+08+magdymeko456-cell@users.noreply.github.com>
+Date: Wed, 26 Aug 2026 04:58:37 +0000
+Subject: [PATCH] feat(translation): accept user-shared text locally
+
+---
+ .github/workflows/build_apk.yml               | 25 ++++++
+ ...ard-overlay-privacy-contract-2026-08-26.md | 33 +++++++
+ lib/app/mirror_scorpion_app.dart              | 11 ++-
+ lib/core/platform/shared_text_inbox.dart      | 81 +++++++++++++++++
+ lib/features/feature_hub_screen.dart          | 87 ++++++++++++++++++-
+ lib/features/home/dashboard_screen.dart       | 40 +++++++++
+ lib/main.dart                                 |  8 +-
+ pubspec.yaml                                  |  1 +
+ test/shared_text_inbox_test.dart              | 24 +++++
+ todo.md                                       |  7 ++
+ 10 files changed, 312 insertions(+), 5 deletions(-)
+ create mode 100644 docs/clipboard-overlay-privacy-contract-2026-08-26.md
+ create mode 100644 lib/core/platform/shared_text_inbox.dart
+ create mode 100644 test/shared_text_inbox_test.dart
+
+diff --git a/.github/workflows/build_apk.yml b/.github/workflows/build_apk.yml
+index e062c8b..431a4e6 100644
+--- a/.github/workflows/build_apk.yml
++++ b/.github/workflows/build_apk.yml
+@@ -35,6 +35,12 @@ jobs:
+             echo "Runware credentials or direct provider calls must not be present in Flutter code."
+             exit 1
+           fi
++      - name: Verify shared-text privacy boundary
++        run: |
++          if grep -R -nE 'addPrimaryClipChangedListener|AccessibilityService|NotificationListenerService|BIND_ACCESSIBILITY_SERVICE|BIND_NOTIFICATION_LISTENER_SERVICE' lib test; then
++            echo "Shared text must not monitor the clipboard or read other applications."
++            exit 1
++          fi
+       - uses: subosito/flutter-action@v2
+         with:
+           flutter-version: "3.44.7"
+@@ -130,6 +136,25 @@ jobs:
+             ' "$MANIFEST" > "$MANIFEST.tmp"
+             mv "$MANIFEST.tmp" "$MANIFEST"
+           fi
++      - name: Configure Android shared text intent
++        run: |
++          MANIFEST=android/app/src/main/AndroidManifest.xml
++          if grep -q 'android:launchMode="singleTop"' "$MANIFEST"; then
++            sed -i 's/android:launchMode="singleTop"/android:launchMode="singleTask"/' "$MANIFEST"
++          fi
++          if ! grep -q 'android.intent.action.SEND' "$MANIFEST"; then
++            awk '
++              /<\/activity>/ {
++                print "            <intent-filter>"
++                print "                <action android:name=\"android.intent.action.SEND\" />"
++                print "                <category android:name=\"android.intent.category.DEFAULT\" />"
++                print "                <data android:mimeType=\"text/*\" />"
++                print "            </intent-filter>"
++              }
++              { print }
++            ' "$MANIFEST" > "$MANIFEST.tmp"
++            mv "$MANIFEST.tmp" "$MANIFEST"
++          fi
+       - name: Configure PDF text extraction R8 rule
+         run: |
+           cat > android/app/mirror-scorpion-pdf-r8.pro <<'EOF'
+diff --git a/docs/clipboard-overlay-privacy-contract-2026-08-26.md b/docs/clipboard-overlay-privacy-contract-2026-08-26.md
+new file mode 100644
+index 0000000..0456005
+--- /dev/null
++++ b/docs/clipboard-overlay-privacy-contract-2026-08-26.md
+@@ -0,0 +1,33 @@
++# عقد الخصوصية لترجمة النص المنسوخ عبر الفقاعة
++
++**التاريخ:** 26 أغسطس 2026
++
++## النتيجة التقنية
++
++لا يمكن تقديم وعد صادق بأن الفقاعة ستراقب **كل** نص ينسخه المستخدم في تطبيقات أخرى وتترجمه تلقائياً. بدءاً من Android 10 تمنع المنصة عمليات الخلفية من الوصول إلى حافظة التطبيق الظاهر، ولهذا لا يجعل وجود فقاعة overlay أو خدمة foreground قراءة الحافظة في الخلفية مساراً موثوقاً أو مناسباً للخصوصية. كما تظهر Android 12 وما بعده إشارة مرئية عندما يصل تطبيق إلى محتوى الحافظة. [1]
++
++لذلك فإن معيار القبول ليس «التقاط كل نسخة»، بل أن يتعامل التطبيق مع نص اختاره المستخدم بوضوح ويشرح أين ستجري معالجته. مستمع `OnPrimaryClipChangedListener` موجود تقنياً، لكنه قد يستدعى أكثر من مرة للقصاصة نفسها أثناء تصنيف النص، ولا يصلح كتعهد بمراقبة نصوص التطبيقات الأخرى. [2]
++
++## خيارات مسار المستخدم
++
++| الخيار | تجربة المستخدم | الخصوصية والتوافق | الذكاء/الترجمة |
++|---|---|---|---|
++| **ترجمة النص الذي شاركه المستخدم** | ينسخ المستخدم النص ثم يختار Share أو Process Text ثم Mirror Scorpion. | أوضح موافقة وأوثق توافقاً مع Android؛ لا مراقبة للحافظة. | تحديد لغة ML Kit ثم ترجمة محلية إلى لغة الجهاز، عندما تتوفر النماذج. |
++| **زر «ترجم آخر نص نسخته» داخل التطبيق** | يضغط المستخدم الفقاعة ليعود إلى التطبيق، ثم يضغط زر الترجمة. | قراءة واحدة معلنة بعد فعل المستخدم، مع عدم حفظ النص أو إرساله. | المسار المحلي نفسه؛ تظهر نتيجة بلا ادعاء مراقبة تلقائية. |
++| **قارئ الحافظة المستمر** | ترجمة كل نسخ تلقائياً في تطبيقات أخرى. | غير موثوق على Android 10+، وإزعاجه الخصوصي عالٍ؛ لا ينفذ. | لا يعتمد ولا يطلب له وصول Accessibility أو Notification Listener. |
++
++## المسار المحلي المقترح
++
++يستخدم التطبيق تحديد اللغة على الجهاز من ML Kit، ثم يقارن لغة المصدر بلغة الجهاز المخزنة. عندما تختلف اللغتان ويتوفر نموذج الترجمة، تترجم النتيجة محلياً ولا ترسل إلى Firebase أو Runware أو أي خدمة أخرى. تحدد ML Kit اللغة المرجحة أو `und` عندما لا تستطيع تحديدها بثقة؛ كما تدعم أكثر من 100 لغة ونصوصاً مرومنة لبعض اللغات. [3]
++
++النص لا يسجل في سجل التطبيق، ولا يوضع في Analytics، ولا يعاد إلى الحافظة تلقائياً. يعرض التطبيق المعاينة والنتيجة في الشاشة، ويتيح النسخ فقط بعد ضغط منفصل من المستخدم. لا يزال تحميل نموذج الترجمة عند الحاجة خطوة ظاهرة وقد تتطلب اتصالاً لأول مرة؛ لا يسمى ذلك «ترجمة أوفلاين جاهزة» قبل اكتمال التحميل.
++
++## الموافقة والحدود المرئية
++
++يظهر مفتاح مستقل بعنوان: **«ترجمة النص الذي تشاركه أنت فقط»**. نص الموافقة يصرح بأن التطبيق لا يراقب الحافظة، ولا يقرأ WhatsApp أو البريد أو الإشعارات، وأن خيار Share أو Process Text هو الذي يحدد النص المراد ترجمته. في حالة النص القصير أو اللغة غير المحددة، تعرض الواجهة ذلك بدلاً من تخمين ترجمة أو إرسال النص إلى الإنترنت.
++
++## المراجع
++
++[1]: https://developer.android.com/privacy-and-security/risks/secure-clipboard-handling "Android Secure Clipboard Handling"
++[2]: https://developer.android.com/reference/android/content/ClipboardManager.OnPrimaryClipChangedListener "Android ClipboardManager.OnPrimaryClipChangedListener"
++[3]: https://developers.google.com/ml-kit/language/identification/android "ML Kit language identification on Android"
+diff --git a/lib/app/mirror_scorpion_app.dart b/lib/app/mirror_scorpion_app.dart
+index b26f19a..32cc0a3 100644
+--- a/lib/app/mirror_scorpion_app.dart
++++ b/lib/app/mirror_scorpion_app.dart
+@@ -3,14 +3,20 @@ import 'package:provider/provider.dart';
+ 
+ import '../core/localization/language_preferences.dart';
+ import '../core/media/runware_video_service.dart';
++import '../core/platform/shared_text_inbox.dart';
+ import '../core/speech/elevenlabs_voice_service.dart';
+ import '../features/home/dashboard_screen.dart';
+ import 'royal_dark_theme.dart';
+ 
+ class MirrorScorpionApp extends StatelessWidget {
+-  const MirrorScorpionApp({this.languagePreferences, super.key});
++  const MirrorScorpionApp({
++    this.languagePreferences,
++    this.sharedTextInbox,
++    super.key,
++  });
+ 
+   final LanguagePreferences? languagePreferences;
++  final SharedTextInbox? sharedTextInbox;
+ 
+   @override
+   Widget build(BuildContext context) {
+@@ -21,6 +27,9 @@ class MirrorScorpionApp extends StatelessWidget {
+         ),
+         ChangeNotifierProvider(create: (_) => ElevenLabsVoiceService()),
+         ChangeNotifierProvider(create: (_) => RunwareVideoService()),
++        ChangeNotifierProvider<SharedTextInbox>.value(
++          value: sharedTextInbox ?? SharedTextInbox(),
++        ),
+       ],
+       child: Builder(
+         builder: (context) {
+diff --git a/lib/core/platform/shared_text_inbox.dart b/lib/core/platform/shared_text_inbox.dart
+new file mode 100644
+index 0000000..dbe2021
+--- /dev/null
++++ b/lib/core/platform/shared_text_inbox.dart
+@@ -0,0 +1,81 @@
++import 'dart:async';
++
++import 'package:flutter/foundation.dart';
++import 'package:receive_sharing_intent/receive_sharing_intent.dart';
++import 'package:shared_preferences/shared_preferences.dart';
++
++/// يستقبل فقط نصاً أرسله المستخدم إلى التطبيق عبر Android Share.
++/// لا يراقب الحافظة، ولا يرسل النص إلى الشبكة، ولا يكتب النص على القرص.
++class SharedTextInbox extends ChangeNotifier {
++  static const _consentKey = 'shared_text_translation_consent_v1';
++  static const maxTextLength = 6000;
++
++  StreamSubscription<List<SharedMediaFile>>? _subscription;
++  String? _pendingText;
++  bool _translationConsent = false;
++  bool _initialized = false;
++
++  bool get hasTranslationConsent => _translationConsent;
++  String? get pendingText => _pendingText;
++
++  Future<void> initialize() async {
++    if (_initialized) return;
++    _initialized = true;
++    final preferences = await SharedPreferences.getInstance();
++    _translationConsent = preferences.getBool(_consentKey) ?? false;
++    _subscription = ReceiveSharingIntent.instance.getMediaStream().listen(
++      _receiveMedia,
++      onError: (_) {},
++    );
++    try {
++      final initialMedia = await ReceiveSharingIntent.instance.getInitialMedia();
++      _receiveMedia(initialMedia);
++      if (initialMedia.isNotEmpty) {
++        await ReceiveSharingIntent.instance.reset();
++      }
++    } catch (_) {
++      // يفشل استقبال Share بصمت؛ لا توجد بيانات بديلة ولا إعادة محاولة خفية.
++    }
++  }
++
++  Future<void> setTranslationConsent(bool value) async {
++    _translationConsent = value;
++    final preferences = await SharedPreferences.getInstance();
++    await preferences.setBool(_consentKey, value);
++    notifyListeners();
++  }
++
++  String? takePendingText() {
++    final text = _pendingText;
++    _pendingText = null;
++    if (text != null) notifyListeners();
++    return text;
++  }
++
++  void _receiveMedia(List<SharedMediaFile> media) {
++    final textItem = media.where(
++      (item) =>
++          item.type == SharedMediaType.text ||
++          (item.mimeType?.toLowerCase().startsWith('text/') ?? false),
++    );
++    if (textItem.isEmpty) return;
++    acceptUserSharedText(textItem.first.path);
++  }
++
++  /// يقبل نصاً وصل فقط عبر فعل Share صريح من المستخدم أو عبر اختبار محلي.
++  /// لا يستدعي ClipboardManager ولا يسجل النص في تخزين دائم.
++  void acceptUserSharedText(String rawText) {
++    final text = rawText.trim();
++    if (text.length < 3) return;
++    _pendingText = text.length > maxTextLength
++        ? text.substring(0, maxTextLength)
++        : text;
++    notifyListeners();
++  }
++
++  @override
++  void dispose() {
++    _subscription?.cancel();
++    super.dispose();
++  }
++}
+diff --git a/lib/features/feature_hub_screen.dart b/lib/features/feature_hub_screen.dart
+index f31e3fd..8b188a4 100644
+--- a/lib/features/feature_hub_screen.dart
++++ b/lib/features/feature_hub_screen.dart
+@@ -18,6 +18,7 @@ import '../core/media/runware_video_service.dart';
+ import '../core/mlkit/on_device_ocr_service.dart';
+ import '../core/mlkit/on_device_translation_service.dart';
+ import '../core/platform/android_overlay_service.dart';
++import '../core/platform/shared_text_inbox.dart';
+ import '../core/pro/premium_verification_service.dart';
+ import '../core/speech/device_speech_recognition_service.dart';
+ import '../core/speech/elevenlabs_voice_service.dart';
+@@ -62,14 +63,20 @@ String _translationProgressMessage(OnDeviceTranslationProgress progress) =>
+     };
+ 
+ class FeatureHubScreen extends StatelessWidget {
+-  const FeatureHubScreen({required this.kind, super.key});
++  const FeatureHubScreen({
++    required this.kind,
++    this.initialTranslationText,
++    super.key,
++  });
+ 
+   final FeatureKind kind;
++  final String? initialTranslationText;
+ 
+   @override
+   Widget build(BuildContext context) {
+     final child = switch (kind) {
+-      FeatureKind.translation => const _TranslationPanel(),
++      FeatureKind.translation =>
++        _TranslationPanel(initialText: initialTranslationText),
+       FeatureKind.dialogue => const _DialoguePanel(),
+       FeatureKind.documents => const _DocumentsPanel(),
+       FeatureKind.stories => const _StoriesPanel(),
+@@ -93,7 +100,9 @@ class FeatureHubScreen extends StatelessWidget {
+ }
+ 
+ class _TranslationPanel extends StatefulWidget {
+-  const _TranslationPanel();
++  const _TranslationPanel({this.initialText});
++
++  final String? initialText;
+ 
+   @override
+   State<_TranslationPanel> createState() => _TranslationPanelState();
+@@ -110,6 +119,7 @@ class _TranslationPanelState extends State<_TranslationPanel> {
+   bool _hasCompletedTranslation = false;
+   bool _isTranslating = false;
+   bool _loadedLanguagePreference = false;
++  bool _processedInitialText = false;
+   Timer? _translationDebounce;
+   @override
+   void initState() {
+@@ -130,6 +140,72 @@ class _TranslationPanelState extends State<_TranslationPanel> {
+       }
+       _loadedLanguagePreference = true;
+     }
++    if (!_processedInitialText && widget.initialText?.trim().isNotEmpty == true) {
++      _processedInitialText = true;
++      WidgetsBinding.instance.addPostFrameCallback((_) {
++        if (mounted) _processSharedText(widget.initialText!.trim());
++      });
++    }
++  }
++
++  Future<void> _processSharedText(String text) async {
++    final inbox = context.read<SharedTextInbox>();
++    if (!inbox.hasTranslationConsent) {
++      final accepted = await _requestSharedTextConsent();
++      if (!accepted || !mounted) {
++        setState(() => _notice = 'لم تترجم الرسالة المشتركة لأنك لم توافق على معالجتها محلياً.');
++        return;
++      }
++    }
++    _beginFreshTranslationIfNeeded();
++    _input.text = text;
++    setState(() => _notice = 'وصل نص اخترت مشاركته. جارٍ تحديد لغته محلياً…');
++    _queueTranslation(text);
++  }
++
++  Future<bool> _requestSharedTextConsent() async {
++    final accepted = await showDialog<bool>(
++      context: context,
++      builder: (dialogContext) => AlertDialog(
++        title: const Text('ترجمة النص الذي تشاركه أنت'),
++        content: const Text(
++          'سيعالج Mirror Scorpion هذا النص محلياً لتحديد لغته وترجمته إلى لغة جهازك. لا يراقب الحافظة، ولا يقرأ التطبيقات الأخرى، ولا يرسل النص إلى خدمة سحابية.',
++        ),
++        actions: [
++          TextButton(
++            onPressed: () => Navigator.pop(dialogContext, false),
++            child: const Text('ليس الآن'),
++          ),
++          FilledButton(
++            onPressed: () => Navigator.pop(dialogContext, true),
++            child: const Text('أوافق وأترجم محلياً'),
++          ),
++        ],
++      ),
++    );
++    if (accepted == true) {
++      await context.read<SharedTextInbox>().setTranslationConsent(true);
++      return true;
++    }
++    return false;
++  }
++
++  Future<void> _translateClipboardOnce() async {
++    final inbox = context.read<SharedTextInbox>();
++    if (!inbox.hasTranslationConsent && !await _requestSharedTextConsent()) {
++      return;
++    }
++    final data = await Clipboard.getData(Clipboard.kTextPlain);
++    final text = data?.text?.trim() ?? '';
++    if (!mounted) return;
++    if (text.length < 3) {
++      setState(() => _notice = 'لا يوجد نص كافٍ في الحافظة لترجمته.');
++      return;
++    }
++    final boundedText = text.length > SharedTextInbox.maxTextLength
++        ? text.substring(0, SharedTextInbox.maxTextLength)
++        : text;
++    await _processSharedText(boundedText);
+   }
+ 
+   Future<void> _selectLanguage(String code) async {
+@@ -318,6 +394,11 @@ return ListView(
+               tooltip: 'اختيار ملف صوتي لترجمته',
+               onPressed: _pickAudioFile,
+             ),
++            _EditorAction(
++              icon: Icons.content_paste_go_outlined,
++              tooltip: 'ترجم آخر نص نسخته بعد موافقتك',
++              onPressed: _translateClipboardOnce,
++            ),
+           ],
+         ),
+         if (_notice != null)
+diff --git a/lib/features/home/dashboard_screen.dart b/lib/features/home/dashboard_screen.dart
+index aa92ea8..0c949ed 100644
+--- a/lib/features/home/dashboard_screen.dart
++++ b/lib/features/home/dashboard_screen.dart
+@@ -1,5 +1,8 @@
+ import 'package:flutter/material.dart';
+ 
++import 'package:provider/provider.dart';
++
++import '../../core/platform/shared_text_inbox.dart';
+ import '../feature_hub_screen.dart';
+ 
+ class DashboardScreen extends StatefulWidget {
+@@ -21,6 +24,8 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
+ 
+   late final AnimationController _pulseController;
+   late final Animation<double> _pulseAnimation;
++  SharedTextInbox? _sharedTextInbox;
++  bool _openingSharedText = false;
+ 
+   @override
+   void initState() {
+@@ -31,12 +36,47 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
+     );
+   }
+ 
++  @override
++  void didChangeDependencies() {
++    super.didChangeDependencies();
++    final inbox = context.read<SharedTextInbox>();
++    if (_sharedTextInbox == inbox) return;
++    _sharedTextInbox?.removeListener(_openPendingSharedText);
++    _sharedTextInbox = inbox..addListener(_openPendingSharedText);
++    _openPendingSharedText();
++  }
++
+   @override
+   void dispose() {
++    _sharedTextInbox?.removeListener(_openPendingSharedText);
+     _pulseController.dispose();
+     super.dispose();
+   }
+ 
++  void _openPendingSharedText() {
++    if (!mounted || _openingSharedText) return;
++    final inbox = _sharedTextInbox;
++    if (inbox?.pendingText == null) return;
++    _openingSharedText = true;
++    final text = inbox!.takePendingText();
++    WidgetsBinding.instance.addPostFrameCallback((_) async {
++      if (!mounted || text == null) return;
++      await Navigator.push(
++        context,
++        MaterialPageRoute<void>(
++          builder: (_) => FeatureHubScreen(
++            kind: FeatureKind.translation,
++            initialTranslationText: text,
++          ),
++        ),
++      );
++      if (mounted) {
++        _openingSharedText = false;
++        _openPendingSharedText();
++      }
++    });
++  }
++
+   void _showInspirationPreview() {
+     showDialog<void>(
+       context: context,
+diff --git a/lib/main.dart b/lib/main.dart
+index cca3a75..f13751f 100644
+--- a/lib/main.dart
++++ b/lib/main.dart
+@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
+ import 'app/mirror_scorpion_app.dart';
+ import 'core/localization/language_preferences.dart';
+ import 'core/platform/android_overlay_service.dart';
++import 'core/platform/shared_text_inbox.dart';
+ import 'core/pro/premium_verification_service.dart';
+ 
+ Future<void> main() async {
+@@ -17,12 +18,17 @@ Future<void> main() async {
+   await premiumService.initialize();
+   final languagePreferences = LanguagePreferences();
+   await languagePreferences.initialize();
++  final sharedTextInbox = SharedTextInbox();
++  await sharedTextInbox.initialize();
+   runApp(
+     MultiProvider(
+       providers: [
+         ChangeNotifierProvider.value(value: premiumService),
+       ],
+-      child: MirrorScorpionApp(languagePreferences: languagePreferences),
++      child: MirrorScorpionApp(
++        languagePreferences: languagePreferences,
++        sharedTextInbox: sharedTextInbox,
++      ),
+     ),
+   );
+ }
+diff --git a/pubspec.yaml b/pubspec.yaml
+index 901c0bd..a31c121 100644
+--- a/pubspec.yaml
++++ b/pubspec.yaml
+@@ -25,6 +25,7 @@ dependencies:
+   speech_to_text: ^7.4.0
+   read_pdf_text: ^0.3.1
+   flutter_overlay_window: ^0.5.0
++  receive_sharing_intent: ^1.9.0
+ 
+ dev_dependencies:
+   flutter_test:
+diff --git a/test/shared_text_inbox_test.dart b/test/shared_text_inbox_test.dart
+new file mode 100644
+index 0000000..b964d08
+--- /dev/null
++++ b/test/shared_text_inbox_test.dart
+@@ -0,0 +1,24 @@
++import 'package:flutter_test/flutter_test.dart';
++import 'package:mirror_scorpion_v4/core/platform/shared_text_inbox.dart';
++
++void main() {
++  test('shared text remains in memory only until it is consumed', () {
++    final inbox = SharedTextInbox();
++
++    inbox.acceptUserSharedText('Hello from Android Share');
++
++    expect(inbox.pendingText, 'Hello from Android Share');
++    expect(inbox.takePendingText(), 'Hello from Android Share');
++    expect(inbox.pendingText, isNull);
++  });
++
++  test('shared text rejects tiny values and bounds a large value', () {
++    final inbox = SharedTextInbox();
++
++    inbox.acceptUserSharedText('  x ');
++    expect(inbox.pendingText, isNull);
++
++    inbox.acceptUserSharedText('a' * (SharedTextInbox.maxTextLength + 20));
++    expect(inbox.pendingText, hasLength(SharedTextInbox.maxTextLength));
++  });
++}
+diff --git a/todo.md b/todo.md
+index 83e2fda..432a3f0 100644
+--- a/todo.md
++++ b/todo.md
+@@ -248,6 +248,13 @@
+ - [x] اجتياز GitHub Actions للتحسينات المحلية في التشغيل `32928918118`: التحليل والاختبارات وبناء APK ورفع الأثر نجحت في 26 أغسطس 2026.
+ - [x] قبول Android لدفعة الترجمة والحوار ومعاينة المستند بعد التشغيل `32928918118`.
+ - [ ] تفعيل الخدمات غير المفعلة تدريجياً: الفقاعة Android أولاً، ثم مشاركة المخرجات المحلية، ثم حزم المحتوى واللغات؛ لا تفعيل لخدمات AI سحابية قبل قرار الخصوصية والتكلفة والموافقة.
++- [ ] إضافة وضع اختياري لترجمة النص الذي ينسخه المستخدم عبر الفقاعة، مع موافقة مرئية، فحص قيود حافظة Android، ترجمة على الجهاز فقط، حذف فوري للنص، ومن دون قراءة تطبيقات أو إرسال سحابي تلقائياً.
++- [x] تنفيذ استقبال النص عبر Android Share وتمريره في الذاكرة إلى كرت الترجمة بعد موافقة المستخدم؛ يحدد ML Kit اللغة ثم يترجمها إلى لغة الجهاز محلياً.
++- [x] تنفيذ زر «ترجم آخر نص نسخته» داخل التطبيق لقراءة معلنة واحدة للحافظة بعد ضغط المستخدم، مع عدم التخزين أو الإرسال أو المراقبة المستمرة.
++- [x] إضافة حاجز CI يمنع Accessibility وNotification Listener ومستمع الحافظة المستمر في مسار النص المشارك.
++- [ ] إضافة Android Process Text كاختصار اختياري لاحق بعد نجاح مسار Share وزر القراءة المعلن على APK.
++- [x] تدقيق قيود حافظة Android وتوثيق المسارات الآمنة؛ لا مراقبة تلقائية للحافظة عبر التطبيقات، وبديل المستخدم هو Share أو Process Text أو زر قراءة معلن داخل التطبيق. راجع `docs/clipboard-overlay-privacy-contract-2026-08-26.md`.
++- [x] اجتياز GitHub Actions لدفعة الفقاعة Android في التشغيل `32930658756`: التحليل والاختبارات وبناء APK ورفع الأثر نجحت في 26 أغسطس 2026؛ ما زال اختبار الإذن والفقاعة على الهاتف مطلوباً.
+ - [x] تصنيف الخدمات غير المفعلة وترتيب تفعيلها بحسب الخصوصية والتبعيات والاختبار؛ راجع `docs/disabled-services-activation-order-2026-08-26.md`.
+ - [ ] رفع قبول المستندات والعدسة: اختيار الملف، OCR، تحديد لغة المصدر، الترجمة إلى لغة الجهاز، حد الصفحات، المعاينة الطويلة، والمشاركة الموقعة.
+ - [x] إضافة معاينة محلية ملء الشاشة للنص المترجم: انتظار ثلاث ثوانٍ، ضغط مطول لرؤية الأصل، وختم مرئي؛ لا تصدير PDF أو مشاركة ملف حتى يُنفذ المسار فعلياً.
+-- 
+2.43.0
+

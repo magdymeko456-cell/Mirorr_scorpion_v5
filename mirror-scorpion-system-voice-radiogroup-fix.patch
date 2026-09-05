@@ -1,0 +1,129 @@
+From 21882530abd84fac865d19e8c3a24d1eebdff0ff Mon Sep 17 00:00:00 2001
+From: magdymeko456-cell
+ <2.88837127e+08+magdymeko456-cell@users.noreply.github.com>
+Date: Mon, 24 Aug 2026 17:25:52 +0000
+Subject: [PATCH] fix(tts): migrate voice picker to RadioGroup
+
+---
+ ...-overlay-activation-contract-2026-08-24.md |  4 +-
+ lib/features/feature_hub_screen.dart          | 66 +++++++++++--------
+ todo.md                                       |  1 +
+ 3 files changed, 41 insertions(+), 30 deletions(-)
+
+diff --git a/docs/media-and-overlay-activation-contract-2026-08-24.md b/docs/media-and-overlay-activation-contract-2026-08-24.md
+index b3be72c..fc18b72 100644
+--- a/docs/media-and-overlay-activation-contract-2026-08-24.md
++++ b/docs/media-and-overlay-activation-contract-2026-08-24.md
+@@ -4,7 +4,7 @@
+ 
+ ## 1. القراءة الصوتية المتاحة الآن
+ 
+-يعتمد التطبيق حالياً على محرك TTS المثبت في جهاز Android من خلال `flutter_tts`. يستطيع محرك Android نطق النص فوراً أو توليد ملف صوتي، لكن يجب تهيئته قبل الاستخدام، ويجب تحرير موارده عند الانتهاء. كما أن توافر اللغة أو بيانات الصوت يختلف من جهاز لآخر؛ ولذلك يعرض التطبيق رسالة واضحة إذا كان صوت اللغة غير مثبّت بدلاً من التحويل الصامت إلى لغة أخرى. [1]
++يعتمد التطبيق حالياً على محرك TTS المثبت في جهاز Android من خلال `flutter_tts`. يستطيع محرك Android نطق النص فوراً أو توليد ملف صوتي، لكن يجب تهيئته قبل الاستخدام، ويجب تحرير موارده عند الانتهاء. كما أن توافر اللغة أو بيانات الصوت يختلف من جهاز لآخر؛ ولذلك يعرض التطبيق رسالة واضحة إذا كان صوت اللغة غير مثبّت بدلاً من التحويل الصامت إلى لغة أخرى. [1] تدعم المكتبة المستخدمة قراءة قائمة أصوات النظام وتعيين صوت منها، ولذلك يقتصر اختيار الصوت على الأصوات التي يعيدها الجهاز فعلياً. [5]
+ 
+ | الحالة | ما يفعله التطبيق | ما لا يدّعيه |
+ |---|---|---|
+@@ -57,3 +57,5 @@
+ [2]: https://developer.android.com/develop/background-work/services/fgs/changes "Android foreground-service changes"
+ [3]: https://developer.android.com/develop/background-work/services/fgs/restrictions-bg-start "Android foreground-service background-start restrictions"
+ [4]: https://developer.android.com/guide/components/intents-filters "Android intents and intent filters"
++[5]: https://pub.dev/packages/flutter_tts "flutter_tts 4.2.5 — system voices and voice selection"
++[6]: https://docs.flutter.dev/release/breaking-changes/radio-api-redesign "Flutter RadioGroup migration"
+diff --git a/lib/features/feature_hub_screen.dart b/lib/features/feature_hub_screen.dart
+index 290f0bf..7a45ecc 100644
+--- a/lib/features/feature_hub_screen.dart
++++ b/lib/features/feature_hub_screen.dart
+@@ -1237,41 +1237,49 @@ class _StoriesPanelState extends State<_StoriesPanel> {
+       builder: (sheetContext) => Directionality(
+         textDirection: TextDirection.rtl,
+         child: SafeArea(
+-          child: ListView(
+-            shrinkWrap: true,
+-            children: [
+-              const ListTile(
+-                title: Text('أصوات النظام المتاحة'),
+-                subtitle: Text('تظهر أصوات جهازك فقط؛ لا يُرفع النص أو يُنسخ صوتك.'),
+-              ),
+-              RadioListTile<SystemTtsVoice?>(
+-                value: null,
+-                groupValue: _speechService.selectedVoice,
+-                title: const Text('صوت النظام الافتراضي'),
+-                onChanged: (_) async {
+-                  await _speechService.selectVoice(
+-                    null,
+-                    languageCode: languageCode,
+-                  );
+-                  if (sheetContext.mounted) Navigator.pop(sheetContext);
+-                },
+-              ),
+-              ...voices.map(
+-                (voice) => RadioListTile<SystemTtsVoice?>(
+-                  value: voice,
+-                  groupValue: _speechService.selectedVoice,
+-                  title: Text(voice.name),
+-                  subtitle: Text(voice.locale),
+-                  onChanged: (_) async {
++          child: RadioGroup<SystemTtsVoice>(
++            groupValue: _speechService.selectedVoice,
++            onChanged: (voice) async {
++              await _speechService.selectVoice(
++                voice,
++                languageCode: languageCode,
++              );
++              if (sheetContext.mounted) Navigator.pop(sheetContext);
++            },
++            child: ListView(
++              shrinkWrap: true,
++              children: [
++                const ListTile(
++                  title: Text('أصوات النظام المتاحة'),
++                  subtitle: Text('تظهر أصوات جهازك فقط؛ لا يُرفع النص أو يُنسخ صوتك.'),
++                ),
++                ListTile(
++                  title: const Text('صوت النظام الافتراضي'),
++                  trailing: Icon(
++                    _speechService.selectedVoice == null
++                        ? Icons.check_circle
++                        : Icons.settings_voice_outlined,
++                    color: _speechService.selectedVoice == null
++                        ? RoyalColors.gold
++                        : RoyalColors.muted,
++                  ),
++                  onTap: () async {
+                     await _speechService.selectVoice(
+-                      voice,
++                      null,
+                       languageCode: languageCode,
+                     );
+                     if (sheetContext.mounted) Navigator.pop(sheetContext);
+                   },
+                 ),
+-              ),
+-            ],
++                ...voices.map(
++                  (voice) => RadioListTile<SystemTtsVoice>(
++                    value: voice,
++                    title: Text(voice.name),
++                    subtitle: Text(voice.locale),
++                  ),
++                ),
++              ],
++            ),
+           ),
+         ),
+       ),
+diff --git a/todo.md b/todo.md
+index 217e995..1c9bf50 100644
+--- a/todo.md
++++ b/todo.md
+@@ -204,6 +204,7 @@
+ 
+ - [ ] مراجعة وتثبيت القراءة الصوتية المحلية للنصوص والقصص مع أصوات جهاز المستخدم واختبار Android.
+ - [x] عرض أصوات النظام المتاحة للغة القصة وتمكين اختيار صوت محلي في الجلسة دون رفع أي نص أو عينة صوت.
++- [x] استبدال RadioListTile المتقادمة في اختيار الأصوات بواجهة اختيار متوافقة مع Flutter 3.44 لاستعادة نجاح التحليل.
+ - [x] توثيق متطلبات الفقاعة الأصلية: إذن overlay صريح، خدمة foreground، مشاركة/معالجة نص باختيار المستخدم فقط، ومنع القراءة التلقائية للتطبيقات الأخرى.
+ - [ ] إعداد نموذج فقاعة Android معزول لا يطلب Accessibility أو Notification Listener ولا يصل إلى رسائل البريد أو WhatsApp تلقائياً.
+ - [ ] تحديد مزود، تكلفة، احتفاظ بيانات، وموافقة صريحة لنسخ صوت المستخدم قبل جمع أي تسجيل صوتي أو إرساله.
+-- 
+2.43.0
+

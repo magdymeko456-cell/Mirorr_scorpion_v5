@@ -1,0 +1,46 @@
+From c9ca5955345c37b57fe520bcc758f0569452f7d6 Mon Sep 17 00:00:00 2001
+From: magdymeko456-cell
+ <2.88837127e+08+magdymeko456-cell@users.noreply.github.com>
+Date: Mon, 24 Aug 2026 04:34:44 +0000
+Subject: [PATCH] test(ui): assert truthful dashboard labels
+
+---
+ test/dashboard_test.dart | 11 +++++++----
+ 1 file changed, 7 insertions(+), 4 deletions(-)
+
+diff --git a/test/dashboard_test.dart b/test/dashboard_test.dart
+index 57e1e0b..48cdd35 100644
+--- a/test/dashboard_test.dart
++++ b/test/dashboard_test.dart
+@@ -2,21 +2,24 @@ import 'package:flutter_test/flutter_test.dart';
+ import 'package:mirror_scorpion_v4/app/mirror_scorpion_app.dart';
+ 
+ void main() {
+-  testWidgets('renders the reference hero, bubble control, and six-card grid', (tester) async {
++  testWidgets('renders the truthful hero status and six-card grid', (tester) async {
+     await tester.pumpWidget(const MirrorScorpionApp());
+ 
+     expect(find.text('ميرور سكربيون'), findsOneWidget);
+     expect(find.text('حيث تُصنع البدايات'), findsOneWidget);
+-    expect(find.text('تفعيل الفقاعة العائمة'), findsOneWidget);
++    expect(find.text('الفقاعة فوق التطبيقات: قيد الإعداد'), findsOneWidget);
+     expect(find.text('ترجمة نصية'), findsOneWidget);
++    expect(find.text('ترجمة محلية + مايك'), findsOneWidget);
+     expect(find.text('حوار مترجم'), findsOneWidget);
+ 
+     await tester.scrollUntilVisible(find.text('مستندات وعدسة'), 300);
+     expect(find.text('مستندات وعدسة'), findsOneWidget);
+     expect(find.text('قصص وإلهام'), findsOneWidget);
+ 
+-    await tester.scrollUntilVisible(find.text('ألعاب 3D'), 300);
+-    expect(find.text('ألعاب 3D'), findsOneWidget);
++    await tester.scrollUntilVisible(find.text('ألعاب وتفكير'), 300);
++    expect(find.text('ألعاب وتفكير'), findsOneWidget);
++    expect(find.text('ألعاب 3D'), findsNothing);
++    expect(find.text('تفعيل الفقاعة العائمة'), findsNothing);
+     await tester.scrollUntilVisible(find.text('الإعدادات'), 300);
+     expect(find.text('الإعدادات'), findsOneWidget);
+   });
+-- 
+2.43.0
+

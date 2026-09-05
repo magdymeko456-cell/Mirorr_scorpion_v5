@@ -1,0 +1,112 @@
+From e16e1b5313ebaf3498815ab539de5513bbad20be Mon Sep 17 00:00:00 2001
+From: magdymeko456-cell
+ <2.88837127e+08+magdymeko456-cell@users.noreply.github.com>
+Date: Mon, 24 Aug 2026 04:25:58 +0000
+Subject: [PATCH] fix(ui): align dashboard claims with available features
+
+---
+ lib/features/home/dashboard_screen.dart | 44 ++++++++-----------------
+ 1 file changed, 14 insertions(+), 30 deletions(-)
+
+diff --git a/lib/features/home/dashboard_screen.dart b/lib/features/home/dashboard_screen.dart
+index f9cd36a..24d62e6 100644
+--- a/lib/features/home/dashboard_screen.dart
++++ b/lib/features/home/dashboard_screen.dart
+@@ -11,17 +11,16 @@ class DashboardScreen extends StatefulWidget {
+ 
+ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProviderStateMixin {
+   static const _features = <_FeatureSpec>[
+-    _FeatureSpec(FeatureKind.translation, 'ترجمة نصية', '100 لغة + مايك', Icons.translate, Colors.blueAccent),
+-    _FeatureSpec(FeatureKind.dialogue, 'حوار مترجم', 'محادثة ثنائية فورية', Icons.forum, Colors.cyanAccent),
+-    _FeatureSpec(FeatureKind.documents, 'مستندات وعدسة', 'ترجمة صور وملفات', Icons.document_scanner, Colors.tealAccent),
+-    _FeatureSpec(FeatureKind.stories, 'قصص وإلهام', 'مكتبة ذكية متكاملة', Icons.auto_stories, Colors.orangeAccent),
+-    _FeatureSpec(FeatureKind.games, 'ألعاب 3D', 'شطرنج + روبيك', Icons.sports_esports, Colors.purpleAccent),
+-    _FeatureSpec(FeatureKind.settings, 'الإعدادات', 'تخصيص وترقية برو', Icons.settings, Colors.blueGrey),
++    _FeatureSpec(FeatureKind.translation, 'ترجمة نصية', 'ترجمة محلية + مايك', Icons.translate, Colors.blueAccent),
++    _FeatureSpec(FeatureKind.dialogue, 'حوار مترجم', 'محرران + مايك الجهاز', Icons.forum, Colors.cyanAccent),
++    _FeatureSpec(FeatureKind.documents, 'مستندات وعدسة', 'OCR صور + PDF قيد الإعداد', Icons.document_scanner, Colors.tealAccent),
++    _FeatureSpec(FeatureKind.stories, 'قصص وإلهام', 'قصص وإلهام محلي', Icons.auto_stories, Colors.orangeAccent),
++    _FeatureSpec(FeatureKind.games, 'ألعاب وتفكير', 'شطرنج قانوني + روبيك قريباً', Icons.sports_esports, Colors.purpleAccent),
++    _FeatureSpec(FeatureKind.settings, 'الإعدادات', 'خصوصية وحزم وPRO', Icons.settings, Colors.blueGrey),
+   ];
+ 
+   late final AnimationController _pulseController;
+   late final Animation<double> _pulseAnimation;
+-  bool _bubbleRequested = false;
+ 
+   @override
+   void initState() {
+@@ -38,19 +37,6 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
+     super.dispose();
+   }
+ 
+-  void _toggleBubble(bool requested) {
+-    setState(() => _bubbleRequested = requested);
+-    ScaffoldMessenger.of(context).showSnackBar(
+-      SnackBar(
+-        content: Text(
+-          requested
+-              ? 'سيطلب التطبيق إذن الظهور فوق التطبيقات عند اكتمال خدمة Android الأصلية.'
+-              : 'تم إيقاف طلب الفقاعة العائمة.',
+-        ),
+-      ),
+-    );
+-  }
+-
+   void _showInspirationPreview() {
+     showDialog<void>(
+       context: context,
+@@ -83,8 +69,8 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
+               const SizedBox(height: 20),
+               ListTile(
+                 leading: const Icon(Icons.grid_view, color: Colors.purpleAccent, size: 32),
+-                title: const Text('مكعب روبيك 3D'),
+-                subtitle: const Text('جميع طرق الحل', style: TextStyle(color: Colors.white54)),
++                title: const Text('مكعب روبيك'),
++                subtitle: const Text('قيد التطوير: حركات وحل تعليمي لاحقاً', style: TextStyle(color: Colors.white54)),
+                 onTap: () {
+                   Navigator.pop(sheetContext);
+                   _openFeature(FeatureKind.games);
+@@ -93,8 +79,8 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
+               const Divider(color: Colors.white24),
+               ListTile(
+                 leading: const Icon(Icons.castle, color: Colors.purpleAccent, size: 32),
+-                title: const Text('شطرنج 3D'),
+-                subtitle: const Text('لعبة شطرنج ثلاثية الأبعاد', style: TextStyle(color: Colors.white54)),
++                title: const Text('شطرنج قانوني'),
++                subtitle: const Text('ساعة وخصم محلي؛ 3D قيد البحث', style: TextStyle(color: Colors.white54)),
+                 onTap: () {
+                   Navigator.pop(sheetContext);
+                   _openFeature(FeatureKind.games);
+@@ -197,16 +183,14 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
+             decoration: BoxDecoration(
+               color: Colors.white.withValues(alpha: 0.05),
+               borderRadius: BorderRadius.circular(30),
+-              border: Border.all(color: _bubbleRequested ? Colors.blueAccent : Colors.white24),
++              border: Border.all(color: Colors.white24),
+             ),
+             child: Row(
+               mainAxisSize: MainAxisSize.min,
+               children: [
+-                Icon(_bubbleRequested ? Icons.bubble_chart : Icons.bubble_chart_outlined, color: _bubbleRequested ? Colors.blueAccent : Colors.grey),
++                const Icon(Icons.bubble_chart_outlined, color: Colors.grey),
+                 const SizedBox(width: 12),
+-                Text(_bubbleRequested ? 'طلب الفقاعة نشط' : 'تفعيل الفقاعة العائمة', style: TextStyle(color: _bubbleRequested ? Colors.blueAccent : Colors.white70, fontWeight: FontWeight.bold)),
+-                const SizedBox(width: 8),
+-                Switch(value: _bubbleRequested, onChanged: _toggleBubble, activeThumbColor: Colors.blueAccent),
++                const Text('الفقاعة فوق التطبيقات: قيد الإعداد', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold)),
+               ],
+             ),
+           ),
+@@ -271,7 +255,7 @@ class _Footer extends StatelessWidget {
+   Widget build(BuildContext context) {
+     return const Padding(
+       padding: EdgeInsets.all(30),
+-      child: Opacity(opacity: 0.3, child: Center(child: Text('Mirror Scorpion\nv4 Flutter Foundation', textAlign: TextAlign.center, style: TextStyle(fontSize: 10)))),
++      child: Opacity(opacity: 0.3, child: Center(child: Text('Mirror Scorpion\nv4 Flutter/Android', textAlign: TextAlign.center, style: TextStyle(fontSize: 10)))),
+     );
+   }
+ }
+-- 
+2.43.0
+

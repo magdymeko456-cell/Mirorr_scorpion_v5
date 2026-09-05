@@ -1,0 +1,126 @@
+From 8567bb7c6695b14dfbe9baa330c85f9bba4b45a0 Mon Sep 17 00:00:00 2001
+From: magdymeko456-cell
+ <2.88837127e+08+magdymeko456-cell@users.noreply.github.com>
+Date: Mon, 24 Aug 2026 03:22:33 +0000
+Subject: [PATCH] feat(settings): improve contact method cards
+
+---
+ lib/features/feature_hub_screen.dart | 102 ++++++++++++++++++++++++++-
+ 1 file changed, 99 insertions(+), 3 deletions(-)
+
+diff --git a/lib/features/feature_hub_screen.dart b/lib/features/feature_hub_screen.dart
+index 1613082..edaba6c 100644
+--- a/lib/features/feature_hub_screen.dart
++++ b/lib/features/feature_hub_screen.dart
+@@ -1930,9 +1930,105 @@ class _ProActivationPageState extends State<_ProActivationPage> {
+               ),
+               if (_notice != null) Padding(padding: const EdgeInsets.only(top: 12), child: Text(_notice!, style: const TextStyle(color: RoyalColors.gold, height: 1.5))),
+               const SizedBox(height: 24),
+-              const Text('التواصل لتفعيل الاشتراك', style: TextStyle(fontWeight: FontWeight.w800)),
+-              const SizedBox(height: 8),
+-              const Text('WhatsApp: 01017341250\nWhatsApp: 01031680816\nWhatsApp: 01558203456\nالبريد: dosoky.server@gmail.com', style: TextStyle(color: RoyalColors.muted, height: 1.6)),
++              const Text(
++                'التواصل لتفعيل الاشتراك',
++                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 20),
++              ),
++              const SizedBox(height: 12),
++              _ContactMethodCard(
++                icon: Icons.chat_bubble,
++                iconColor: const Color(0xFF25D366),
++                label: 'WhatsApp',
++                value: '01017341250',
++              ),
++              const SizedBox(height: 10),
++              _ContactMethodCard(
++                icon: Icons.chat_bubble,
++                iconColor: const Color(0xFF25D366),
++                label: 'WhatsApp',
++                value: '01031680816',
++              ),
++              const SizedBox(height: 10),
++              _ContactMethodCard(
++                icon: Icons.chat_bubble,
++                iconColor: const Color(0xFF25D366),
++                label: 'WhatsApp',
++                value: '01558203456',
++              ),
++              const SizedBox(height: 10),
++              _ContactMethodCard(
++                icon: Icons.alternate_email,
++                iconColor: const Color(0xFFEA4335),
++                label: 'البريد الإلكتروني',
++                value: 'dosoky.server@gmail.com',
++              ),
++            ],
++          ),
++        ),
++      ),
++    );
++  }
++}
++
++class _ContactMethodCard extends StatelessWidget {
++  const _ContactMethodCard({
++    required this.icon,
++    required this.iconColor,
++    required this.label,
++    required this.value,
++  });
++
++  final IconData icon;
++  final Color iconColor;
++  final String label;
++  final String value;
++
++  @override
++  Widget build(BuildContext context) {
++    return Semantics(
++      button: true,
++      label: '$label: $value. اضغط للنسخ',
++      child: InkWell(
++        borderRadius: BorderRadius.circular(18),
++        onTap: () async {
++          await Clipboard.setData(ClipboardData(text: value));
++          if (context.mounted) {
++            ScaffoldMessenger.of(context).showSnackBar(
++              SnackBar(content: Text('تم نسخ $value')),
++            );
++          }
++        },
++        child: Ink(
++          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
++          decoration: BoxDecoration(
++            color: const Color(0xFF1B2838),
++            borderRadius: BorderRadius.circular(18),
++            border: Border.all(color: iconColor.withValues(alpha: 0.5)),
++          ),
++          child: Row(
++            children: [
++              Container(
++                width: 44,
++                height: 44,
++                decoration: BoxDecoration(color: iconColor, shape: BoxShape.circle),
++                child: Icon(icon, color: Colors.white, size: 24),
++              ),
++              const SizedBox(width: 14),
++              Expanded(
++                child: Column(
++                  crossAxisAlignment: CrossAxisAlignment.start,
++                  children: [
++                    Text(label, style: const TextStyle(color: RoyalColors.muted, fontSize: 14)),
++                    const SizedBox(height: 3),
++                    Text(
++                      value,
++                      textDirection: TextDirection.ltr,
++                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
++                    ),
++                  ],
++                ),
++              ),
++              const Icon(Icons.copy_outlined, color: RoyalColors.gold),
+             ],
+           ),
+         ),
+-- 
+2.43.0
+

@@ -1,0 +1,3934 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../app/royal_dark_theme.dart';
+import '../core/localization/language_preferences.dart';
+import '../core/content/offline_content_storage.dart';
+import '../core/content/github_content_catalog_service.dart';
+import '../core/games/chess_game_controller.dart';
+import '../core/inspiration/inspiration_safety.dart';
+import '../core/documents/local_document_text_service.dart';
+import '../core/documents/translated_document_export_service.dart';
+import '../core/mlkit/on_device_ocr_service.dart';
+import '../core/mlkit/on_device_translation_service.dart';
+import '../core/platform/android_overlay_service.dart';
+import '../core/platform/device_capability_service.dart';
+import '../core/platform/shared_text_inbox.dart';
+import '../core/pro/premium_verification_service.dart';
+import '../core/speech/device_speech_recognition_service.dart';
+import '../core/speech/elevenlabs_voice_service.dart';
+import '../core/speech/audio_transcriber_service.dart';
+import '../core/speech/system_tts_service.dart';
+import 'voice_profile_bar.dart';
+import '../core/speech/translated_audio_export_service.dart';
+import '../core/speech/whisper_model_installer.dart';
+import 'chess_club_screen.dart';
+import 'subscription_boundaries_card.dart';
+import '../l10n/generated/app_localizations.dart';
+
+enum FeatureKind { translation, dialogue, documents, stories, games, settings }
+
+abstract final class TranslationLanguageCatalog {
+  static const labels = <String, String>{
+    'af': 'Afrikaans', 'sq': 'Shqip', 'am': 'አማርኛ', 'ar': 'العربية', 'hy': 'Հայերեն', 'az': 'Azərbaycan',
+    'eu': 'Euskara', 'be': 'Беларуская', 'bn': 'বাংলা', 'bs': 'Bosanski', 'bg': 'Български', 'ca': 'Català',
+    'ceb': 'Cebuano', 'ny': 'Chichewa', 'zh': '中文', 'co': 'Corsu', 'hr': 'Hrvatski', 'cs': 'Čeština',
+    'da': 'Dansk', 'nl': 'Nederlands', 'en': 'English', 'eo': 'Esperanto', 'et': 'Eesti', 'tl': 'Filipino',
+    'fi': 'Suomi', 'fr': 'Français', 'fy': 'Frysk', 'gl': 'Galego', 'ka': 'ქართული', 'de': 'Deutsch',
+    'el': 'Ελληνικά', 'gu': 'ગુજરાતી', 'ht': 'Kreyòl', 'ha': 'Hausa', 'haw': 'Hawaiʻi', 'iw': 'עברית',
+    'hi': 'हिन्दी', 'hmn': 'Hmong', 'hu': 'Magyar', 'is': 'Íslenska', 'ig': 'Igbo', 'id': 'Bahasa Indonesia',
+    'ga': 'Gaeilge', 'it': 'Italiano', 'ja': '日本語', 'jw': 'Basa Jawa', 'kn': 'ಕನ್ನಡ', 'kk': 'Қазақ',
+    'km': 'ខ្មែរ', 'rw': 'Kinyarwanda', 'ko': '한국어', 'ku': 'Kurdî', 'ky': 'Кыргызча', 'lo': 'ລາວ',
+    'la': 'Latina', 'lv': 'Latviešu', 'lt': 'Lietuvių', 'lb': 'Lëtzebuergesch', 'mk': 'Македонски',
+    'mg': 'Malagasy', 'ms': 'Bahasa Melayu', 'ml': 'മലയാളം', 'mt': 'Malti', 'mi': 'Māori', 'mr': 'मराठी',
+    'mn': 'Монгол', 'my': 'မြန်မာ', 'ne': 'नेपाली', 'no': 'Norsk', 'or': 'ଓଡ଼ିଆ', 'ps': 'پښتو',
+    'fa': 'فارسی', 'pl': 'Polski', 'pt': 'Português', 'pa': 'ਪੰਜਾਬੀ', 'ro': 'Română', 'ru': 'Русский',
+    'sm': 'Samoa', 'gd': 'Gàidhlig', 'sr': 'Српски', 'st': 'Sesotho', 'sn': 'Shona', 'sd': 'سنڌي',
+    'si': 'සිංහල', 'sk': 'Slovenčina', 'sl': 'Slovenščina', 'so': 'Soomaali', 'es': 'Español', 'su': 'Basa Sunda',
+    'sw': 'Kiswahili', 'sv': 'Svenska', 'tg': 'Тоҷикӣ', 'ta': 'தமிழ்', 'tt': 'Татар', 'te': 'తెలుగు',
+    'th': 'ไทย', 'tr': 'Türkçe', 'tk': 'Türkmen', 'ug': 'ئۇيغۇرچە', 'uk': 'Українська', 'ur': 'اردو',
+    'uz': "O'zbek", 'vi': 'Tiếng Việt', 'cy': 'Cymraeg', 'xh': 'isiXhosa', 'yi': 'יידיש', 'yo': 'Yorùbá', 'zu': 'isiZulu',
+  };
+}
+
+String _translationProgressMessage(OnDeviceTranslationProgress progress) =>
+    switch (progress) {
+      OnDeviceTranslationProgress.identifyingLanguage =>
+        'جارٍ تحديد لغة النص…',
+      OnDeviceTranslationProgress.checkingModels =>
+        'جارٍ فحص نماذج اللغة المحلية…',
+      OnDeviceTranslationProgress.downloadingModels =>
+        'يُنزّل التطبيق نموذجَي اللغة لأول مرة؛ قد يستغرق ذلك أكثر من 3 ثوانٍ حسب الشبكة…',
+      OnDeviceTranslationProgress.translating =>
+        'جارٍ إجراء الترجمة على الجهاز…',
+    };
+
+class FeatureHubScreen extends StatelessWidget {
+  const FeatureHubScreen({
+    required this.kind,
+    this.initialTranslationText,
+    super.key,
+  });
+
+  final FeatureKind kind;
+  final String? initialTranslationText;
+
+  @override
+  Widget build(BuildContext context) {
+    final child = switch (kind) {
+      FeatureKind.translation =>
+        _TranslationPanel(
+          initialText: initialTranslationText,
+          recognitionService: context.read<DeviceSpeechRecognitionService>(),
+        ),
+      FeatureKind.dialogue => _DialoguePanel(
+          recognitionService: context.read<DeviceSpeechRecognitionService>(),
+        ),
+      FeatureKind.documents => const _DocumentsPanel(),
+      FeatureKind.stories => _StoriesPanel(
+          recognitionService: context.read<DeviceSpeechRecognitionService>(),
+        ),
+      FeatureKind.games => const ChessClubScreen(),
+      FeatureKind.settings => const _SettingsPanel(),
+    };
+    if (kind == FeatureKind.games) {
+      return Directionality(textDirection: TextDirection.rtl, child: child);
+    }
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        appBar: kind == FeatureKind.games ? null : AppBar(title: Text(_titleFor(context, kind))),
+        body: child,
+      ),
+    );
+  }
+
+  String _titleFor(BuildContext context, FeatureKind value) => switch (value) {
+        FeatureKind.translation => AppLocalizations.of(context)!.featureTranslation,
+        FeatureKind.dialogue => AppLocalizations.of(context)!.featureDialogue,
+        FeatureKind.documents => AppLocalizations.of(context)!.featureDocuments,
+        FeatureKind.stories => AppLocalizations.of(context)!.featureStories,
+        FeatureKind.games => AppLocalizations.of(context)!.featureGames,
+        FeatureKind.settings => AppLocalizations.of(context)!.featureSettings,
+      };
+}
+
+class _TranslationPanel extends StatefulWidget {
+  const _TranslationPanel({this.initialText, required this.recognitionService});
+
+  final String? initialText;
+  final DeviceSpeechRecognitionService recognitionService;
+
+  @override
+  State<_TranslationPanel> createState() => _TranslationPanelState();
+}
+
+class _TranslationPanelState extends State<_TranslationPanel> {
+  final _input = TextEditingController();
+  final _output = TextEditingController();
+  final _translationService = const OnDeviceTranslationService();
+  final _speechService = SystemTtsService(storageKey: 'translationpanelstate');
+  final _capabilityService = DeviceCapabilityService();
+  final _modelInstaller = WhisperModelInstaller();
+  final _audioTranscriber = AudioTranscriberService();
+  final _audioExporter = TranslatedAudioExportService();
+  String _selectedLanguage = 'ar';
+  String _lastOutputLanguage = 'ar';
+  String? _notice;
+  TranslatedAudioFile? _translatedAudioFile;
+  bool _hasCompletedTranslation = false;
+  bool _isTranslating = false;
+  bool _isInstallingAudioModel = false;
+  bool _isTranscribingAudio = false;
+  int? _audioModelDownloadPercent;
+  int? _audioTranscriptionPercent;
+  bool _loadedLanguagePreference = false;
+  bool _processedInitialText = false;
+  Timer? _translationDebounce;
+
+  DeviceSpeechRecognitionService get _recognitionService =>
+      widget.recognitionService;
+
+  @override
+  void initState() {
+    super.initState();
+    _speechService.addListener(_onSpeechChanged);
+    _speechService.initialize();
+    _recognitionService.addListener(_onSpeechChanged);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_loadedLanguagePreference) {
+      final preferences = context.read<LanguagePreferences>();
+      final savedTarget = preferences.translationTargetLanguage;
+      if (TranslationLanguageCatalog.labels.containsKey(savedTarget)) {
+        _selectedLanguage = savedTarget;
+      }
+      _loadedLanguagePreference = true;
+    }
+    if (!_processedInitialText && widget.initialText?.trim().isNotEmpty == true) {
+      _processedInitialText = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _processSharedText(widget.initialText!.trim());
+      });
+    }
+  }
+
+  Future<void> _processSharedText(String text) async {
+    final inbox = context.read<SharedTextInbox>();
+    final deviceLanguage = context.read<LanguagePreferences>().deviceLanguageCode;
+    if (!inbox.hasTranslationConsent) {
+      final accepted = await _requestSharedTextConsent();
+      if (!accepted || !mounted) {
+        setState(() => _notice = 'لم تترجم الرسالة المشتركة لأنك لم توافق على معالجتها محلياً.');
+        return;
+      }
+    }
+    _beginFreshTranslationIfNeeded();
+    _input.text = text;
+    setState(() {
+      _notice = 'وصل نص اخترت مشاركته. جارٍ تحديد لغته محلياً ثم ترجمته إلى لغة جهازك…';
+    });
+    _queueTranslation(text, targetLanguageCode: deviceLanguage);
+  }
+
+  Future<bool> _requestSharedTextConsent() async {
+    final inbox = context.read<SharedTextInbox>();
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('ترجمة النص الذي تشاركه أنت'),
+        content: const Text(
+          'سيعالج Mirror Scorpion هذا النص محلياً لتحديد لغته وترجمته إلى لغة جهازك. لا يراقب الحافظة، ولا يقرأ التطبيقات الأخرى، ولا يرسل النص إلى خدمة سحابية.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('ليس الآن'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('أوافق وأترجم محلياً'),
+          ),
+        ],
+      ),
+    );
+    if (accepted == true) {
+      await inbox.setTranslationConsent(true);
+      return true;
+    }
+    return false;
+  }
+
+  Future<void> _translateClipboardOnce() async {
+    final inbox = context.read<SharedTextInbox>();
+    if (!inbox.hasTranslationConsent && !await _requestSharedTextConsent()) {
+      return;
+    }
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    final text = data?.text?.trim() ?? '';
+    if (!mounted) return;
+    if (text.length < 3) {
+      setState(() => _notice = 'لا يوجد نص كافٍ في الحافظة لترجمته.');
+      return;
+    }
+    final boundedText = text.length > SharedTextInbox.maxTextLength
+        ? text.substring(0, SharedTextInbox.maxTextLength)
+        : text;
+    await _processSharedText(boundedText);
+  }
+
+  Future<void> _selectLanguage(String code) async {
+    setState(() => _selectedLanguage = code);
+    await context.read<LanguagePreferences>().setTranslationTargetLanguage(code);
+    _queueTranslation(_input.text);
+  }
+
+  void _onSpeechChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _beginFreshTranslationIfNeeded() {
+    if (!_hasCompletedTranslation) return;
+    setState(() {
+      _input.clear();
+      _output.clear();
+      _notice = 'بدأت جلسة ترجمة جديدة.';
+      _hasCompletedTranslation = false;
+    });
+  }
+
+  Future<void> _speakTranslation() async {
+    if (_speechService.isSpeaking) {
+      await _speechService.stop();
+      return;
+    }
+    await _speechService.speak(
+      text: _output.text,
+      languageCode: _lastOutputLanguage,
+    );
+    if (mounted && _speechService.message != null) {
+      setState(() => _notice = _speechService.message);
+    }
+  }
+
+  Future<void> _pickAudioFileForLocalTranslation() async {
+    if (_isInstallingAudioModel || _isTranscribingAudio) return;
+    FilePickerResult? selection;
+    try {
+      selection = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: AudioTranscriberService.supportedExtensions.toList()..sort(),
+        withData: false,
+      );
+    } on PlatformException catch (error) {
+      if (mounted) setState(() => _notice = 'تعذر فتح منتقي ملفات Android: ${error.code}.');
+      return;
+    }
+    if (selection == null || selection.files.isEmpty || !mounted) return;
+    final file = selection.files.first;
+    final path = file.path;
+    if (path == null || path.isEmpty) {
+      setState(() => _notice = 'مدير الملفات لم يمنح التطبيق مساراً قابلاً للقراءة. انسخ الملف إلى الهاتف ثم اختره من التخزين المحلي.');
+      return;
+    }
+    if (!AudioTranscriberService.allowsFileSize(file.size)) {
+      setState(() => _notice = 'حجم الملف غير مناسب. الحد الأقصى للتفريغ المحلي هو 128 MB.');
+      return;
+    }
+    final capability = await _capabilityService.inspect();
+    if (!mounted) return;
+    if (capability == null) {
+      setState(() => _notice = 'تعذر قراءة مواصفات الهاتف؛ لن يبدأ تفريغ الملف محلياً.');
+      return;
+    }
+    final compatibility = LocalAudioCompatibilityPolicy.evaluate(capability);
+    if (compatibility != LocalAudioCompatibility.supported) {
+      setState(() => _notice = LocalAudioCompatibilityPolicy.messageFor(compatibility));
+      return;
+    }
+    setState(() => _notice = 'تم اختيار «${file.name}». أكّد التفريغ المحلي في النافذة التالية.');
+    final accepted = await _confirmLocalAudioTranscription(file);
+    if (accepted != true || !mounted) return;
+    await _transcribeAndTranslateLocalAudio(path);
+  }
+
+  Future<bool?> _confirmLocalAudioTranscription(PlatformFile file) async {
+    final installed = await _modelInstaller.verifiedInstalledModel(WhisperModelDescriptor.baseMultilingual);
+    if (!mounted) return false;
+    final sizeInMb = (file.size / (1024 * 1024)).toStringAsFixed(1);
+    return showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('تفريغ ملف صوت محلياً'),
+        content: Text(
+          'الملف: ${file.name}\nالحجم: $sizeInMb MB\n\n'
+          'سيبقى الملف داخل هاتفك ولن يُرفع إلى خادم. '
+          '${installed == null ? 'يتطلب التفريغ تنزيل نموذج متعدد اللغات بحجم 142 MB مرة واحدة ثم التحقق من بصمته.' : 'نموذج التفريغ المتحقق منه موجود في الهاتف.'}\n\n'
+          'لا توجد شروط استخدام إضافية هنا. بعد التأكيد يبدأ التنزيل أو التفريغ المحلي مباشرة. يعمل المسار ابتداءً من 4 GB RAM، لكن الملفات الطويلة تكون أسرع وأكثر استقراراً على ذاكرة أعلى؛ تعتمد السرعة أيضاً على المعالج وطول التسجيل.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('إلغاء')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: Text(installed == null ? 'نزّل النموذج وتابع' : 'ابدأ التفريغ المحلي')),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _transcribeAndTranslateLocalAudio(String filePath) async {
+    final capability = await _capabilityService.inspect();
+    if (!mounted) return;
+    if (capability == null) {
+      setState(() => _notice = 'تعذر قراءة مواصفات الهاتف؛ لن يبدأ تفريغ الملف محلياً.');
+      return;
+    }
+    final compatibility = LocalAudioCompatibilityPolicy.evaluate(capability);
+    if (compatibility != LocalAudioCompatibility.supported) {
+      setState(() => _notice = LocalAudioCompatibilityPolicy.messageFor(compatibility));
+      return;
+    }
+    var model = await _modelInstaller.verifiedInstalledModel(WhisperModelDescriptor.baseMultilingual);
+    if (model == null) {
+      setState(() {
+        _isInstallingAudioModel = true;
+        _audioModelDownloadPercent = 0;
+        _notice = 'جارٍ تنزيل نموذج التفريغ المحلي بعد موافقتك…';
+      });
+      final installed = await _modelInstaller.downloadAfterUserApproval(
+        descriptor: WhisperModelDescriptor.baseMultilingual,
+        onProgress: (received, expected) {
+          if (!mounted) return;
+          setState(() => _audioModelDownloadPercent = ((received * 100) / expected).floor().clamp(0, 100).toInt());
+        },
+      );
+      if (!mounted) return;
+      setState(() => _isInstallingAudioModel = false);
+      model = installed.file;
+      if (!installed.isSuccess || model == null) {
+        setState(() => _notice = installed.message);
+        return;
+      }
+    }
+    setState(() {
+      _isTranscribingAudio = true;
+      _audioTranscriptionPercent = 0;
+      _notice = 'جارٍ تجهيز الملف للتفريغ المحلي…';
+    });
+    final transcription = await _audioTranscriber.transcribeAudioFile(
+      filePath: filePath,
+      verifiedModelFile: model,
+      onProgress: (stage, percentage) {
+        if (!mounted) return;
+        final message = switch (stage) {
+          AudioTranscriptionStage.preparing => 'جارٍ تجهيز نسخة عمل محلية من الملف…',
+          AudioTranscriptionStage.transcribing => 'جارٍ تفريغ الصوت محلياً${percentage == null ? '…' : ' ($percentage%)'}',
+          AudioTranscriptionStage.cleaning => 'جارٍ تنظيف ملفات المعالجة المؤقتة…',
+        };
+        setState(() {
+          _notice = message;
+          _audioTranscriptionPercent = percentage;
+        });
+      },
+    );
+    if (!mounted) return;
+    setState(() => _isTranscribingAudio = false);
+    if (!transcription.isSuccess) {
+      setState(() => _notice = transcription.message);
+      return;
+    }
+    _beginFreshTranslationIfNeeded();
+    _input.text = transcription.text!;
+    final deviceLanguage = context.read<LanguagePreferences>().deviceLanguageCode;
+    setState(() => _notice = 'اكتمل تفريغ الصوت. جارٍ تحديد لغة النص وترجمته إلى لغة جهازك…');
+    _queueTranslation(transcription.text!, targetLanguageCode: deviceLanguage);
+  }
+
+  Future<void> _exportAndShareTranslatedAudio() async {
+    if (_output.text.trim().isEmpty) {
+      setState(() => _notice = 'لا يوجد نص مترجم لإنشاء ملف صوتي.');
+      return;
+    }
+    var audioFile = _translatedAudioFile;
+    if (audioFile == null) {
+      setState(() => _notice = 'جارٍ إنشاء ملف WAV محلياً من النص المترجم…');
+      final exported = await _audioExporter.createWav(
+        text: _output.text,
+        languageCode: _lastOutputLanguage,
+        profile: _speechService.selectedProfile,
+        selectedVoice: _speechService.selectedVoice,
+      );
+      if (!mounted) return;
+      audioFile = exported.audioFile;
+      if (!exported.isSuccess || audioFile == null) {
+        setState(() => _notice = exported.message);
+        return;
+      }
+      setState(() => _translatedAudioFile = audioFile);
+    }
+    final result = await _audioExporter.share(audioFile);
+    if (mounted) setState(() => _notice = result.message);
+  }
+
+  Future<void> _toggleMicrophone() async {
+    if (_recognitionService.isListening) {
+      await _recognitionService.stop();
+      if (mounted && _recognitionService.message != null) {
+        setState(() => _notice = _recognitionService.message);
+      }
+      return;
+    }
+    final sourceLanguage = context.read<LanguagePreferences>().deviceLanguageCode;
+    await _speechService.stop();
+    if (!mounted) return;
+    _beginFreshTranslationIfNeeded();
+    await _recognitionService.start(
+      languageCode: sourceLanguage,
+      onText: (recognizedText) {
+        if (!mounted) return;
+        _input.text = recognizedText;
+        _queueTranslation(
+          recognizedText,
+          sourceLanguageCode: sourceLanguage,
+        );
+      },
+    );
+    if (mounted && _recognitionService.message != null) {
+      setState(() => _notice = _recognitionService.message);
+    }
+  }
+
+  void _queueTranslation(
+    String value, {
+    String? sourceLanguageCode,
+    String? targetLanguageCode,
+  }) {
+    _translationDebounce?.cancel();
+    if (_translatedAudioFile != null) {
+      final staleFile = _translatedAudioFile;
+      _translatedAudioFile = null;
+      unawaited(_audioExporter.delete(staleFile));
+    }
+    if (value.trim().isEmpty) {
+      setState(() {
+        _output.clear();
+        _notice = null;
+        _isTranslating = false;
+      });
+      return;
+    }
+    _translationDebounce = Timer(const Duration(milliseconds: 650), () {
+      _translateLocally(
+        value,
+        sourceLanguageCode: sourceLanguageCode,
+        targetLanguageCode: targetLanguageCode,
+      );
+    });
+  }
+
+  Future<void> _translateLocally(
+    String value, {
+    String? sourceLanguageCode,
+    String? targetLanguageCode,
+  }) async {
+    if (!mounted || value.trim() != _input.text.trim()) return;
+    setState(() {
+      _isTranslating = true;
+      _notice = sourceLanguageCode == null
+          ? 'جارٍ تحديد لغة النص وتجهيز نموذج الترجمة المحلي…'
+          : 'جارٍ تجهيز نموذج الترجمة المحلي للغة الميكروفون…';
+    });
+    final targetLanguage = targetLanguageCode ?? _selectedLanguage;
+    final result = await _translationService.translate(
+      text: value,
+      targetLanguageCode: targetLanguage,
+      sourceLanguageCode: sourceLanguageCode,
+      onProgress: (progress) {
+        if (mounted && value.trim() == _input.text.trim()) {
+          setState(() => _notice = _translationProgressMessage(progress));
+        }
+      },
+    );
+    if (!mounted || value.trim() != _input.text.trim()) return;
+    setState(() {
+      _isTranslating = false;
+      if (result.isSuccess) _output.text = result.text ?? '';
+      if (result.isSuccess) _lastOutputLanguage = targetLanguage;
+      if (!result.isSuccess) _output.clear();
+      _hasCompletedTranslation =
+          result.isSuccess && _output.text.trim().isNotEmpty;
+      _notice = result.message;
+    });
+  }
+
+  @override
+  void dispose() {
+    _translationDebounce?.cancel();
+    _speechService.removeListener(_onSpeechChanged);
+    _speechService.stop();
+    _recognitionService.removeListener(_onSpeechChanged);
+    unawaited(_recognitionService.cancelAndWait());
+    _modelInstaller.dispose();
+    unawaited(_audioExporter.delete(_translatedAudioFile));
+    _input.dispose();
+    _output.dispose();
+    super.dispose();
+  }
+
+@override
+Widget build(BuildContext context) {
+    final deviceLanguage = context.watch<LanguagePreferences>().deviceLanguageCode;
+return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+      children: [
+        VoiceProfileBar(ttsService: _speechService),
+        Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 280),
+            child: _TranslationLanguageMenu(
+              value: _selectedLanguage,
+              label: 'لغة الترجمة',
+              icon: Icons.translate,
+              onChanged: _selectLanguage,
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 280),
+            child: _DeviceSpeechLanguageLabel(
+              languageCode: deviceLanguage,
+              label: 'لغة المايك — من الجهاز',
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        _TranslationEditor(
+          controller: _input,
+          hint: 'ابدأ بالكتابة أو اضغط المايك للتحدث...',
+          readOnly: false,
+          actionsOnRight: false,
+          onTap: _beginFreshTranslationIfNeeded,
+          onChanged: (value) => _queueTranslation(
+            value,
+            sourceLanguageCode: deviceLanguage,
+          ),
+          actions: [
+            _EditorAction(
+              icon: _recognitionService.isListening ? Icons.stop_circle_outlined : Icons.mic,
+              tooltip: _recognitionService.isListening ? 'إيقاف التقاط الكلام' : 'التقاط الكلام من ميكروفون الجهاز',
+              onPressed: _toggleMicrophone,
+            ),
+            _EditorAction(
+              icon: Icons.attach_file_rounded,
+              tooltip: 'اختيار ملف صوت لتفريغه وترجمته محلياً',
+              onPressed: _pickAudioFileForLocalTranslation,
+            ),
+            _EditorAction(
+              icon: Icons.content_paste_go_outlined,
+              tooltip: 'ترجم آخر نص نسخته بعد موافقتك',
+              onPressed: _translateClipboardOnce,
+            ),
+          ],
+        ),
+        if (_notice != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: Row(
+              children: [
+                if (_isTranslating)
+                  const Padding(
+                    padding: EdgeInsetsDirectional.only(end: 8),
+                    child: SizedBox(
+                      width: 15,
+                      height: 15,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+                Expanded(child: Text(_notice!, style: const TextStyle(color: RoyalColors.gold))),
+              ],
+            ),
+          ),
+        if (_isInstallingAudioModel && _audioModelDownloadPercent != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: LinearProgressIndicator(value: _audioModelDownloadPercent! / 100),
+          ),
+        if (_isTranscribingAudio && _audioTranscriptionPercent != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: LinearProgressIndicator(value: _audioTranscriptionPercent! / 100),
+          ),
+        const SizedBox(height: 10),
+        _TranslationEditor(
+          controller: _output,
+          hint: 'ستظهر ترجمة ML Kit المحلية هنا بعد تنزيل النماذج.',
+          readOnly: true,
+          actionsOnRight: true,
+          actions: [
+            _EditorAction(icon: _speechService.isSpeaking ? Icons.stop_circle_outlined : Icons.volume_up, tooltip: _speechService.isSpeaking ? AppLocalizations.of(context)!.stopSpeaking : 'نطق الترجمة بصوت النظام', onPressed: _speakTranslation),
+            _EditorAction(icon: Icons.ios_share, tooltip: 'إنشاء ومشاركة ملف WAV للنص المترجم', onPressed: _exportAndShareTranslatedAudio),
+            _EditorAction(icon: Icons.copy, tooltip: 'نسخ الترجمة', onPressed: () async {
+              if (_output.text.isEmpty) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('لا يوجد نص مترجم لنسخه بعد.')),
+                  );
+                }
+                return;
+              }
+              await Clipboard.setData(ClipboardData(text: _output.text));
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('تم نسخ الترجمة.')),
+                );
+              }
+            }),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _TranslationLanguageMenu extends StatelessWidget {
+  const _TranslationLanguageMenu({
+    required this.value,
+    required this.label,
+    required this.icon,
+    required this.onChanged,
+  });
+
+  final String value;
+  final String label;
+  final IconData icon;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1B2838),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 14, color: Colors.cyanAccent),
+              const SizedBox(width: 5),
+              Text(label, style: const TextStyle(color: RoyalColors.muted, fontSize: 11)),
+            ],
+          ),
+          DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: value,
+              isExpanded: true,
+              dropdownColor: const Color(0xFF1B2838),
+              icon: const Icon(Icons.keyboard_arrow_down, color: Colors.cyanAccent),
+              items: TranslationLanguageCatalog.labels.entries
+                  .map((entry) => DropdownMenuItem(value: entry.key, child: Text(entry.value, overflow: TextOverflow.ellipsis)))
+                  .toList(),
+              onChanged: (code) {
+                if (code != null) onChanged(code);
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DeviceSpeechLanguageLabel extends StatelessWidget {
+  const _DeviceSpeechLanguageLabel({
+    required this.languageCode,
+    required this.label,
+  });
+
+  final String languageCode;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final languageLabel =
+        TranslationLanguageCatalog.labels[languageCode] ?? languageCode;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1B2838),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.28)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.mic_none, size: 14, color: Colors.cyanAccent),
+              const SizedBox(width: 5),
+              Expanded(
+                child: Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: RoyalColors.muted, fontSize: 11),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 5),
+          Text(
+            languageLabel,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TranslationEditor extends StatelessWidget {
+  const _TranslationEditor({
+    required this.controller,
+    required this.hint,
+    required this.readOnly,
+    required this.actions,
+    required this.actionsOnRight,
+    this.onTap,
+    this.onChanged,
+  });
+
+  final TextEditingController controller;
+  final String hint;
+  final bool readOnly;
+  final List<_EditorAction> actions;
+  final bool actionsOnRight;
+  final VoidCallback? onTap;
+  final ValueChanged<String>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 250,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.03),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white12),
+      ),
+      child: Stack(
+        children: [
+          TextField(
+            controller: controller,
+            readOnly: readOnly,
+            expands: true,
+            minLines: null,
+            maxLines: null,
+            textAlignVertical: TextAlignVertical.top,
+            style: const TextStyle(color: Colors.white, fontSize: 17),
+            decoration: InputDecoration(
+              hintText: hint,
+              hintStyle: const TextStyle(color: Colors.white30, fontSize: 15),
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.only(bottom: 56),
+            ),
+            onTap: onTap,
+            onChanged: onChanged,
+          ),
+          Positioned(
+            bottom: 0,
+            left: actionsOnRight ? null : 0,
+            right: actionsOnRight ? 0 : null,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: actions
+                  .map(
+                    (action) => IconButton(
+                      tooltip: action.tooltip,
+                      onPressed: action.onPressed,
+                      icon: Icon(action.icon, color: Colors.cyanAccent),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EditorAction {
+  const _EditorAction({required this.icon, required this.tooltip, required this.onPressed});
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onPressed;
+}
+
+class _DialoguePanel extends StatefulWidget {
+  const _DialoguePanel({required this.recognitionService});
+
+  final DeviceSpeechRecognitionService recognitionService;
+
+  @override
+  State<_DialoguePanel> createState() => _DialoguePanelState();
+}
+
+class _DialoguePanelState extends State<_DialoguePanel> {
+  final _source = TextEditingController();
+  final _translated = TextEditingController();
+  final _translationService = const OnDeviceTranslationService();
+  final _speechService = SystemTtsService(storageKey: 'dialoguepanelstate');
+  Timer? _translationDebounce;
+
+  // يبدأ المصدر بلغة الجهاز/اللغة المحفوظة، ثم يبقى مستقلاً وقابلاً للاختيار.
+  String _sourceLanguage = 'en';
+  String _targetLanguage = 'ar';
+  String? _notice;
+  bool _isBusy = false;
+  bool _isTranslating = false;
+  bool _hasCompletedTranslation = false;
+  bool _loadedTarget = false;
+  int _sessionId = 0;
+
+  DeviceSpeechRecognitionService get _recognitionService =>
+      widget.recognitionService;
+
+  @override
+  void initState() {
+    super.initState();
+    _recognitionService.addListener(_refresh);
+    _speechService.addListener(_refresh);
+    _speechService.initialize();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_loadedTarget) return;
+    final preferences = context.read<LanguagePreferences>();
+    _sourceLanguage = preferences.translationSourceLanguage;
+    _targetLanguage = preferences.translationTargetLanguage;
+    if (!TranslationLanguageCatalog.labels.containsKey(_targetLanguage)) {
+      _targetLanguage = 'ar';
+    }
+    _loadedTarget = true;
+  }
+
+  void _refresh() {
+    if (mounted) setState(() {});
+  }
+
+  Future<bool> _finishRecognitionSession() async {
+    _sessionId++;
+    final stopped = await _recognitionService.cancelAndWait();
+    if (!stopped && mounted && _recognitionService.message != null) {
+      setState(() => _notice = _recognitionService.message);
+    }
+    return stopped;
+  }
+
+  Future<void> _startRecognition() async {
+    final session = ++_sessionId;
+    final started = await _recognitionService.start(
+      languageCode: _sourceLanguage,
+      onText: (recognizedText) {
+        if (!mounted || session != _sessionId) return;
+        _source.text = recognizedText;
+        _queueTranslation(recognizedText);
+      },
+    );
+    if (mounted && !started && _recognitionService.message != null) {
+      setState(() => _notice = _recognitionService.message);
+    }
+  }
+
+  Future<void> _toggleMicrophone() async {
+    if (_isBusy || _speechService.isSpeaking) return;
+    setState(() => _isBusy = true);
+    try {
+      if (_recognitionService.isListening) {
+        await _finishRecognitionSession();
+        if (mounted && _recognitionService.message != null) {
+          setState(() => _notice = _recognitionService.message);
+        }
+        return;
+      }
+      await _speechService.stop();
+      if (!mounted) return;
+      if (_hasCompletedTranslation) {
+        _source.clear();
+        _translated.clear();
+        _hasCompletedTranslation = false;
+      }
+      await _startRecognition();
+    } finally {
+      if (mounted) setState(() => _isBusy = false);
+    }
+  }
+
+  Future<void> _selectSourceLanguage(String code) async {
+    if (_isBusy || code == _sourceLanguage) return;
+    final wasListening = _recognitionService.isListening;
+    setState(() => _isBusy = true);
+    try {
+      if (wasListening && !await _finishRecognitionSession()) return;
+      if (!mounted) return;
+      setState(() {
+        _sourceLanguage = code;
+        _source.clear();
+        _translated.clear();
+        _hasCompletedTranslation = false;
+        _notice = null;
+      });
+      await context.read<LanguagePreferences>().setTranslationSourceLanguage(code);
+      if (wasListening) await _startRecognition();
+    } finally {
+      if (mounted) setState(() => _isBusy = false);
+    }
+  }
+
+  Future<void> _selectTargetLanguage(String code) async {
+    if (_isBusy) return;
+    final wasListening = _recognitionService.isListening;
+    setState(() => _isBusy = true);
+    try {
+      if (wasListening && !await _finishRecognitionSession()) return;
+      if (!mounted) return;
+      setState(() => _targetLanguage = code);
+      await context.read<LanguagePreferences>().setTranslationTargetLanguage(code);
+      if (_source.text.trim().isNotEmpty) _queueTranslation(_source.text);
+      if (wasListening) await _startRecognition();
+    } finally {
+      if (mounted) setState(() => _isBusy = false);
+    }
+  }
+
+  Future<void> _swapLanguages() async {
+    if (_isBusy) return;
+    final wasListening = _recognitionService.isListening;
+    setState(() => _isBusy = true);
+    try {
+      if (!await _finishRecognitionSession()) return;
+      final oldSource = _sourceLanguage;
+      final oldTarget = _targetLanguage;
+      if (!mounted) return;
+      setState(() {
+        _sourceLanguage = oldTarget;
+        _targetLanguage = oldSource;
+        _source.clear();
+        _translated.clear();
+        _hasCompletedTranslation = false;
+        _notice = 'تم تبديل لغة المايك واللغة الهدف.';
+      });
+      await context.read<LanguagePreferences>().setTranslationTargetLanguage(_targetLanguage);
+      await context.read<LanguagePreferences>().setTranslationSourceLanguage(_sourceLanguage);
+      if (wasListening) await _startRecognition();
+    } finally {
+      if (mounted) setState(() => _isBusy = false);
+    }
+  }
+
+  void _beginFreshSessionIfNeeded() {
+    if (!_hasCompletedTranslation) return;
+    setState(() {
+      _source.clear();
+      _translated.clear();
+      _hasCompletedTranslation = false;
+      _notice = 'بدأت جلسة حوار جديدة.';
+    });
+  }
+
+  void _queueTranslation(String value) {
+    _translationDebounce?.cancel();
+    if (value.trim().isEmpty) {
+      setState(() {
+        _translated.clear();
+        _isTranslating = false;
+        _notice = null;
+      });
+      return;
+    }
+    _translationDebounce = Timer(const Duration(milliseconds: 650), () {
+      _translate(value);
+    });
+  }
+
+  Future<void> _translate(String value) async {
+    if (!mounted || value.trim() != _source.text.trim()) return;
+    final sourceLanguage = _sourceLanguage;
+    final targetLanguage = _targetLanguage;
+    setState(() {
+      _isTranslating = true;
+      _notice = 'جارٍ ترجمة الحوار من ${TranslationLanguageCatalog.labels[sourceLanguage] ?? sourceLanguage} إلى ${TranslationLanguageCatalog.labels[targetLanguage] ?? targetLanguage}…';
+    });
+    final result = await _translationService.translate(
+      text: value,
+      sourceLanguageCode: sourceLanguage,
+      targetLanguageCode: targetLanguage,
+      onProgress: (progress) {
+        if (mounted && value.trim() == _source.text.trim()) {
+          setState(() => _notice = _translationProgressMessage(progress));
+        }
+      },
+    );
+    if (!mounted || value.trim() != _source.text.trim()) return;
+    if (sourceLanguage != _sourceLanguage || targetLanguage != _targetLanguage) return;
+    setState(() {
+      _isTranslating = false;
+      _translated.text = result.isSuccess ? result.text ?? '' : '';
+      _hasCompletedTranslation = result.isSuccess && _translated.text.trim().isNotEmpty;
+      _notice = result.message;
+    });
+  }
+
+  Future<void> _speakTranslation() async {
+    if (_speechService.isSpeaking) {
+      await _speechService.stop();
+      return;
+    }
+    await _speechService.speak(text: _translated.text, languageCode: _targetLanguage);
+    if (mounted && _speechService.message != null) {
+      setState(() => _notice = _speechService.message);
+    }
+  }
+
+  @override
+  void dispose() {
+    _translationDebounce?.cancel();
+    _sessionId++;
+    _recognitionService.removeListener(_refresh);
+    unawaited(_recognitionService.cancelAndWait());
+    _speechService.removeListener(_refresh);
+    _speechService.stop();
+    _source.dispose();
+    _translated.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final listening = _recognitionService.isListening;
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(18, 10, 18, 18),
+      children: [
+        VoiceProfileBar(ttsService: _speechService),
+        _DialogueEditor(
+          controller: _source,
+          label: AppLocalizations.of(context)!.dialogueTopLabelDevice,
+          hint: AppLocalizations.of(context)!.dialogueTopHintDevice,
+          actions: const [],
+          onTap: _beginFreshSessionIfNeeded,
+          onChanged: _queueTranslation,
+        ),
+        const SizedBox(height: 10),
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1B2838),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.35)),
+          ),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: _DialogueLanguageMenu(
+                      value: _sourceLanguage,
+                      label: AppLocalizations.of(context)!.micSourceNow,
+                      onChanged: _selectSourceLanguage,
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: AppLocalizations.of(context)!.dialogueSwapSpeakerTooltip,
+                    onPressed: _isBusy ? null : _swapLanguages,
+                    icon: const Icon(Icons.swap_horiz_rounded, color: RoyalColors.gold, size: 28),
+                  ),
+                  Expanded(
+                    child: _DialogueLanguageMenu(
+                      value: _targetLanguage,
+                      label: AppLocalizations.of(context)!.translationLangNow,
+                      onChanged: _selectTargetLanguage,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: listening ? Colors.redAccent : Colors.blueAccent,
+                  ),
+                  onPressed: _isBusy ? null : _toggleMicrophone,
+                  icon: Icon(listening ? Icons.stop_circle_outlined : Icons.mic),
+                  label: Text(
+                    _isBusy
+                        ? 'جارٍ تبديل جلسة المايك…'
+                        : listening
+                            ? AppLocalizations.of(context)!.stopListening
+                            : AppLocalizations.of(context)!.speakInCurrentSource,
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        _DialogueEditor(
+          controller: _translated,
+          label: AppLocalizations.of(context)!.dialogueBottomLabel,
+          hint: AppLocalizations.of(context)!.dialogueBottomHint,
+          readOnly: true,
+          actions: [
+            _EditorAction(
+              icon: _speechService.isSpeaking ? Icons.stop_circle_outlined : Icons.volume_up,
+              tooltip: _speechService.isSpeaking ? AppLocalizations.of(context)!.stopSpeaking : AppLocalizations.of(context)!.speakDialogueTranslation,
+              onPressed: _speakTranslation,
+            ),
+            _EditorAction(
+              icon: Icons.copy,
+              tooltip: AppLocalizations.of(context)!.copyDialogueTranslation,
+              onPressed: () async {
+                if (_translated.text.isNotEmpty) {
+                  await Clipboard.setData(ClipboardData(text: _translated.text));
+                }
+              },
+            ),
+          ],
+        ),
+        if (_notice != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: Row(
+              children: [
+                if (_isTranslating)
+                  const Padding(
+                    padding: EdgeInsetsDirectional.only(end: 8),
+                    child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                  ),
+                Expanded(child: Text(_notice!, style: const TextStyle(color: RoyalColors.gold))),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _DialogueLanguageMenu extends StatelessWidget {
+  const _DialogueLanguageMenu({
+    required this.value,
+    required this.label,
+    required this.onChanged,
+  });
+
+  final String value;
+  final String label;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(label, style: const TextStyle(color: RoyalColors.muted, fontSize: 10)),
+        DropdownButtonHideUnderline(
+          child: DropdownButton<String>(
+            value: value,
+            isExpanded: true,
+            dropdownColor: const Color(0xFF1B2838),
+            items: TranslationLanguageCatalog.labels.entries
+                .map((entry) => DropdownMenuItem(value: entry.key, child: Text(entry.value, overflow: TextOverflow.ellipsis)))
+                .toList(),
+            onChanged: (code) {
+              if (code != null) onChanged(code);
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DialogueEditor extends StatelessWidget {
+  const _DialogueEditor({
+    required this.controller,
+    required this.label,
+    required this.hint,
+    required this.actions,
+    this.readOnly = false,
+    this.onTap,
+    this.onChanged,
+  });
+
+  final TextEditingController controller;
+  final String label;
+  final String hint;
+  final List<_EditorAction> actions;
+  final bool readOnly;
+  final GestureTapCallback? onTap;
+  final ValueChanged<String>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 300,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(label, style: const TextStyle(color: RoyalColors.teal, fontSize: 12)),
+          const SizedBox(height: 8),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              readOnly: readOnly,
+              expands: true,
+              minLines: null,
+              maxLines: null,
+              textAlignVertical: TextAlignVertical.top,
+              style: const TextStyle(color: Colors.white, fontSize: 17),
+              decoration: InputDecoration(
+                hintText: hint,
+                hintStyle: const TextStyle(color: Colors.white30),
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.only(bottom: 12),
+              ),
+              onTap: onTap,
+              onChanged: onChanged,
+            ),
+          ),
+          if (actions.isNotEmpty)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: actions
+                  .map((action) => IconButton(
+                        tooltip: action.tooltip,
+                        onPressed: action.onPressed,
+                        icon: Icon(action.icon, color: Colors.cyanAccent),
+                      ))
+                  .toList(),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DocumentsPanel extends StatefulWidget {
+  const _DocumentsPanel();
+
+  @override
+  State<_DocumentsPanel> createState() => _DocumentsPanelState();
+}
+
+class _DocumentsPanelState extends State<_DocumentsPanel> {
+  final _picker = ImagePicker();
+  final _ocrService = const OnDeviceOcrService();
+  final _documentTextService = const LocalDocumentTextService();
+  final _translationService = const OnDeviceTranslationService();
+  final _documentExportService = const TranslatedDocumentExportService();
+  bool _isScanning = false;
+  bool _isTranslating = false;
+  bool _isExporting = false;
+  String? _selectedFileName;
+  String? _selectedDocumentName;
+  String? _extractedText;
+  String? _translatedText;
+  String? _notice;
+
+  Future<void> _scanImage(ImageSource source) async {
+    final image = await _picker.pickImage(
+      source: source,
+      imageQuality: 90,
+      maxWidth: 1920,
+    );
+    if (image == null) {
+      if (mounted) setState(() => _notice = 'لم يتم اختيار صورة.');
+      return;
+    }
+    final stopwatch = Stopwatch()..start();
+    setState(() {
+      _isScanning = true;
+      _selectedFileName = image.name;
+      _extractedText = null;
+      _translatedText = null;
+      _notice = 'جارٍ فحص الصورة محلياً…';
+    });
+    final result = await _ocrService.recognizeImagePath(image.path);
+    final remaining = const Duration(seconds: 3) - stopwatch.elapsed;
+    if (remaining > Duration.zero) await Future<void>.delayed(remaining);
+    if (!mounted) return;
+    setState(() {
+      _isScanning = false;
+      _extractedText = result.isSuccess ? result.text : null;
+      _notice = result.message;
+    });
+    final extractedText = result.isSuccess ? result.text : null;
+    if (extractedText != null && extractedText.trim().isNotEmpty) {
+      await _translateExtractedText(extractedText);
+    }
+  }
+
+  Future<void> _translateExtractedText(String text) async {
+    if (!mounted) return;
+    final targetLanguage = DocumentTranslationPolicy.targetForDevice(
+      context.read<LanguagePreferences>().deviceLanguageCode,
+    );
+    setState(() {
+      _isTranslating = true;
+      _translatedText = null;
+      _notice = 'جارٍ اكتشاف لغة المستند وترجمته إلى لغة جهازك: '
+          '${TranslationLanguageCatalog.labels[targetLanguage] ?? targetLanguage}…';
+    });
+    final result = await _translationService.translate(
+      text: text,
+      targetLanguageCode: targetLanguage,
+      onProgress: (progress) {
+        if (mounted && text == _extractedText) {
+          setState(() => _notice = _translationProgressMessage(progress));
+        }
+      },
+    );
+    if (!mounted || text != _extractedText) return;
+    final translatedText = result.isSuccess ? result.text : null;
+    setState(() {
+      _isTranslating = false;
+      _translatedText = translatedText;
+      _notice = result.message;
+    });
+    if (translatedText != null && translatedText.trim().isNotEmpty && mounted) {
+      _openTranslatedPreview(
+        originalText: text,
+        translatedText: translatedText,
+      );
+    }
+  }
+
+  Future<void> _openTranslatedPreview({
+    required String originalText,
+    required String translatedText,
+  }) async {
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => _TranslatedTextPreviewPage(
+          originalText: originalText,
+          translatedText: translatedText,
+          documentName: _selectedDocumentName ?? _selectedFileName ?? 'نص مستخرج',
+        ),
+      ),
+    );
+  }
+
+  String get _exportDocumentName =>
+      _selectedDocumentName ?? _selectedFileName ?? 'mirror_scorpion_translation';
+
+  Future<void> _shareTranslatedDocument() async {
+    final translatedText = _translatedText;
+    if (translatedText == null || translatedText.trim().isEmpty) return;
+    final deviceLanguage = context.read<LanguagePreferences>().deviceLanguageCode;
+    final languageLabel =
+        TranslationLanguageCatalog.labels[deviceLanguage] ?? deviceLanguage;
+    setState(() {
+      _isExporting = true;
+      _notice = 'جارٍ إنشاء PDF مترجم محلياً للمشاركة…';
+    });
+    try {
+      await _documentExportService.sharePdf(
+        documentName: _exportDocumentName,
+        translatedText: translatedText,
+        targetLanguageLabel: languageLabel,
+      );
+      if (mounted) {
+        setState(() => _notice = 'تم فتح مشاركة النظام لملف PDF المترجم.');
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _notice = 'تعذر إنشاء أو مشاركة ملف PDF المترجم.');
+      }
+    } finally {
+      if (mounted) setState(() => _isExporting = false);
+    }
+  }
+
+  Future<void> _printTranslatedDocument() async {
+    final translatedText = _translatedText;
+    if (translatedText == null || translatedText.trim().isEmpty) return;
+    final deviceLanguage = context.read<LanguagePreferences>().deviceLanguageCode;
+    final languageLabel =
+        TranslationLanguageCatalog.labels[deviceLanguage] ?? deviceLanguage;
+    setState(() {
+      _isExporting = true;
+      _notice = 'جارٍ إنشاء PDF مترجم محلياً للطباعة…';
+    });
+    try {
+      await _documentExportService.printPdf(
+        documentName: _exportDocumentName,
+        translatedText: translatedText,
+        targetLanguageLabel: languageLabel,
+      );
+      if (mounted) {
+        setState(() => _notice = 'تم فتح خدمة الطباعة لملف PDF المترجم.');
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _notice = 'تعذر إنشاء أو طباعة ملف PDF المترجم.');
+      }
+    } finally {
+      if (mounted) setState(() => _isExporting = false);
+    }
+  }
+
+  Future<void> _pickLocalDocument() async {
+    final picked = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['pdf', 'txt'],
+    );
+    if (!mounted) return;
+    final file = (picked == null || picked.files.isEmpty) ? null : picked.files.first;
+    if (file == null) {
+      setState(() => _notice = 'لم يتم اختيار مستند.');
+      return;
+    }
+    final path = file.path;
+    if (path == null || path.isEmpty) {
+      setState(() => _notice = 'تعذر الوصول إلى المستند محلياً من هذا الموفر.');
+      return;
+    }
+    setState(() {
+      _isScanning = true;
+      _selectedDocumentName = file.name;
+      _extractedText = null;
+      _translatedText = null;
+      _notice = 'جارٍ قراءة «${file.name}» محلياً…';
+    });
+    final result = await _documentTextService.extract(
+      path: path,
+      fileName: file.name,
+    );
+    if (!mounted) return;
+    setState(() {
+      _isScanning = false;
+      _extractedText = result.isSuccess ? result.text : null;
+      _notice = result.message;
+    });
+    if (result.isSuccess && result.text != null && result.text!.trim().isNotEmpty) {
+      await _translateExtractedText(result.text!);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(18),
+      children: [
+        const _SectionNotice(title: 'عدسة وPDF ومستندات محلية', detail: 'تستخرج العدسة أو المستند النص محلياً، ثم تكتشف لغته وتترجمه دائماً إلى لغة جهازك. لا توجد لغة هدف قابلة للتغيير في هذا القسم.'),
+        const SizedBox(height: 20),
+        _DeviceSpeechLanguageLabel(
+          languageCode: context.watch<LanguagePreferences>().deviceLanguageCode,
+          label: 'الترجمة إلى لغة جهازك',
+        ),
+        const SizedBox(height: 12),
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.camera_alt_outlined, color: RoyalColors.gold),
+            title: const Text('عدسة ذكية'),
+            subtitle: const Text('التقاط صورة وفحص النص محلياً'),
+            trailing: const Icon(Icons.chevron_left),
+            onTap: _isScanning ? null : () => _scanImage(ImageSource.camera),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.photo_library_outlined, color: RoyalColors.gold),
+            title: const Text('اختيار صورة من الجهاز'),
+            subtitle: const Text('OCR محلي ثم ترجمة إلى لغة جهازك'),
+            trailing: const Icon(Icons.chevron_left),
+            onTap: _isScanning ? null : () => _scanImage(ImageSource.gallery),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.picture_as_pdf_outlined, color: RoyalColors.gold),
+            title: const Text('اختيار PDF أو ملف نصي محلي'),
+            subtitle: Text(_selectedDocumentName == null ? 'PDF نصي أو TXT: استخراج محلي ثم ترجمة إلى لغة جهازك' : 'المستند المختار: $_selectedDocumentName'),
+            trailing: const Icon(Icons.chevron_left),
+            onTap: _isScanning || _isTranslating || _isExporting
+                ? null
+                : _pickLocalDocument,
+          ),
+        ),
+        if (_selectedFileName != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 18),
+            child: Text('الصورة المختارة: $_selectedFileName', style: const TextStyle(color: RoyalColors.muted)),
+          ),
+        if (_isScanning || _isTranslating || _isExporting)
+          const Padding(
+            padding: EdgeInsets.only(top: 18),
+            child: LinearProgressIndicator(),
+          ),
+        if (_notice != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 14),
+            child: Text(_notice!, style: const TextStyle(color: RoyalColors.gold, height: 1.5)),
+          ),
+        if (_translatedText != null)
+          Card(
+            margin: const EdgeInsets.only(top: 16),
+            color: Colors.blueAccent.withValues(alpha: 0.08),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text('الترجمة إلى لغة جهازك: ${TranslationLanguageCatalog.labels[context.read<LanguagePreferences>().deviceLanguageCode] ?? context.read<LanguagePreferences>().deviceLanguageCode}', style: const TextStyle(color: RoyalColors.gold)),
+                  const SizedBox(height: 8),
+                  SelectableText(_translatedText!, style: const TextStyle(height: 1.6)),
+                  const SizedBox(height: 12),
+                  FilledButton.icon(
+                    onPressed: () => _openTranslatedPreview(
+                      originalText: _extractedText ?? '',
+                      translatedText: _translatedText!,
+                    ),
+                    icon: const Icon(Icons.fullscreen_outlined),
+                    label: const Text('فتح شاشة الترجمة'),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _isExporting
+                              ? null
+                              : _shareTranslatedDocument,
+                          icon: const Icon(Icons.share_outlined),
+                          label: const Text('مشاركة PDF'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _isExporting
+                              ? null
+                              : _printTranslatedDocument,
+                          icon: const Icon(Icons.print_outlined),
+                          label: const Text('طباعة PDF'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _TranslatedTextPreviewPage extends StatefulWidget {
+  const _TranslatedTextPreviewPage({
+    required this.originalText,
+    required this.translatedText,
+    required this.documentName,
+  });
+
+  final String originalText;
+  final String translatedText;
+  final String documentName;
+
+  @override
+  State<_TranslatedTextPreviewPage> createState() =>
+      _TranslatedTextPreviewPageState();
+}
+
+class _TranslatedTextPreviewPageState
+    extends State<_TranslatedTextPreviewPage> {
+  bool _showOriginal = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        appBar: AppBar(title: Text(widget.documentName)),
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'تظهر الترجمة في هذه الشاشة. اضغط مطولاً لإظهار النص الأصلي مؤقتاً فوقها.',
+                  style: TextStyle(color: RoyalColors.muted, height: 1.45),
+                ),
+                const SizedBox(height: 12),
+                Expanded(
+                  child: GestureDetector(
+                    onLongPressStart: (_) =>
+                        setState(() => _showOriginal = true),
+                    onLongPressEnd: (_) =>
+                        setState(() => _showOriginal = false),
+                    onLongPressCancel: () =>
+                        setState(() => _showOriginal = false),
+                    child: Stack(
+                      children: [
+                        _PreviewTextSheet(
+                          heading: 'الترجمة إلى لغة الجهاز',
+                          text: widget.translatedText,
+                          color: const Color(0xFF23364F),
+                          showSignature: true,
+                        ),
+                        if (_showOriginal)
+                          Positioned.fill(
+                            child: _PreviewTextSheet(
+                              heading: 'النص الأصلي المستخرج',
+                              text: widget.originalText,
+                              color: const Color(0xFF23364F),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'اضغط مطولاً لرؤية النص الأصلي، ثم ارفع إصبعك للعودة إلى الترجمة.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: RoyalColors.gold, height: 1.4),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PreviewTextSheet extends StatelessWidget {
+  const _PreviewTextSheet({
+    required this.heading,
+    required this.text,
+    required this.color,
+    this.showSignature = false,
+  });
+
+  final String heading;
+  final String text;
+  final Color color;
+  final bool showSignature;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white24),
+      ),
+      child: Stack(
+        children: [
+          SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(heading, style: const TextStyle(color: RoyalColors.gold, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 12),
+                SelectableText(text, style: const TextStyle(fontSize: 17, height: 1.7)),
+              ],
+            ),
+          ),
+          if (showSignature)
+            Center(
+              child: IgnorePointer(
+                child: Transform.rotate(
+                  angle: -0.48,
+                  child: const Opacity(
+                    opacity: 0.16,
+                    child: Text(
+                      'تُرجِم بواسطة ميرور سكربيون',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StoriesPanel extends StatefulWidget {
+  const _StoriesPanel({required this.recognitionService});
+
+  final DeviceSpeechRecognitionService recognitionService;
+
+  @override
+  State<_StoriesPanel> createState() => _StoriesPanelState();
+}
+
+class _StoriesPanelState extends State<_StoriesPanel> {
+  late Future<List<_StoryEntry>> _storiesFuture;
+  String? _notice;
+  final bool _threeHourReminder = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _storiesFuture = _loadBundledStories();
+  }
+
+  Future<List<_StoryEntry>> _loadBundledStories() async {
+    const assets = <String>[
+      'assets/data/starter_original_ar.json',
+      'assets/data/owner_inspiration_ar.json',
+    ];
+    final packages = await Future.wait(
+      assets.map((asset) async => jsonDecode(
+            await rootBundle.loadString(asset),
+          ) as Map<String, dynamic>),
+    );
+    return packages
+        .expand((package) => package['stories'] as List<dynamic>? ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .map(_StoryEntry.fromJson)
+        .toList();
+  }
+
+  Future<void> _openInspirationLibrary() async {
+    final stories = await _storiesFuture;
+    if (!mounted) return;
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => _InspirationLibraryPage(stories: stories),
+      ),
+    );
+  }
+
+  Future<void> _openCatalog(_StoryCatalogDefinition catalog) async {
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => _StoryCatalogPage(catalog: catalog),
+      ),
+    );
+  }
+
+  Future<void> _openCreator() async {
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => _CreatorPage(
+          deviceLanguageCode:
+              context.read<LanguagePreferences>().deviceLanguageCode,
+          recognitionService: widget.recognitionService,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(18),
+      children: [
+        const _SectionNotice(
+          title: 'قصص وإلهام',
+          detail:
+              'اختر كرتاً لفتح فهرسه. لا يعرض التطبيق نصاً دينياً أو كتاباً كاملاً إلا من حزمة تحمل مصدراً ورخصة أو إذن إعادة نشر واضحاً.',
+        ),
+        const SizedBox(height: 12),
+        Card(
+          color: Colors.blueAccent.withValues(alpha: 0.06),
+          child: Column(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.auto_awesome_outlined,
+                    color: RoyalColors.gold),
+                title: const Text('الإلهام'),
+                subtitle: const Text('رسائل إنسانية مرفقة محلياً وقابلة للقراءة بصوت الجهاز'),
+                trailing: const Icon(Icons.chevron_left),
+                onTap: _openInspirationLibrary,
+              ),
+              const Divider(height: 1),
+              SwitchListTile(
+                value: _threeHourReminder,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                title: const Text('إشعار إلهام كل 3 ساعات'),
+                subtitle: const Text('سيطلب إذن Android عند التفعيل في الدفعة التالية.'),
+                onChanged: null,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        ..._storyCatalogs.map(
+          (catalog) => Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Card(
+              child: ListTile(
+                leading: Icon(catalog.icon, color: catalog.color),
+                title: Text(catalog.title),
+                subtitle: Text(catalog.summary),
+                trailing: const Icon(Icons.chevron_left),
+                onTap: () => _openCatalog(catalog),
+              ),
+            ),
+          ),
+        ),
+        Card(
+          color: Colors.teal.withValues(alpha: 0.06),
+          child: ListTile(
+            leading: const Icon(Icons.edit_note_outlined, color: RoyalColors.teal),
+            title: const Text('الإبداع'),
+            subtitle: const Text('اكتب أو أملِ قصة من شاشة كبيرة، واستمع إلى ما كتبته'),
+            trailing: const Icon(Icons.chevron_left),
+            onTap: _openCreator,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.folder_copy_outlined, color: RoyalColors.gold),
+            title: const Text('الحزم والمصادر'),
+            subtitle: const Text('نزّل أو استورد حزمة بعد مراجعة المصدر والرخصة'),
+            trailing: const Icon(Icons.chevron_left),
+            onTap: () => Navigator.push<void>(
+              context,
+              MaterialPageRoute<void>(builder: (_) => const _OfflinePackagesPage()),
+            ),
+          ),
+        ),
+        if (_notice != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: Text(_notice!, style: const TextStyle(color: RoyalColors.gold, height: 1.5)),
+          ),
+      ],
+    );
+  }
+}
+
+class _StoryEntry {
+  const _StoryEntry({
+    required this.title,
+    required this.category,
+    required this.summary,
+    required this.body,
+    required this.source,
+    required this.citation,
+  });
+
+  final String title;
+  final String category;
+  final String summary;
+  final String body;
+  final String source;
+  final String citation;
+
+  factory _StoryEntry.fromJson(Map<String, dynamic> json) => _StoryEntry(
+        title: json['title'] as String? ?? 'قصة بلا عنوان',
+        category: json['category'] as String? ?? '',
+        summary: json['summary'] as String? ?? '',
+        body: json['body'] as String? ?? '',
+        source: json['source'] as String? ?? 'غير محدد',
+        citation: json['citation'] as String? ?? 'غير محدد',
+      );
+}
+
+class _StoryCatalogDefinition {
+  const _StoryCatalogDefinition({
+    required this.title,
+    required this.summary,
+    required this.icon,
+    required this.color,
+    required this.sourceStatus,
+    required this.entries,
+  });
+
+  final String title;
+  final String summary;
+  final IconData icon;
+  final Color color;
+  final String sourceStatus;
+  final List<_StoryCatalogEntry> entries;
+}
+
+class _StoryCatalogEntry {
+  const _StoryCatalogEntry({required this.title, required this.subtitle});
+
+  final String title;
+  final String subtitle;
+}
+
+final _storyCatalogs = <_StoryCatalogDefinition>[
+  _StoryCatalogDefinition(
+    title: 'أسباب النزول',
+    summary: 'فهرس سور القرآن الـ114. النص ينتظر حزمة مصدر مرخصة.',
+    icon: Icons.menu_book_outlined,
+    color: RoyalColors.gold,
+    sourceStatus:
+        'الفهرس متاح الآن. لا تظهر أسباب النزول لكل سورة حتى تُراجع الطبعة ورخصة إعادة النشر وتُضاف حزمة موثقة.',
+    entries: List<_StoryCatalogEntry>.generate(
+      _surahNames.length,
+      (index) => _StoryCatalogEntry(
+        title: '${index + 1}. ${_surahNames[index]}',
+        subtitle: 'أسباب النزول — المحتوى يحتاج حزمة مرخصة',
+      ),
+    ),
+  ),
+  const _StoryCatalogDefinition(
+    title: 'قصص الأنبياء',
+    summary: 'فهرس الأنبياء لتصفح القصص عند تنزيل حزمة موثقة.',
+    icon: Icons.auto_stories_outlined,
+    color: RoyalColors.cyan,
+    sourceStatus:
+        'الفهرس متاح الآن. القصص نفسها لا تظهر حتى تكتمل مراجعة الجودة وحقوق الحزمة المصدرية.',
+    entries: _prophetCatalog,
+  ),
+  const _StoryCatalogDefinition(
+    title: 'قصص النساء',
+    summary: 'فهرس شخصيات وموضوعات في انتظار حزمة مرخصة محددة المواضع.',
+    icon: Icons.diversity_1_outlined,
+    color: RoyalColors.purple,
+    sourceStatus:
+        'هذا الفهرس تنظيمي فقط. يحتاج هذا القسم تحديد المواضع والمصدر والرخصة قبل عرض أي نص.',
+    entries: _womenCatalog,
+  ),
+  const _StoryCatalogDefinition(
+    title: 'قصص الأقوام',
+    summary: 'فهرس للأقوام والموضوعات، مع فصل المحتوى قيد المراجعة.',
+    icon: Icons.account_tree_outlined,
+    color: RoyalColors.teal,
+    sourceStatus:
+        'لا تتوفر مادة للقراءة من هذا الفهرس قبل اعتماد حزمة بمصدر ورخصة واضحة.',
+    entries: _peoplesCatalog,
+  ),
+  const _StoryCatalogDefinition(
+    title: 'قصص الحيوانات',
+    summary: 'فهرس موضوعي يجهز لاستقبال مواد موثقة فقط.',
+    icon: Icons.pets_outlined,
+    color: RoyalColors.muted,
+    sourceStatus:
+        'لم تُعتمد حزمة محتوى لهذا التصنيف بعد؛ يعرض التطبيق الفهرس فقط إلى حين مراجعة المصدر.',
+    entries: _animalsCatalog,
+  ),
+];
+
+class _StoryCatalogPage extends StatelessWidget {
+  const _StoryCatalogPage({required this.catalog});
+
+  final _StoryCatalogDefinition catalog;
+
+  void _showSourceGate(BuildContext context, _StoryCatalogEntry entry) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFF0D1623),
+      builder: (sheetContext) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(entry.title,
+                    style: Theme.of(sheetContext).textTheme.titleLarge),
+                const SizedBox(height: 10),
+                Text(catalog.sourceStatus,
+                    style: const TextStyle(height: 1.6)),
+                const SizedBox(height: 14),
+                OutlinedButton.icon(
+                  onPressed: () => Navigator.push<void>(
+                    sheetContext,
+                    MaterialPageRoute<void>(
+                      builder: (_) => const _OfflinePackagesPage(),
+                    ),
+                  ),
+                  icon: const Icon(Icons.inventory_2_outlined),
+                  label: const Text('فتح الحزم والمصادر'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        appBar: AppBar(title: Text(catalog.title)),
+        body: ListView.separated(
+          padding: const EdgeInsets.all(16),
+          itemCount: catalog.entries.length + 1,
+          separatorBuilder: (_, _) => const SizedBox(height: 8),
+          itemBuilder: (context, index) {
+            if (index == 0) {
+              return _SectionNotice(
+                title: catalog.title,
+                detail: catalog.sourceStatus,
+              );
+            }
+            final entry = catalog.entries[index - 1];
+            return Card(
+              child: ListTile(
+                title: Text(entry.title),
+                subtitle: Text(entry.subtitle),
+                trailing: Icon(Icons.lock_outline, color: catalog.color),
+                onTap: () => _showSourceGate(context, entry),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _InspirationLibraryPage extends StatefulWidget {
+  const _InspirationLibraryPage({required this.stories});
+
+  final List<_StoryEntry> stories;
+
+  @override
+  State<_InspirationLibraryPage> createState() =>
+      _InspirationLibraryPageState();
+}
+
+class _InspirationLibraryPageState extends State<_InspirationLibraryPage> {
+  final _speechService = SystemTtsService(storageKey: 'inspirationlibrarypagestate');
+
+  @override
+  void initState() {
+    super.initState();
+    _speechService.addListener(_refresh);
+    _speechService.initialize();
+  }
+
+  void _refresh() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _speechService.removeListener(_refresh);
+    _speechService.stop();
+    super.dispose();
+  }
+
+  Future<void> _toggleSpeech(_StoryEntry story) async {
+    if (_speechService.isSpeaking) {
+      await _speechService.stop();
+      return;
+    }
+    await _speechService.speak(
+      text: '${story.title}. ${story.body}',
+      languageCode: context.read<LanguagePreferences>().storyLanguageCode,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final inspirationStories = widget.stories
+        .where((story) => story.category.contains('inspiration'))
+        .toList();
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        appBar: AppBar(title: const Text('الإلهام')),
+        body: ListView.separated(
+          padding: const EdgeInsets.all(16),
+          itemCount: inspirationStories.length + 1,
+          separatorBuilder: (_, _) => const SizedBox(height: 8),
+          itemBuilder: (context, index) {
+            if (index == 0) {
+              return const _SectionNotice(
+                title: 'رسائل الإلهام',
+                detail:
+                    'هذه رسائل مرفقة محلياً بمصدرها. يمكنك فتح الرسالة أو سماعها بصوت النظام.',
+              );
+            }
+            final story = inspirationStories[index - 1];
+            return Card(
+              child: ListTile(
+                title: Text(story.title),
+                subtitle: Text(story.summary),
+                trailing: IconButton(
+                  tooltip: _speechService.isSpeaking
+                      ? 'إيقاف القراءة'
+                      : 'قراءة الرسالة بصوت النظام',
+                  icon: Icon(
+                    _speechService.isSpeaking
+                        ? Icons.stop_circle_outlined
+                        : Icons.volume_up_outlined,
+                    color: RoyalColors.gold,
+                  ),
+                  onPressed: () => _toggleSpeech(story),
+                ),
+                onTap: () => Navigator.push<void>(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) => _StoryReaderPage(story: story),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _StoryReaderPage extends StatelessWidget {
+  const _StoryReaderPage({required this.story});
+
+  final _StoryEntry story;
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        appBar: AppBar(title: Text(story.title)),
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SelectableText(story.body,
+                    style: const TextStyle(fontSize: 18, height: 1.85)),
+                const SizedBox(height: 24),
+                Text('المصدر: ${story.source}',
+                    style: const TextStyle(color: RoyalColors.muted)),
+                Text('الإحالة: ${story.citation}',
+                    style: const TextStyle(color: RoyalColors.muted)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CreatorPage extends StatefulWidget {
+  const _CreatorPage({
+    required this.deviceLanguageCode,
+    required this.recognitionService,
+  });
+
+  final String deviceLanguageCode;
+  final DeviceSpeechRecognitionService recognitionService;
+
+  @override
+  State<_CreatorPage> createState() => _CreatorPageState();
+}
+
+class _CreatorPageState extends State<_CreatorPage> {
+  static const _termsAcceptedKey = 'creator_terms_accepted_v1';
+
+  final _draftController = TextEditingController();
+  final _ttsService = SystemTtsService(storageKey: 'creatorpagestate');
+  bool _loadingTerms = true;
+  bool _termsAccepted = false;
+  bool _termsRead = false;
+  String _dictationPrefix = '';
+  String? _notice;
+
+  DeviceSpeechRecognitionService get _speechService =>
+      widget.recognitionService;
+
+  @override
+  void initState() {
+    super.initState();
+    _speechService.addListener(_refresh);
+    _ttsService.addListener(_refresh);
+    _ttsService.initialize();
+    _loadTerms();
+  }
+
+  void _refresh() {
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _loadTerms() async {
+    final preferences = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _termsAccepted = preferences.getBool(_termsAcceptedKey) ?? false;
+      _loadingTerms = false;
+    });
+  }
+
+  Future<void> _acceptTerms() async {
+    if (!_termsRead) return;
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setBool(_termsAcceptedKey, true);
+    if (!mounted) return;
+    setState(() {
+      _termsAccepted = true;
+      _notice = 'تم حفظ الموافقة على هذا الجهاز. محرر الإبداع محلي ولا يرسل نصك تلقائياً.';
+    });
+  }
+
+  Future<void> _toggleDictation() async {
+    if (_speechService.isListening) {
+      await _speechService.stop();
+      return;
+    }
+    _dictationPrefix = _draftController.text.trim();
+    final started = await _speechService.start(
+      languageCode: widget.deviceLanguageCode,
+      onText: (recognizedText) {
+        final merged = _dictationPrefix.isEmpty
+            ? recognizedText
+            : '$_dictationPrefix $recognizedText';
+        _draftController.value = TextEditingValue(
+          text: merged,
+          selection: TextSelection.collapsed(offset: merged.length),
+        );
+        if (mounted) setState(() {});
+      },
+    );
+    if (mounted) setState(() => _notice = _speechService.message);
+    if (!started && mounted) setState(() => _notice = _speechService.message);
+  }
+
+  Future<void> _toggleDraftSpeech() async {
+    if (_ttsService.isSpeaking) {
+      await _ttsService.stop();
+      return;
+    }
+    await _ttsService.speak(
+      text: _draftController.text,
+      languageCode: widget.deviceLanguageCode,
+    );
+    if (mounted) setState(() => _notice = _ttsService.message);
+  }
+
+  void _checkDraft() {
+    final result = InspirationSafety.assessStoryDraft(_draftController.text);
+    setState(() => _notice = result.message);
+  }
+
+  @override
+  void dispose() {
+    _speechService.removeListener(_refresh);
+    _ttsService.removeListener(_refresh);
+    _ttsService.stop();
+    _draftController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loadingTerms) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (!_termsAccepted) {
+      return Directionality(
+        textDirection: TextDirection.rtl,
+        child: Scaffold(
+          appBar: AppBar(title: const Text('شروط الإبداع')),
+          body: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  VoiceProfileBar(ttsService: _ttsService),
+                  const Text('اكتب قصة تحترم الآخرين',
+                      style: TextStyle(
+                          color: RoyalColors.gold,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 14),
+                  const Text(
+                    'لا تكتب محتوى يحرض على الكراهية أو العنف أو التنمر، ولا ألفاظاً مسيئة أو تلميحات جنسية. لا يقرأ التطبيق ما تكتبه ولا يرسله إلى خدمة خارجية من هذه الشاشة.',
+                    style: TextStyle(height: 1.7, fontSize: 16),
+                  ),
+                  const Spacer(),
+                  CheckboxListTile(
+                    value: _termsRead,
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('قرأت الشروط وأوافق عليها.'),
+                    onChanged: (value) =>
+                        setState(() => _termsRead = value ?? false),
+                  ),
+                  FilledButton.icon(
+                    onPressed: _termsRead ? _acceptTerms : null,
+                    icon: const Icon(Icons.verified_user_outlined),
+                    label: const Text('موافقة وفتح محرر الإبداع'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        appBar: AppBar(title: const Text('الإبداع')),
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'اكتب قصتك أو استخدم الإملاء بلغة جهازك. يبقى النص على جهازك ولا يُرسل تلقائياً.',
+                  style: TextStyle(color: RoyalColors.muted, height: 1.5),
+                ),
+                const SizedBox(height: 12),
+                Expanded(
+                  child: TextField(
+                    controller: _draftController,
+                    expands: true,
+                    maxLines: null,
+                    minLines: null,
+                    textAlignVertical: TextAlignVertical.top,
+                    keyboardType: TextInputType.multiline,
+                    onChanged: (_) => setState(() {}),
+                    decoration: const InputDecoration(
+                      alignLabelWithHint: true,
+                      hintText: 'ابدأ كتابة قصتك هنا…',
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: _toggleDictation,
+                        icon: Icon(_speechService.isListening
+                            ? Icons.stop_circle_outlined
+                            : Icons.mic_none_outlined),
+                        label: Text(_speechService.isListening
+                            ? 'إيقاف الإملاء'
+                            : 'إملاء صوتي'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _draftController.text.trim().isEmpty
+                            ? null
+                            : _toggleDraftSpeech,
+                        icon: Icon(_ttsService.isSpeaking
+                            ? Icons.stop_circle_outlined
+                            : Icons.volume_up_outlined),
+                        label: Text(_ttsService.isSpeaking
+                            ? 'إيقاف السماع'
+                            : 'اسمع ما كتبت'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: _checkDraft,
+                  icon: const Icon(Icons.verified_user_outlined),
+                  label: const Text('فحص شروط المسودة'),
+                ),
+                if (_notice != null) ...[
+                  const SizedBox(height: 8),
+                  Text(_notice!,
+                      style: const TextStyle(
+                          color: RoyalColors.gold, height: 1.45)),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+const _surahNames = <String>[
+  'الفاتحة', 'البقرة', 'آل عمران', 'النساء', 'المائدة', 'الأنعام', 'الأعراف',
+  'الأنفال', 'التوبة', 'يونس', 'هود', 'يوسف', 'الرعد', 'إبراهيم', 'الحجر',
+  'النحل', 'الإسراء', 'الكهف', 'مريم', 'طه', 'الأنبياء', 'الحج', 'المؤمنون',
+  'النور', 'الفرقان', 'الشعراء', 'النمل', 'القصص', 'العنكبوت', 'الروم', 'لقمان',
+  'السجدة', 'الأحزاب', 'سبأ', 'فاطر', 'يس', 'الصافات', 'ص', 'الزمر', 'غافر',
+  'فصلت', 'الشورى', 'الزخرف', 'الدخان', 'الجاثية', 'الأحقاف', 'محمد', 'الفتح',
+  'الحجرات', 'ق', 'الذاريات', 'الطور', 'النجم', 'القمر', 'الرحمن', 'الواقعة',
+  'الحديد', 'المجادلة', 'الحشر', 'الممتحنة', 'الصف', 'الجمعة', 'المنافقون',
+  'التغابن', 'الطلاق', 'التحريم', 'الملك', 'القلم', 'الحاقة', 'المعارج', 'نوح',
+  'الجن', 'المزمل', 'المدثر', 'القيامة', 'الإنسان', 'المرسلات', 'النبأ',
+  'النازعات', 'عبس', 'التكوير', 'الانفطار', 'المطففين', 'الانشقاق', 'البروج',
+  'الطارق', 'الأعلى', 'الغاشية', 'الفجر', 'البلد', 'الشمس', 'الليل', 'الضحى',
+  'الشرح', 'التين', 'العلق', 'القدر', 'البينة', 'الزلزلة', 'العاديات', 'القارعة',
+  'التكاثر', 'العصر', 'الهمزة', 'الفيل', 'قريش', 'الماعون', 'الكوثر', 'الكافرون',
+  'النصر', 'المسد', 'الإخلاص', 'الفلق', 'الناس',
+];
+
+const _prophetCatalog = <_StoryCatalogEntry>[
+  _StoryCatalogEntry(title: 'آدم عليه السلام', subtitle: 'قصة نبي — محتوى مرخص مطلوب'),
+  _StoryCatalogEntry(title: 'نوح عليه السلام', subtitle: 'قصة نبي — محتوى مرخص مطلوب'),
+  _StoryCatalogEntry(title: 'إبراهيم عليه السلام', subtitle: 'قصة نبي — محتوى مرخص مطلوب'),
+  _StoryCatalogEntry(title: 'يوسف عليه السلام', subtitle: 'قصة نبي — محتوى مرخص مطلوب'),
+  _StoryCatalogEntry(title: 'موسى عليه السلام', subtitle: 'قصة نبي — محتوى مرخص مطلوب'),
+  _StoryCatalogEntry(title: 'داود عليه السلام', subtitle: 'قصة نبي — محتوى مرخص مطلوب'),
+  _StoryCatalogEntry(title: 'سليمان عليه السلام', subtitle: 'قصة نبي — محتوى مرخص مطلوب'),
+  _StoryCatalogEntry(title: 'عيسى عليه السلام', subtitle: 'قصة نبي — محتوى مرخص مطلوب'),
+  _StoryCatalogEntry(title: 'محمد ﷺ', subtitle: 'سيرة نبي — محتوى مرخص مطلوب'),
+];
+
+const _womenCatalog = <_StoryCatalogEntry>[
+  _StoryCatalogEntry(title: 'مريم عليها السلام', subtitle: 'موضوع في انتظار حزمة مرخصة'),
+  _StoryCatalogEntry(title: 'أم موسى', subtitle: 'موضوع في انتظار حزمة مرخصة'),
+  _StoryCatalogEntry(title: 'امرأة فرعون', subtitle: 'موضوع في انتظار حزمة مرخصة'),
+  _StoryCatalogEntry(title: 'بلقيس', subtitle: 'موضوع في انتظار حزمة مرخصة'),
+  _StoryCatalogEntry(title: 'هاجر', subtitle: 'موضوع في انتظار حزمة مرخصة'),
+];
+
+const _peoplesCatalog = <_StoryCatalogEntry>[
+  _StoryCatalogEntry(title: 'قوم نوح', subtitle: 'موضوع في انتظار حزمة مرخصة'),
+  _StoryCatalogEntry(title: 'عاد', subtitle: 'موضوع في انتظار حزمة مرخصة'),
+  _StoryCatalogEntry(title: 'ثمود', subtitle: 'موضوع في انتظار حزمة مرخصة'),
+  _StoryCatalogEntry(title: 'قوم لوط', subtitle: 'موضوع في انتظار حزمة مرخصة'),
+  _StoryCatalogEntry(title: 'أصحاب مدين', subtitle: 'موضوع في انتظار حزمة مرخصة'),
+];
+
+const _animalsCatalog = <_StoryCatalogEntry>[
+  _StoryCatalogEntry(title: 'نملة سليمان', subtitle: 'موضوع في انتظار حزمة مرخصة'),
+  _StoryCatalogEntry(title: 'هدهد سليمان', subtitle: 'موضوع في انتظار حزمة مرخصة'),
+  _StoryCatalogEntry(title: 'ناقة صالح', subtitle: 'موضوع في انتظار حزمة مرخصة'),
+  _StoryCatalogEntry(title: 'حوت يونس', subtitle: 'موضوع في انتظار حزمة مرخصة'),
+  _StoryCatalogEntry(title: 'كلب أصحاب الكهف', subtitle: 'موضوع في انتظار حزمة مرخصة'),
+];
+
+class _GamesPanel extends StatefulWidget {
+  const _GamesPanel();
+
+  @override
+  State<_GamesPanel> createState() => _GamesPanelState();
+}
+
+class _GamesPanelState extends State<_GamesPanel> {
+  final _chess = ChessGameController();
+  String? _selectedSquare;
+  List<String> _legalTargets = const [];
+  bool _computerThinking = false;
+  bool _playAgainstComputer = true;
+  ChessComputerLevel _computerLevel = ChessComputerLevel.normal;
+  String _gameNotice = 'اختر وضع اللعب ثم انقل قطعة بيضاء لبدء المباراة.';
+  final _capturedByWhite = <String>[];
+  final _capturedByBlack = <String>[];
+
+  @override
+  void initState() {
+    super.initState();
+    SystemChrome.setPreferredOrientations(const [DeviceOrientation.portraitUp]);
+  }
+
+  @override
+  void dispose() {
+    SystemChrome.setPreferredOrientations(DeviceOrientation.values);
+    super.dispose();
+  }
+
+  void _recordLastCapture() {
+    final move = _chess.lastMove;
+    if (move == null || !move.isCapture) return;
+    (move.movedByWhite ? _capturedByWhite : _capturedByBlack)
+        .add(move.capturedSymbol);
+  }
+
+  Future<void> _tapSquare(String square) async {
+    if (_computerThinking || _chess.gameOver) return;
+    if (_playAgainstComputer && !_chess.isWhiteTurn) return;
+    final piece = _chess.pieceAt(square);
+    final activeColor = _chess.isWhiteTurn ? 'WHITE' : 'BLACK';
+    if (_selectedSquare == null) {
+      if (piece == null || piece.color.name != activeColor) return;
+      setState(() {
+        _selectedSquare = square;
+        _legalTargets = _chess.legalMovesFrom(square);
+        _gameNotice = _legalTargets.isEmpty ? 'لا توجد حركة قانونية لهذه القطعة.' : 'اختر مربعاً مميزاً للحركة.';
+      });
+      return;
+    }
+
+    if (square == _selectedSquare) {
+      setState(() {
+        _selectedSquare = null;
+        _legalTargets = const [];
+      });
+      return;
+    }
+    if (!_legalTargets.contains(square)) {
+      if (piece != null && piece.color.name == activeColor) {
+        setState(() {
+          _selectedSquare = square;
+          _legalTargets = _chess.legalMovesFrom(square);
+        });
+      }
+      return;
+    }
+
+    final moved = _chess.moveHuman(_selectedSquare!, square);
+    if (!moved) return;
+    _recordLastCapture();
+    if (_chess.gameOver) {
+      setState(() {
+        _selectedSquare = null;
+        _legalTargets = const [];
+        _computerThinking = false;
+        _gameNotice = _outcomeMessage();
+      });
+      return;
+    }
+    setState(() {
+      _selectedSquare = null;
+      _legalTargets = const [];
+      _gameNotice = _outcomeMessage();
+    });
+    if (!_playAgainstComputer) return;
+    setState(() {
+      _computerThinking = true;
+      _gameNotice = 'الكمبيوتر يفكر بالمستوى ${_computerLevel.label}…';
+    });
+    await Future<void>.delayed(const Duration(milliseconds: 450));
+    if (!mounted) return;
+    final computerMoved = _chess.moveComputer(level: _computerLevel);
+    if (computerMoved) _recordLastCapture();
+    if (!mounted) return;
+    setState(() {
+      _computerThinking = false;
+      _gameNotice = _outcomeMessage();
+    });
+  }
+
+  String _outcomeMessage() {
+    if (_chess.isCheckmate) return 'كش مات. انتهت المباراة.';
+    if (_chess.isDraw) return 'تعادل وفق قواعد الشطرنج.';
+    if (_chess.isWhiteTurn) return 'دور الأبيض. اختر قطعة ثم مربعاً مميزاً للحركة.';
+    return _playAgainstComputer
+        ? 'دور الكمبيوتر الأسود.'
+        : 'دور الأسود. اختر قطعة ثم مربعاً مميزاً للحركة.';
+  }
+
+  void _resetGame() {
+    setState(() {
+      _chess.reset();
+      _selectedSquare = null;
+      _legalTargets = const [];
+      _computerThinking = false;
+      _capturedByWhite.clear();
+      _capturedByBlack.clear();
+      _gameNotice = 'بدأت مباراة جديدة. دور الأبيض.';
+    });
+  }
+
+  void _setPlayMode(bool againstComputer) {
+    setState(() {
+      _playAgainstComputer = againstComputer;
+      _chess.reset();
+      _selectedSquare = null;
+      _legalTargets = const [];
+      _computerThinking = false;
+      _capturedByWhite.clear();
+      _capturedByBlack.clear();
+      _gameNotice = againstComputer
+          ? 'وضع لاعب واحد: أنت بالأبيض والكمبيوتر بالأسود.'
+          : 'وضع لاعبين محليين: يتبادل اللاعبان الجهاز.';
+    });
+  }
+
+  void _setComputerLevel(ChessComputerLevel level) {
+    setState(() {
+      _computerLevel = level;
+      _chess.reset();
+      _selectedSquare = null;
+      _legalTargets = const [];
+      _computerThinking = false;
+      _capturedByWhite.clear();
+      _capturedByBlack.clear();
+      _gameNotice = 'مستوى الكمبيوتر: ${level.label}. بدأت مباراة جديدة.';
+    });
+  }
+
+  Widget _buildMatchStatus() {
+    final isWhiteTurn = _chess.isWhiteTurn;
+    final title = _chess.isCheckmate
+        ? 'كش مات — فاز ${isWhiteTurn ? 'الأسود' : 'الأبيض'}'
+        : _chess.isDraw
+            ? 'تعادل وفق قواعد الشطرنج'
+            : _computerThinking
+                ? 'الكمبيوتر يفكر — ${_computerLevel.label}'
+                : isWhiteTurn
+                    ? 'دور الأبيض'
+                    : _playAgainstComputer
+                        ? 'دور الكمبيوتر الأسود'
+                        : 'دور الأسود';
+    final subtitle = _playAgainstComputer
+        ? 'أنت بالأبيض • الكمبيوتر بالأسود'
+        : 'تناوب الجهاز بين اللاعب الأبيض والأسود';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [const Color(0xFF172938), const Color(0xFF0E1A24).withValues(alpha: 0.86)],
+        ),
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: RoyalColors.gold.withValues(alpha: 0.42)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 31,
+            height: 31,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: isWhiteTurn ? const Color(0xFFFFF8E6) : const Color(0xFF14222B),
+              border: Border.all(color: RoyalColors.gold, width: 1.5),
+              boxShadow: [BoxShadow(color: RoyalColors.gold.withValues(alpha: 0.22), blurRadius: 8)],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: RoyalColors.gold)),
+                const SizedBox(height: 2),
+                Text(subtitle, style: const TextStyle(fontSize: 12, color: RoyalColors.muted)),
+              ],
+            ),
+          ),
+          const Icon(Icons.auto_awesome, color: RoyalColors.gold, size: 19),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCapturedPieces() {
+    return Row(
+      children: [
+        Expanded(child: _CapturedPiecesPane(label: 'أسر الأبيض', symbols: _capturedByWhite, isWhiteSide: true)),
+        const SizedBox(width: 8),
+        Expanded(child: _CapturedPiecesPane(label: 'أسر الأسود', symbols: _capturedByBlack, isWhiteSide: false)),
+      ],
+    );
+  }
+
+  Widget _buildChessBoard() {
+    const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+    return AspectRatio(
+      aspectRatio: 1,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          gradient: const LinearGradient(
+            colors: [Color(0xFFF1D889), Color(0xFF714B1D), Color(0xFF251609), Color(0xFFCD9F43)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          border: Border.all(color: const Color(0xFFFFE7A0), width: 1.25),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withValues(alpha: 0.68), blurRadius: 24, offset: const Offset(0, 12)),
+            BoxShadow(color: const Color(0xFFFFD768).withValues(alpha: 0.12), blurRadius: 24, spreadRadius: 1),
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(5),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(15),
+            child: Stack(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 6, 6, 18),
+                  child: GridView.builder(
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: 64,
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 8),
+                    itemBuilder: (context, index) {
+                      final rank = 8 - (index ~/ 8);
+                      final file = files[index % 8];
+                      final square = '$file$rank';
+                      final piece = _chess.pieceAt(square);
+                      final isLight = (index ~/ 8 + index % 8).isEven;
+                      final isSelected = _selectedSquare == square;
+                      final isTarget = _legalTargets.contains(square);
+                      final lastMove = _chess.lastMove;
+                      final isLastMove = lastMove?.from == square || lastMove?.to == square;
+                      final squareColor = isSelected
+                          ? const Color(0xFFE6B948)
+                          : isTarget
+                              ? const Color(0xFF77AE80)
+                              : isLastMove
+                                  ? (isLight ? const Color(0xFFE9C96E) : const Color(0xFF567866))
+                                  : isLight
+                                      ? const Color(0xFFE4D5B4)
+                                      : const Color(0xFF3C5A67);
+                      return GestureDetector(
+                        onTap: () => _tapSquare(square),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 130),
+                          decoration: BoxDecoration(
+                            color: squareColor,
+                            border: Border.all(
+                              color: Colors.black.withValues(alpha: isLight ? 0.035 : 0.10),
+                              width: 0.3,
+                            ),
+                          ),
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              if (isTarget)
+                                Container(
+                                  width: piece == null ? 12 : 35,
+                                  height: piece == null ? 12 : 35,
+                                  decoration: BoxDecoration(
+                                    color: piece == null
+                                        ? const Color(0xFF133B2B).withValues(alpha: 0.72)
+                                        : Colors.transparent,
+                                    shape: BoxShape.circle,
+                                    border: piece == null
+                                        ? null
+                                        : Border.all(
+                                            color: const Color(0xFFB63737).withValues(alpha: 0.86),
+                                            width: 2.4,
+                                          ),
+                                  ),
+                                ),
+                              AnimatedScale(
+                                duration: const Duration(milliseconds: 130),
+                                scale: isSelected ? 1.08 : 1,
+                                child: _ChessPieceToken(
+                                  symbol: ChessGameController.pieceSymbol(piece),
+                                  isWhite: piece?.color.name == 'WHITE',
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                Positioned(
+                  left: 3,
+                  top: 8,
+                  bottom: 20,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: List<Widget>.generate(
+                      8,
+                      (index) => Text('${8 - index}', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Color(0xFFFFE2A1))),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  left: 20,
+                  right: 7,
+                  bottom: 2,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: files.map((file) => Text(file, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Color(0xFFFFE2A1)))).toList(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(6, 6, 6, 18),
+        children: [
+          Row(
+            children: [
+              IconButton(
+                tooltip: 'رجوع',
+                onPressed: () => Navigator.maybePop(context),
+                icon: const Icon(Icons.arrow_forward_ios_rounded, color: RoyalColors.gold, size: 20),
+              ),
+              const SizedBox(width: 2),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(AppLocalizations.of(context)!.featureGames, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+                    Text('مباراة سريعة في وضع عمودي', style: TextStyle(fontSize: 12, color: RoyalColors.muted)),
+                  ],
+                ),
+              ),
+              IconButton(
+                tooltip: 'مباراة جديدة',
+                onPressed: _resetGame,
+                icon: const Icon(Icons.restart_alt, color: RoyalColors.gold),
+              ),
+            ],
+          ),
+          const SizedBox(height: 5),
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            alignment: WrapAlignment.center,
+            children: [
+              ChoiceChip(
+                label: const Text('ضد الكمبيوتر'),
+                selected: _playAgainstComputer,
+                onSelected: (selected) { if (selected) _setPlayMode(true); },
+              ),
+              ChoiceChip(
+                label: const Text('لاعبان محلياً'),
+                selected: !_playAgainstComputer,
+                onSelected: (selected) { if (selected) _setPlayMode(false); },
+              ),
+            ],
+          ),
+          if (_playAgainstComputer) ...[
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 7,
+              runSpacing: 5,
+              alignment: WrapAlignment.center,
+              children: ChessComputerLevel.values.map((level) => ChoiceChip(
+                label: Text(level.label),
+                selected: _computerLevel == level,
+                onSelected: (selected) { if (selected) _setComputerLevel(level); },
+              )).toList(),
+            ),
+          ],
+          const SizedBox(height: 9),
+          _buildMatchStatus(),
+          const SizedBox(height: 10),
+          Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 520), child: _buildChessBoard())),
+          const SizedBox(height: 9),
+          _buildCapturedPieces(),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  _gameNotice,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: RoyalColors.gold, height: 1.35, fontSize: 12),
+                ),
+              ),
+              IconButton(
+                tooltip: 'مباراة جديدة',
+                onPressed: _resetGame,
+                icon: const Icon(Icons.refresh_rounded, color: RoyalColors.gold),
+              ),
+            ],
+          ),
+          Theme(
+            data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+            child: ExpansionTile(
+              tilePadding: const EdgeInsets.symmetric(horizontal: 6),
+              title: const Text('سجل النقلات PGN', style: TextStyle(color: RoyalColors.muted, fontSize: 12)),
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+                  child: SelectableText(
+                    _chess.pgn.isEmpty ? 'ستظهر النقلات هنا بعد بدء المباراة.' : _chess.pgn,
+                    textDirection: TextDirection.ltr,
+                    style: const TextStyle(color: RoyalColors.muted, fontSize: 11),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ChessPieceToken extends StatelessWidget {
+  const _ChessPieceToken({required this.symbol, required this.isWhite});
+
+  final String symbol;
+  final bool isWhite;
+
+  @override
+  Widget build(BuildContext context) {
+    if (symbol.isEmpty) return const SizedBox.shrink();
+    final colors = isWhite
+        ? const [Color(0xFFFFFFFF), Color(0xFFFFE9A5), Color(0xFFD19D45), Color(0xFFFFF9DD)]
+        : const [Color(0xFF7593A0), Color(0xFF253C48), Color(0xFF081217), Color(0xFF3F6473)];
+    return Stack(
+      alignment: Alignment.center,
+      clipBehavior: Clip.none,
+      children: [
+        Positioned(
+          bottom: -2,
+          child: Container(
+            width: 22,
+            height: 5,
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.28),
+              borderRadius: BorderRadius.circular(99),
+              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.30), blurRadius: 3.5, offset: const Offset(0, 1.5))],
+            ),
+          ),
+        ),
+        Transform.translate(
+          offset: const Offset(0, -1),
+          child: ShaderMask(
+            blendMode: BlendMode.srcIn,
+            shaderCallback: (bounds) => LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: colors,
+              stops: const [0, 0.30, 0.72, 1],
+            ).createShader(bounds),
+            child: Text(
+              symbol,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 38,
+                height: 1,
+                fontWeight: FontWeight.w600,
+                shadows: [
+                  Shadow(color: Colors.black.withValues(alpha: 0.64), blurRadius: 1.8, offset: const Offset(1, 1.2)),
+                  Shadow(color: Colors.white.withValues(alpha: isWhite ? 0.32 : 0.09), blurRadius: 0.45, offset: const Offset(-0.4, -0.5)),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CapturedPiecesPane extends StatelessWidget {
+  const _CapturedPiecesPane({
+    required this.label,
+    required this.symbols,
+    required this.isWhiteSide,
+  });
+
+  final String label;
+  final List<String> symbols;
+  final bool isWhiteSide;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(minHeight: 54),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: RoyalColors.border.withValues(alpha: 0.7)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 11, color: RoyalColors.muted, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 3),
+          Text(
+            symbols.isEmpty ? '—' : symbols.join(' '),
+            textDirection: TextDirection.ltr,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 18,
+              height: 1,
+              color: isWhiteSide ? const Color(0xFFFFF1C9) : const Color(0xFF9DB9C5),
+              shadows: [Shadow(color: Colors.black.withValues(alpha: 0.58), blurRadius: 2, offset: const Offset(1, 1))],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SettingsPanel extends StatelessWidget {
+  const _SettingsPanel();
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<PremiumVerificationService>(
+      builder: (context, premium, _) => ListView(
+        padding: const EdgeInsets.all(18),
+        children: [
+          const _SectionNotice(title: 'PRO بتوقيع خادمي', detail: 'لا يصدر التطبيق كود تفعيل ولا يحمل مفتاحاً خاصاً. يعرض معرّف تثبيت محلياً ويرسل الباتش الموقّع إلى الخادم عند ربط API.'),
+          const SizedBox(height: 16),
+          const SubscriptionBoundariesCard(),
+          const SizedBox(height: 12),
+          Card(
+            child: ListTile(
+              title: const Text('معرّف التثبيت'),
+              subtitle: SelectableText(premium.installationId),
+              trailing: IconButton(
+                icon: const Icon(Icons.copy, color: RoyalColors.gold),
+                onPressed: () async {
+                  await Clipboard.setData(ClipboardData(text: premium.installationId));
+                  if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم نسخ المعرّف.')));
+                },
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 54,
+            child: FilledButton.icon(
+              style: FilledButton.styleFrom(backgroundColor: RoyalColors.gold, foregroundColor: Colors.black),
+              onPressed: () => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => const _ProActivationPage())),
+              icon: const Icon(Icons.workspace_premium),
+              label: const Text('تفعيل النسخة PRO', style: TextStyle(fontWeight: FontWeight.w800)),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            child: ListTile(
+              leading: const Icon(
+                Icons.record_voice_over_outlined,
+                color: RoyalColors.gold,
+              ),
+              title: const Text('ElevenLabs — القراءة ونسخ صوت المالك'),
+              subtitle: const Text(
+                'الربط السحابي غير مفعّل؛ أصوات النظام المحلية هي المسار العامل الآن.',
+              ),
+              trailing: const Icon(Icons.chevron_left),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => const _ElevenLabsVoicePage(),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.download_outlined, color: RoyalColors.cyan),
+              title: const Text('حزم المحتوى واللغات أوف لاين'),
+              subtitle: const Text('عرض المساحة المحلية وحزم JSON المستوردة وتجهيز نموذجَي لغة الترجمة بموافقة صريحة.'),
+              trailing: const Icon(Icons.chevron_left),
+              onTap: () => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => const _OfflinePackagesPage())),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.bubble_chart_outlined, color: RoyalColors.teal),
+              title: const Text('الفقاعة العائمة والخصوصية'),
+              subtitle: const Text('Android فقط: إذن صريح وفقاعة قابلة للسحب، بلا قراءة للتطبيقات الأخرى.'),
+              trailing: const Icon(Icons.chevron_left),
+              onTap: () => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => const _BubblePrivacyPage())),
+            ),
+          ),
+          const SizedBox(height: 12),
+          const Card(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.info_outline, color: RoyalColors.gold),
+                      SizedBox(width: 10),
+                      Text('نبذة عن التطبيق', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+                    ],
+                  ),
+                  SizedBox(height: 12),
+                  Text('ميرور سكربيون: حيث تُصنع البدايات', style: TextStyle(color: RoyalColors.cyan, fontWeight: FontWeight.w700, fontSize: 17)),
+                  SizedBox(height: 10),
+                  Text('الوقت هو العملة الأغلى التي مُنحت للإنسان. هنا، نحن لا نقيس أعمارنا بالسنوات، بل بكل ثانية نصنع فيها إنجازاً حقيقياً.\n\nهنا ستكتشف أن كل انكسار مررت به لم يكن إلا تمهيداً لانطلاقة أعظم؛ فالماضي ليس للمحو، بل للتعلّم، والمستقبل هو ما يستحق انتباهك الآن.\n\nتذكّر دائماً: قصتك لا تزال تُكتب، والنهاية لم يحن وقتها بعد.', style: TextStyle(color: RoyalColors.muted, height: 1.65, fontSize: 15)),
+                  SizedBox(height: 14),
+                  Divider(),
+                  SizedBox(height: 8),
+                  Text('إهداء', style: TextStyle(color: RoyalColors.gold, fontWeight: FontWeight.w800, fontSize: 17)),
+                  SizedBox(height: 8),
+                  Text(
+                    'إلى أبنائي وأغلى ما أملك.. سلمى، سما، سارة، وسيف؛ النور الذي أضاء لي السهر، والحافز الذي جعل من الإصرار جسراً للقمة.\n\nتم تطوير Mirror Scorpion بجهد وشغف متواصل ليكون أكثر من مجرد أداة ذكية؛ إنه شاهدٌ حي على أن الشغف لا يحده زمن، وأن الحب هو المحرك الأكبر لكل نجاح وابتكار. أهديكم هذا الإنجاز، وإلى كل من آمن بفكري وساندني في رحلة البناء.',
+                    style: TextStyle(color: RoyalColors.muted, height: 1.65, fontSize: 15),
+                  ),
+                  SizedBox(height: 12),
+                  Text('المطور: تامر الدسوقي', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ElevenLabsVoicePage extends StatelessWidget {
+  const _ElevenLabsVoicePage();
+
+  void _showConsentSummary(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFF0D1623),
+      builder: (sheetContext) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Text(
+                    'ملخص الموافقة قبل نسخ الصوت',
+                    style: TextStyle(
+                      color: RoyalColors.gold,
+                      fontSize: 19,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'لن تكون ميزة النسخ متاحة إلا لمن عمره 18 عاماً أو أكثر، '
+                    'ولصوت المالك أو صاحب تفويض صريح فقط. لا يقرأ التطبيق '
+                    'رسائلك أو مكالماتك، ولا يرفع تسجيلاً تلقائياً. عند التفعيل '
+                    'سيظهر عقد موافقة مستقل وخيار حذف واضح قبل إرسال عينة.',
+                    style: TextStyle(height: 1.7),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'المرجع داخل المشروع: ${ElevenLabsVoiceService.consentDocumentPath}',
+                    style: const TextStyle(
+                      color: RoyalColors.muted,
+                      height: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    onPressed: () => Navigator.pop(sheetContext),
+                    child: const Text('فهمت'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final service = context.watch<ElevenLabsVoiceService>();
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        appBar: AppBar(title: const Text('إعداد ElevenLabs')),
+        body: ListView(
+          padding: const EdgeInsets.all(18),
+          children: [
+            const _SectionNotice(
+              title: 'حالة صوت صادقة',
+              detail:
+                  'تعمل القراءة الحالية بصوت النظام المثبت على جهازك. لا يعمل ElevenLabs في هذه النسخة بعد، ولا يرسل التطبيق نصاً أو عينة أو مفتاحاً إلى أي مزود.',
+            ),
+            const SizedBox(height: 14),
+            Card(
+              child: ListTile(
+                leading: const Icon(
+                  Icons.phonelink_lock_outlined,
+                  color: RoyalColors.cyan,
+                ),
+                title: const Text('حالة الخادم الوسيط'),
+                subtitle: Text(service.statusMessage),
+                trailing: const Icon(
+                  Icons.cloud_off_outlined,
+                  color: RoyalColors.muted,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text(
+                      'قراءة سحابية اختيارية',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'ستُستخدم لاحقاً لقراءة نص تختاره فقط. لا تعد بديلاً عن أصوات النظام ولا تعمل قبل اعتماد الخطة والخادم وحد الاستخدام.',
+                      style: TextStyle(
+                        color: RoyalColors.muted,
+                        height: 1.5,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    FilledButton.icon(
+                      onPressed: null,
+                      icon: Icon(Icons.cloud_off_outlined),
+                      label: Text('الخادم غير مفعّل'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text(
+                      'نسخ صوت المالك',
+                      style: TextStyle(
+                        color: RoyalColors.gold,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'مغلق الآن. عند إطلاقه سيطلب موافقة منفصلة، تأكيد العمر وملكية الصوت، ثم يسمح بعينة يختارها المستخدم يدوياً. لا يدعم نسخ أصوات الغير أو تشغيل التسجيل في الخلفية.',
+                      style: TextStyle(
+                        color: RoyalColors.muted,
+                        height: 1.5,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    OutlinedButton.icon(
+                      onPressed: () => _showConsentSummary(context),
+                      icon: const Icon(Icons.privacy_tip_outlined),
+                      label: const Text('اطلع على ملخص الموافقة والحذف'),
+                    ),
+                    const SizedBox(height: 8),
+                    FilledButton.icon(
+                      onPressed: null,
+                      icon: Icon(Icons.lock_outline),
+                      label: Text('لا يمكن رفع عينة الآن'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _OfflinePackagesPage extends StatefulWidget {
+  const _OfflinePackagesPage();
+
+  @override
+  State<_OfflinePackagesPage> createState() => _OfflinePackagesPageState();
+}
+
+class _OfflinePackagesPageState extends State<_OfflinePackagesPage> {
+  final _storage = const OfflineContentStorage();
+  final _catalogService = GitHubContentCatalogService();
+  final _translationService = const OnDeviceTranslationService();
+  late Future<List<OfflinePackageRecord>> _packages;
+  late Future<ContentCatalogLoadResult> _catalog;
+  bool _isDownloading = false;
+  bool _isPreparingTranslationModels = false;
+  String? _notice;
+
+  @override
+  void initState() {
+    super.initState();
+    _packages = _storage.listPackages();
+    _catalog = _catalogService.fetchCatalog();
+  }
+
+  @override
+  void dispose() {
+    _catalogService.dispose();
+    super.dispose();
+  }
+
+  void _refreshCatalog() {
+    setState(() => _catalog = _catalogService.fetchCatalog());
+  }
+
+  Future<void> _downloadPackage(
+    ContentCatalog catalog,
+    ContentCatalogPackage package,
+  ) async {
+    setState(() {
+      _isDownloading = true;
+      _notice = 'جارٍ تنزيل «${package.title}» والتحقق من سلامتها…';
+    });
+    final result = await _catalogService.downloadPackage(
+      catalog: catalog,
+      package: package,
+      storage: _storage,
+    );
+    if (!mounted) return;
+    setState(() {
+      _isDownloading = false;
+      _notice = result.message;
+      if (result.success) _packages = _storage.listPackages();
+    });
+  }
+
+  Future<void> _deletePackage(OfflinePackageRecord package) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('حذف الحزمة؟'),
+        content: Text('سيُحذف «${package.title}» من مساحة التطبيق فقط.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('إلغاء'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('حذف'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final deleted = await _storage.deletePackage(package.id);
+    if (!mounted) return;
+    setState(() {
+      _packages = _storage.listPackages();
+      _notice = deleted
+          ? 'تم حذف «${package.title}» من مساحة التطبيق.'
+          : 'لم تعد الحزمة موجودة في مساحة التطبيق.';
+    });
+  }
+
+  Future<void> _prepareTranslationModels() async {
+    final preferences = context.read<LanguagePreferences>();
+    final sourceLanguage = preferences.deviceLanguageCode;
+    final targetLanguage = preferences.translationTargetLanguage;
+    final sourceLabel =
+        TranslationLanguageCatalog.labels[sourceLanguage] ?? sourceLanguage;
+    final targetLabel =
+        TranslationLanguageCatalog.labels[targetLanguage] ?? targetLanguage;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('تجهيز نماذج الترجمة؟'),
+        content: Text(
+          'سيُطلب من ML Kit تنزيل نموذج لغة الجهاز ($sourceLabel) '
+          'ونموذج لغة الهدف ($targetLabel) إذا لم يكونا موجودين. '
+          'لن يبدأ أي تنزيل إلا بعد موافقتك الآن.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('إلغاء'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('تجهيز الآن'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() {
+      _isPreparingTranslationModels = true;
+      _notice = 'جارٍ فحص نموذجَي $sourceLabel و$targetLabel…';
+    });
+    final result = await _translationService.prepareLanguagePair(
+      sourceLanguageCode: sourceLanguage,
+      targetLanguageCode: targetLanguage,
+    );
+    if (!mounted) return;
+    setState(() {
+      _isPreparingTranslationModels = false;
+      _notice = result.message;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        appBar: AppBar(title: const Text('الحزم المحلية')),
+        body: FutureBuilder<List<OfflinePackageRecord>>(
+          future: _packages,
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+            final packages = snapshot.data!;
+            final preferences = context.watch<LanguagePreferences>();
+            return ListView(
+              padding: const EdgeInsets.all(18),
+              children: [
+                const _SectionNotice(
+                  title: 'مساحة العمل أوفلاين',
+                  detail: 'تعرض هذه المساحة حزم JSON التي اختارها المستخدم فقط، وتتيح تجهيز نموذجَي الترجمة باختيار صريح. تتحقق الحزم المتاحة من SHA-256 قبل الحفظ؛ المصادر غير الموثقة لا يظهر لها تنزيل.',
+                ),
+                const SizedBox(height: 16),
+                Card(
+                  child: ListTile(
+                    leading: const Icon(
+                      Icons.translate_outlined,
+                      color: RoyalColors.cyan,
+                    ),
+                    title: const Text('تجهيز ترجمة لغة الجهاز أوفلاين'),
+                    subtitle: Text(
+                      'لغة الجهاز: ${TranslationLanguageCatalog.labels[preferences.deviceLanguageCode] ?? preferences.deviceLanguageCode} '
+                      '• الهدف: ${TranslationLanguageCatalog.labels[preferences.translationTargetLanguage] ?? preferences.translationTargetLanguage}',
+                    ),
+                    trailing: FilledButton(
+                      onPressed: _isPreparingTranslationModels
+                          ? null
+                          : _prepareTranslationModels,
+                      child: _isPreparingTranslationModels
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('تجهيز'),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                if (packages.isEmpty)
+                  const Card(child: ListTile(title: Text('لا توجد حزم مستوردة بعد'), subtitle: Text('يمكن استيراد حزمة JSON من كارت القصص.'))),
+                ...packages.map(
+                  (item) => Card(
+                    child: ListTile(
+                      leading: const Icon(
+                        Icons.inventory_2_outlined,
+                        color: RoyalColors.cyan,
+                      ),
+                      title: Text(item.title),
+                      subtitle: Text(
+                        '${item.id}${item.version == null ? '' : ' • v${item.version}'}',
+                      ),
+                      trailing: IconButton(
+                        tooltip: 'حذف الحزمة من الجهاز',
+                        icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                        onPressed: () => _deletePackage(item),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                FutureBuilder<ContentCatalogLoadResult>(
+                  future: _catalog,
+                  builder: (context, catalogSnapshot) {
+                    if (!catalogSnapshot.hasData) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    final catalogResult = catalogSnapshot.data!;
+                    if (!catalogResult.isSuccess) {
+                      return Card(
+                        child: ListTile(
+                          leading: const Icon(Icons.cloud_off_outlined),
+                          title: const Text('تعذر تحميل فهرس المصادر'),
+                          subtitle: Text(catalogResult.message),
+                          trailing: IconButton(
+                            tooltip: 'إعادة المحاولة',
+                            icon: const Icon(Icons.refresh),
+                            onPressed: _refreshCatalog,
+                          ),
+                        ),
+                      );
+                    }
+                    final catalog = catalogResult.catalog!;
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          children: [
+                            const Expanded(
+                              child: Text(
+                                'حزم متاحة من GitHub',
+                                style: TextStyle(fontWeight: FontWeight.w800),
+                              ),
+                            ),
+                            IconButton(
+                              tooltip: 'تحديث الفهرس',
+                              icon: const Icon(Icons.refresh, color: RoyalColors.gold),
+                              onPressed: _isDownloading ? null : _refreshCatalog,
+                            ),
+                          ],
+                        ),
+                        ...catalog.packages.map(
+                          (package) => Card(
+                            child: ListTile(
+                              leading: Icon(
+                                package.canDownload
+                                    ? Icons.download_for_offline_outlined
+                                    : Icons.verified_outlined,
+                                color: package.canDownload
+                                    ? RoyalColors.gold
+                                    : RoyalColors.muted,
+                              ),
+                              title: Text(package.title),
+                              subtitle: Text(
+                                package.canDownload
+                                    ? '${package.scope} • ${package.sourceName ?? 'مصدر غير محدد'}'
+                                    : package.reason ?? 'قيد المراجعة قبل الإتاحة.',
+                              ),
+                              trailing: package.canDownload
+                                  ? FilledButton(
+                                      onPressed: _isDownloading
+                                          ? null
+                                          : () => _downloadPackage(catalog, package),
+                                      child: const Text('تنزيل'),
+                                    )
+                                  : const Text(
+                                      'قيد المراجعة',
+                                      style: TextStyle(color: RoyalColors.muted),
+                                    ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+                if (_notice != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: Text(
+                      _notice!,
+                      style: const TextStyle(color: RoyalColors.gold, height: 1.5),
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _BubblePrivacyPage extends StatefulWidget {
+  const _BubblePrivacyPage();
+
+  @override
+  State<_BubblePrivacyPage> createState() => _BubblePrivacyPageState();
+}
+
+class _BubblePrivacyPageState extends State<_BubblePrivacyPage> {
+  String? _notice;
+  bool _isWorking = false;
+
+  Future<void> _startBubble() async {
+    setState(() => _isWorking = true);
+    final result = await context.read<AndroidOverlayService>().showBubble();
+    if (!mounted) return;
+    setState(() {
+      _isWorking = false;
+      _notice = result.message;
+    });
+  }
+
+  Future<void> _stopBubble() async {
+    setState(() => _isWorking = true);
+    final result = await context.read<AndroidOverlayService>().closeBubble();
+    if (!mounted) return;
+    setState(() {
+      _isWorking = false;
+      _notice = result.message;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        appBar: AppBar(title: const Text('الفقاعة العائمة والخصوصية')),
+        body: ListView(
+          padding: const EdgeInsets.all(18),
+          children: [
+            const _SectionNotice(
+              title: 'حدود الفقاعة',
+              detail: 'فقاعة Android قابلة للسحب تظهر فقط بعد إذنك وتحت إشعار foreground. تترجم النص الذي تكتبه داخلها أو تلصقه بنفسك؛ ولا تقرأ التطبيقات الأخرى أو الحافظة تلقائياً.',
+            ),
+            const SizedBox(height: 12),
+            const Card(child: ListTile(leading: Icon(Icons.block_outlined, color: Colors.redAccent), title: Text('غير مسموح'), subtitle: Text('لا خدمة Accessibility، ولا Notification Listener، ولا قراءة تلقائية لرسائل WhatsApp أو البريد أو Messenger.'))),
+            const SizedBox(height: 12),
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.info_outline, color: RoyalColors.gold),
+                title: Text(context.watch<AndroidOverlayService>().isSupported ? (context.watch<AndroidOverlayService>().isVisible ? 'الفقاعة مفعلة الآن' : 'Android Overlay متاح للاختبار') : 'هذه المنصة لا تدعم Overlay'),
+                subtitle: const Text('تفعيل الفقاعة يفتح صفحة الإذن الرسمية من Android عند الحاجة.'),
+              ),
+            ),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: _isWorking || !context.watch<AndroidOverlayService>().isSupported ? null : _startBubble,
+              icon: _isWorking
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.bubble_chart_outlined),
+              label: const Text('تفعيل الفقاعة فوق التطبيقات'),
+            ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: _isWorking || !context.watch<AndroidOverlayService>().isSupported ? null : _stopBubble,
+              icon: const Icon(Icons.close),
+              label: const Text('إيقاف الفقاعة'),
+            ),
+            if (_notice != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 14),
+                child: Text(_notice!, style: const TextStyle(color: RoyalColors.gold, height: 1.5)),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ProActivationPage extends StatefulWidget {
+  const _ProActivationPage();
+
+  @override
+  State<_ProActivationPage> createState() => _ProActivationPageState();
+}
+
+class _ProActivationPageState extends State<_ProActivationPage> {
+  final _patchController = TextEditingController();
+  String? _notice;
+
+  @override
+  void dispose() {
+    _patchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pastePatch() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    if (data?.text != null) setState(() => _patchController.text = data!.text!);
+  }
+
+  void _activate() {
+    setState(() {
+      _notice = _patchController.text.trim().isEmpty
+          ? 'ألصق باتش التفعيل الموقّع أولاً.'
+          : 'لم يُربط مسار التحقق الخادمي بعد؛ لم يتم تفعيل PRO محلياً.';
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        appBar: AppBar(title: const Text('تفعيل النسخة PRO')),
+        body: Consumer<PremiumVerificationService>(
+          builder: (context, premium, _) => ListView(
+            padding: const EdgeInsets.all(20),
+            children: [
+              const _SectionNotice(
+                title: 'المزايا الاحترافية',
+                detail: 'الفقاعة العائمة، تنزيلات أوفلاين، وثائق بلا حد، صوت المستخدم، ومشاهد الفيديو. تتطلب جميعها تحققاً موقعاً من الخادم واتصالاً بالإنترنت ووقتاً موثوقاً.',
+              ),
+              const SizedBox(height: 18),
+              const Text('معرّف التثبيت', style: TextStyle(fontWeight: FontWeight.w800)),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsetsDirectional.only(start: 12, end: 4, top: 8, bottom: 8),
+                decoration: BoxDecoration(
+                  border: Border.all(color: RoyalColors.border),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: SelectableText(
+                        premium.installationId,
+                        textDirection: TextDirection.ltr,
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'نسخ المعرّف',
+                      icon: const Icon(Icons.copy, color: RoyalColors.gold),
+                      onPressed: () async {
+                        await Clipboard.setData(ClipboardData(text: premium.installationId));
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('تم نسخ معرّف التثبيت.')),
+                          );
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text('باتش التفعيل الموقّع', style: TextStyle(fontWeight: FontWeight.w800)),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _patchController,
+                minLines: 3,
+                maxLines: 5,
+                decoration: InputDecoration(
+                  hintText: 'MS4.payload.signature',
+                  suffixIcon: IconButton(tooltip: 'لصق', icon: const Icon(Icons.content_paste, color: RoyalColors.gold), onPressed: _pastePatch),
+                ),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                height: 52,
+                child: FilledButton.icon(
+style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFFD4AF37),
+                    foregroundColor: Colors.black,
+                    textStyle: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18),
+                    elevation: 8,
+                    shadowColor: const Color(0xFFD4AF37).withValues(alpha: 0.5),
+                  ),
+                  onPressed: _activate,
+icon: const Icon(Icons.workspace_premium),
+label: const Text('تفعيل PRO'),
+                ),
+              ),
+              if (_notice != null) Padding(padding: const EdgeInsets.only(top: 12), child: Text(_notice!, style: const TextStyle(color: RoyalColors.gold, height: 1.5))),
+              const SizedBox(height: 24),
+              const Text(
+                'التواصل لتفعيل الاشتراك',
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 20),
+              ),
+              const SizedBox(height: 12),
+              _ContactMethodCard(
+                icon: Icons.chat_bubble,
+                iconColor: const Color(0xFF25D366),
+                label: 'WhatsApp',
+                value: '01017341250',
+              ),
+              const SizedBox(height: 10),
+              _ContactMethodCard(
+                icon: Icons.chat_bubble,
+                iconColor: const Color(0xFF25D366),
+                label: 'WhatsApp',
+                value: '01031680816',
+              ),
+              const SizedBox(height: 10),
+              _ContactMethodCard(
+                icon: Icons.chat_bubble,
+                iconColor: const Color(0xFF25D366),
+                label: 'WhatsApp',
+                value: '01558203456',
+              ),
+              const SizedBox(height: 10),
+              _ContactMethodCard(
+                icon: Icons.alternate_email,
+                iconColor: const Color(0xFFEA4335),
+                label: 'البريد الإلكتروني',
+                value: 'dosoky.server@gmail.com',
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ContactMethodCard extends StatelessWidget {
+  const _ContactMethodCard({
+    required this.icon,
+    required this.iconColor,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final Color iconColor;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: '$label: $value. اضغط للنسخ',
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: () async {
+          await Clipboard.setData(ClipboardData(text: value));
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('تم نسخ $value')),
+            );
+          }
+        },
+        child: Ink(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1B2838),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: iconColor.withValues(alpha: 0.5)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(color: iconColor, shape: BoxShape.circle),
+                child: Icon(icon, color: Colors.white, size: 24),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(label, style: const TextStyle(color: RoyalColors.muted, fontSize: 14)),
+                    const SizedBox(height: 3),
+                    Text(
+                      value,
+                      textDirection: TextDirection.ltr,
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.copy_outlined, color: RoyalColors.gold),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SectionNotice extends StatelessWidget {
+  const _SectionNotice({required this.title, required this.detail});
+
+  final String title;
+  final String detail;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: RoyalColors.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: RoyalColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 6),
+          Text(detail, style: const TextStyle(color: RoyalColors.muted, height: 1.55)),
+        ],
+      ),
+    );
+  }
+}

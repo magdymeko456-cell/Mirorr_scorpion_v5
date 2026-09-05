@@ -1,0 +1,42 @@
+From 0fdb9e352aa06fd2af5e017e0fade7eea9b0c5e2 Mon Sep 17 00:00:00 2001
+From: Manus Patch Builder <patch-builder@users.noreply.github.com>
+Date: Tue, 25 Aug 2026 17:20:37 +0000
+Subject: [PATCH] feat(branding): use scorpion artwork for Android icon
+
+---
+ .github/workflows/build_apk.yml | 2 ++
+ pubspec.yaml                    | 5 +++++
+ 2 files changed, 7 insertions(+)
+
+diff --git a/.github/workflows/build_apk.yml b/.github/workflows/build_apk.yml
+index bdc191e..41f39d1 100644
+--- a/.github/workflows/build_apk.yml
++++ b/.github/workflows/build_apk.yml
+@@ -104,6 +104,8 @@ jobs:
+           fi
+       - name: Install dependencies
+         run: flutter pub get
++      - name: Generate scorpion Android launcher icon
++        run: dart run flutter_launcher_icons
+       - name: Static analysis
+         run: flutter analyze
+       - name: Unit and widget tests
+diff --git a/pubspec.yaml b/pubspec.yaml
+index 20a41aa..88d0645 100644
+--- a/pubspec.yaml
++++ b/pubspec.yaml
+@@ -28,6 +28,11 @@ dev_dependencies:
+   flutter_test:
+     sdk: flutter
+   flutter_lints: ^5.0.0
++  flutter_launcher_icons: ^0.14.4
++
++flutter_launcher_icons:
++  android: true
++  image_path: assets/images/scorpion_bg.jpeg
+ 
+ flutter:
+   uses-material-design: true
+-- 
+2.43.0
+

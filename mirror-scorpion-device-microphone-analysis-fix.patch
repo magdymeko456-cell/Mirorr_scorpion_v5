@@ -1,0 +1,42 @@
+From 2fe0bb5383085193422ba31e14cf74a54273c0e7 Mon Sep 17 00:00:00 2001
+From: magdymeko456-cell
+ <2.88837127e+08+magdymeko456-cell@users.noreply.github.com>
+Date: Sun, 23 Aug 2026 16:54:35 +0000
+Subject: [PATCH] fix(translation): resolve speech analysis warnings
+
+---
+ lib/core/speech/device_speech_recognition_service.dart | 2 +-
+ lib/features/feature_hub_screen.dart                   | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/lib/core/speech/device_speech_recognition_service.dart b/lib/core/speech/device_speech_recognition_service.dart
+index 931806a..66464c1 100644
+--- a/lib/core/speech/device_speech_recognition_service.dart
++++ b/lib/core/speech/device_speech_recognition_service.dart
+@@ -43,8 +43,8 @@ class DeviceSpeechRecognitionService extends ChangeNotifier {
+         installedLocaleIds: installedLocales.map((locale) => locale.localeId),
+       );
+       await _speechToText.listen(
+-        localeId: localeId,
+         onResult: _handleResult,
++        listenOptions: stt.SpeechListenOptions(localeId: localeId),
+       );
+       _message = 'استمع الآن؛ سيظهر النص المعترف به في محرر المصدر.';
+       notifyListeners();
+diff --git a/lib/features/feature_hub_screen.dart b/lib/features/feature_hub_screen.dart
+index 7ca8158..c13ce17 100644
+--- a/lib/features/feature_hub_screen.dart
++++ b/lib/features/feature_hub_screen.dart
+@@ -136,8 +136,8 @@ class _TranslationPanelState extends State<_TranslationPanel> {
+       }
+       return;
+     }
+-    await _speechService.stop();
+     final sourceLanguage = context.read<LanguagePreferences>().translationSourceLanguage;
++    await _speechService.stop();
+     await _recognitionService.start(
+       languageCode: sourceLanguage,
+       onText: (recognizedText) {
+-- 
+2.43.0
+

@@ -1,0 +1,519 @@
+From 62fe77f8ca1312a5204294d83be9eb82b7f2622d Mon Sep 17 00:00:00 2001
+From: magdymeko456-cell
+ <2.88837127e+08+magdymeko456-cell@users.noreply.github.com>
+Date: Tue, 25 Aug 2026 22:17:54 +0000
+Subject: [PATCH] feat(video): add disabled Fal gateway scaffold
+
+---
+ .github/workflows/build_apk.yml               |  6 ++
+ ...al-video-activation-contract-2026-08-25.md | 80 +++++++++++++++++++
+ functions/index.js                            | 19 +++++
+ functions/package.json                        |  2 +-
+ functions/src/fal_video_gateway.js            | 56 +++++++++++++
+ functions/test/entrypoint.test.js             |  1 +
+ functions/test/fal_video_gateway.test.js      | 48 +++++++++++
+ lib/app/mirror_scorpion_app.dart              |  2 +
+ lib/core/media/fal_video_service.dart         | 54 +++++++++++++
+ lib/features/feature_hub_screen.dart          | 42 +++++++++-
+ test/fal_video_service_test.dart              | 31 +++++++
+ todo.md                                       |  5 ++
+ 12 files changed, 344 insertions(+), 2 deletions(-)
+ create mode 100644 docs/fal-video-activation-contract-2026-08-25.md
+ create mode 100644 functions/src/fal_video_gateway.js
+ create mode 100644 functions/test/fal_video_gateway.test.js
+ create mode 100644 lib/core/media/fal_video_service.dart
+ create mode 100644 test/fal_video_service_test.dart
+
+diff --git a/.github/workflows/build_apk.yml b/.github/workflows/build_apk.yml
+index e3926bc..aeecfbf 100644
+--- a/.github/workflows/build_apk.yml
++++ b/.github/workflows/build_apk.yml
+@@ -29,6 +29,12 @@ jobs:
+             echo "ElevenLabs credentials or direct provider calls must not be present in Flutter code."
+             exit 1
+           fi
++      - name: Verify Fal secret stays outside the APK
++        run: |
++          if grep -R -nE 'FAL_API_KEY|queue\.fal\.run|api\.fal\.ai|fal\.run' lib test; then
++            echo "Fal credentials or direct provider calls must not be present in Flutter code."
++            exit 1
++          fi
+       - uses: subosito/flutter-action@v2
+         with:
+           flutter-version: "3.44.7"
+diff --git a/docs/fal-video-activation-contract-2026-08-25.md b/docs/fal-video-activation-contract-2026-08-25.md
+new file mode 100644
+index 0000000..54b0d00
+--- /dev/null
++++ b/docs/fal-video-activation-contract-2026-08-25.md
+@@ -0,0 +1,80 @@
++# عقد تفعيل Fal للفيديو — Mirror Scorpion v4
++
++**الحالة:** تصميم معتمد، لكنه **غير مفعّل ولا يتصل بـFal**.  
++**تاريخ المراجعة:** 25 أغسطس 2026.
++
++## القرار التقني الأولي
++
++يُستخدم المسار التجريبي، عند التفعيل المستقبلي فقط، مع نقطة Fal الرسمية:
++
++```text
++fal-ai/wan-25-preview/text-to-video
++```
++
++اختيار البداية هو فيديو نصي واحد، مدته **5 ثوانٍ** ودقته **480p**، بلا صورة مرجعية وبلا صوت وبلا شخصيات حقيقية. صفحة النموذج تقول إن 480p تُحاسَب حالياً بسعر 0.05 دولار لكل ثانية؛ لذا يبلغ الحد النظري لفيديو تجريبي واحد مدته خمس ثوانٍ 0.25 دولار وفق السعر وقت المراجعة. هذا الرقم **ليس سعراً ثابتاً داخل التطبيق**؛ يجب قراءة السعر الحالي من Fal قبل تشغيل أي وظيفة، لأن الأسعار قابلة للتغيير. [1] [2]
++
++| البند | القرار |
++|---|---|
++| النموذج الأولي | Wan 2.5 Text-to-Video من Fal. |
++| طول الفيديو | 5 ثوانٍ فقط في المرحلة التجريبية. |
++| الدقة | 480p فقط لتقليل التكلفة والانتظار. |
++| الصوت/الصورة المرجعية | غير مدعومين في النسخة الأولى؛ يقلل ذلك مخاطر الصوت والهوية والحقوق. |
++| السر | `FAL_API_KEY` في إعداد خادم فقط؛ لا يظهر في Flutter أو Git أو السجل. |
++| حالة البداية | `disabled`؛ الحد المالي الافتراضي صفر، ولا يمكن إنشاء طلب. |
++| عدم التخزين | لا نحفظ الفيديو أو المدخلات في تخزين المشروع ضمن المرحلة الأولى؛ تعرض النتيجة المؤقتة فقط بعد سياسة واضحة. |
++
++## الموافقة المطلوبة قبل الإرسال
++
++لا يظهر زر الإرسال إلا بعد تحديد المستخدم عناصر إقرار مستقلة. لا تكفي الموافقة العامة على شروط التطبيق.
++
++| الإقرار | الغرض |
++|---|---|
++| أملك النص أو أملك حق استخدامه. | حماية حقوق القصة أو السيناريو. |
++| لا يتضمن النص أو الصور هوية شخص حقيقي من دون موافقته. | منع الانتحال أو مخالفة الخصوصية. |
++| أفهم أن الفيديو مولد بالذكاء الاصطناعي وقد يحتوي أخطاء. | منع عرضه كوثيقة أو حقيقة تاريخية. |
++| أوافق على إرسال **النص المختار فقط** إلى Fal لتوليد الفيديو. | موافقة محددة للنطاق. |
++| أفهم الحصة المتبقية والحد المقدر قبل الإرسال. | منع المفاجآت المالية. |
++
++سيستمر مرشح السلامة المحلي لقصة المستخدم، ثم يمر الطلب على مرشح الخادم. تحظر سياسة Fal المحتوى غير القانوني والاستغلال والعنف والكراهية والانتحال غير المصرح به ومخالفة الحقوق والخصوصية. [3]
++
++## عقد وظيفة الخادم
++
++يقوم تطبيق Flutter بطلب Firebase Function تابع للتطبيق، ولا يتصل بنطاق Fal مباشرة. لا تقبل الوظيفة طلباً قبل تحقق الشروط التالية: وجود جلسة مستخدم موثوقة عند توفرها، تفعيل المالك للخدمة، وجود المفتاح السري في الخادم، وجود سقف إنفاق موجب، اكتمال إقرارات الموافقة، نجاح مرشحات المحتوى، وبقاء الحصة اليومية/الشهرية.
++
++```text
++createVideoJob
++  → validate consent + safety + quota + estimated current price
++  → create local job (PENDING)
++  → submit to Fal queue only if owner enablement is true
++  → retain fal_request_id, never the API key
++
++getVideoJob → maps Fal status to local status
++cancelVideoJob → requests cancellation at Fal
++deleteVideoJob → removes local job metadata
++```
++
++تصف Fal دورة الوظيفة بـ`IN_QUEUE` ثم `IN_PROGRESS` ثم `COMPLETED`، وتعطي معرف الطلب وروابط الحالة والنتيجة والإلغاء. الطلب الموجود في الطابور يمكن حذفه فوراً؛ أما الذي بدأ تشغيله فقد يكمل رغم طلب الإلغاء بحسب النموذج. [4]
++
++## حدود البيانات والحذف
++
++نرسل إلى Fal النص اللازم للفيديو فقط، بعد الفحص. لا نرسل سجل القصة الكامل أو رقم تثبيت الجهاز أو صوت المستخدم أو مفاتيح التفعيل. روابط وسائط Fal عامة وقابلة للانتهاء وفق إعدادات انتهاء الوسائط؛ لذلك لا تعرض على الآخرين ولا تحفظ في سجل تحليلي. [4]
++
++لن تُنسخ الملفات إلى Firebase Storage في التجربة الأولى. إذا اختار المستخدم حفظ الفيديو لاحقاً، يجب أن يكون ذلك قراراً مستقلاً يتضمن مكان التخزين ومدة الحذف وقاعدة وصول واضحة.
++
++## مفاتيح التحكم المطلوبة قبل التشغيل الحقيقي
++
++| متغير خادمي | القيمة الافتراضية | السبب |
++|---|---|---|
++| `FAL_VIDEO_ENABLED` | `false` | يمنع كل اتصال خارجي افتراضياً. |
++| `FAL_API_KEY` | غير موجود | لا يمكن التوليد من دون سر خادمي. |
++| `FAL_VIDEO_MONTHLY_CAP_USD` | `0` | يمنع أي إنفاق قبل اعتماد المالك. |
++| `FAL_VIDEO_DAILY_JOB_LIMIT` | `0` | يمنع إساءة الاستخدام قبل اعتماد الحصة. |
++
++لا نضيف هذه القيم أو المفتاح الآن. يجب أن يحدد المالك سقفاً شهرياً رقمياً قبل تفعيل `FAL_VIDEO_ENABLED`.
++
++## المراجع
++
++[1]: https://fal.ai/models/fal-ai/wan-25-preview/text-to-video "Fal — Wan 2.5 Text to Video"
++[2]: https://fal.ai/docs/documentation/model-apis/pricing "Fal Model API Pricing"
++[3]: https://fal.ai/legal/acceptable-use-policy "Fal Acceptable Use Policy"
++[4]: https://fal.ai/docs/documentation/model-apis/inference/queue "Fal Asynchronous Inference and Cancellation"
+diff --git a/functions/index.js b/functions/index.js
+index b220014..4ba55d0 100644
+--- a/functions/index.js
++++ b/functions/index.js
+@@ -4,6 +4,7 @@ const { initializeApp } = require("firebase-admin/app");
+ 
+ const { buildHealthResponse } = require("./src/health");
+ const { buildElevenLabsGatewayStatus } = require("./src/elevenlabs_gateway");
++const { buildFalVideoGatewayStatus } = require("./src/fal_video_gateway");
+ 
+ // تعتمد Cloud Functions على هوية بيئة التشغيل الافتراضية.
+ // لا تُضف serviceAccountKey.json أو أي مفتاح خاص إلى المشروع.
+@@ -39,3 +40,21 @@ exports.elevenLabsGatewayStatus = onCall({ region: "us-central1" }, (request) =>
+ 
+   return response;
+ });
++
++// لا ينفذ هذا المسار أي طلب فيديو. لا يُفعل Fal إلا بعد سقف مالي صريح
++// ومفتاح مخزن في الخادم وموافقة مرئية قابلة للتدقيق لكل طلب.
++exports.falVideoGatewayStatus = onCall({ region: "us-central1" }, (request) => {
++  const response = buildFalVideoGatewayStatus({
++    authenticated: request.auth != null,
++    hasApiKey: Boolean(process.env.FAL_API_KEY),
++    monthlyCapUsd: 0,
++    dailyJobLimit: 0,
++  });
++
++  logger.info("Mirror Scorpion Fal video gateway status checked", {
++    authenticated: response.authenticated,
++    enabled: response.enabled,
++  });
++
++  return response;
++});
+diff --git a/functions/package.json b/functions/package.json
+index c7ba2ef..cdf0769 100644
+--- a/functions/package.json
++++ b/functions/package.json
+@@ -8,7 +8,7 @@
+     "node": "22"
+   },
+   "scripts": {
+-    "check": "node --check index.js && node --check src/health.js && node --check src/elevenlabs_gateway.js",
++    "check": "node --check index.js && node --check src/health.js && node --check src/elevenlabs_gateway.js && node --check src/fal_video_gateway.js",
+     "test": "node --test test/*.test.js",
+     "verify": "npm run check && npm run test"
+   },
+diff --git a/functions/src/fal_video_gateway.js b/functions/src/fal_video_gateway.js
+new file mode 100644
+index 0000000..1554256
+--- /dev/null
++++ b/functions/src/fal_video_gateway.js
+@@ -0,0 +1,56 @@
++const falVideoGatewayMode = 'disabled-by-default';
++const falVideoModel = 'fal-ai/wan-25-preview/text-to-video';
++const falVideoDurationSeconds = 5;
++const falVideoResolution = '480p';
++
++function buildFalVideoGatewayStatus({
++  authenticated = false,
++  hasApiKey = false,
++  monthlyCapUsd = 0,
++  dailyJobLimit = 0,
++} = {}) {
++  return {
++    provider: 'Fal',
++    gatewayMode: falVideoGatewayMode,
++    model: falVideoModel,
++    enabled: false,
++    externalCallsAllowed: false,
++    authenticated,
++    hasApiKey,
++    monthlyCapUsd,
++    dailyJobLimit,
++    message:
++      'Fal video gateway is intentionally disabled. No story, image, audio, or video is sent to Fal.',
++  };
++}
++
++function validateFutureFalVideoRequest({
++  gatewayEnabled = false,
++  hasApiKey = false,
++  userId,
++  consentReceiptId,
++  quotaRemaining = 0,
++  durationSeconds = falVideoDurationSeconds,
++  resolution = falVideoResolution,
++} = {}) {
++  if (!gatewayEnabled) return { allowed: false, code: 'GATEWAY_DISABLED' };
++  if (!hasApiKey) return { allowed: false, code: 'SERVER_SECRET_MISSING' };
++  if (typeof userId !== 'string' || userId.length === 0) {
++    return { allowed: false, code: 'AUTH_REQUIRED' };
++  }
++  if (!consentReceiptId) return { allowed: false, code: 'CONSENT_REQUIRED' };
++  if (quotaRemaining <= 0) return { allowed: false, code: 'QUOTA_EXHAUSTED' };
++  if (durationSeconds !== falVideoDurationSeconds || resolution !== falVideoResolution) {
++    return { allowed: false, code: 'TRIAL_SCOPE_EXCEEDED' };
++  }
++  return { allowed: true, code: 'APPROVED_FOR_PROVIDER_CALL' };
++}
++
++module.exports = {
++  buildFalVideoGatewayStatus,
++  falVideoDurationSeconds,
++  falVideoGatewayMode,
++  falVideoModel,
++  falVideoResolution,
++  validateFutureFalVideoRequest,
++};
+diff --git a/functions/test/entrypoint.test.js b/functions/test/entrypoint.test.js
+index 7e50b08..b89446a 100644
+--- a/functions/test/entrypoint.test.js
++++ b/functions/test/entrypoint.test.js
+@@ -6,4 +6,5 @@ test("Functions entrypoint loads safe callables without a service-account file",
+ 
+   assert.equal(typeof functions.healthCheck, "function");
+   assert.equal(typeof functions.elevenLabsGatewayStatus, "function");
++  assert.equal(typeof functions.falVideoGatewayStatus, "function");
+ });
+diff --git a/functions/test/fal_video_gateway.test.js b/functions/test/fal_video_gateway.test.js
+new file mode 100644
+index 0000000..52a5fdd
+--- /dev/null
++++ b/functions/test/fal_video_gateway.test.js
+@@ -0,0 +1,48 @@
++const assert = require('node:assert/strict');
++const test = require('node:test');
++
++const {
++  buildFalVideoGatewayStatus,
++  falVideoGatewayMode,
++  validateFutureFalVideoRequest,
++} = require('../src/fal_video_gateway');
++
++test('Fal gateway stays disabled even if a future secret and quota exist', () => {
++  const status = buildFalVideoGatewayStatus({
++    authenticated: true,
++    hasApiKey: true,
++    monthlyCapUsd: 25,
++    dailyJobLimit: 2,
++  });
++
++  assert.equal(status.gatewayMode, falVideoGatewayMode);
++  assert.equal(status.enabled, false);
++  assert.equal(status.externalCallsAllowed, false);
++  assert.match(status.message, /No story, image, audio, or video is sent/);
++});
++
++test('Fal rejects a future request before any provider condition when disabled', () => {
++  const result = validateFutureFalVideoRequest({
++    gatewayEnabled: false,
++    hasApiKey: true,
++    userId: 'owner-1',
++    consentReceiptId: 'consent-1',
++    quotaRemaining: 1,
++  });
++
++  assert.deepEqual(result, { allowed: false, code: 'GATEWAY_DISABLED' });
++});
++
++test('Fal future request is constrained to the reviewed trial format', () => {
++  const result = validateFutureFalVideoRequest({
++    gatewayEnabled: true,
++    hasApiKey: true,
++    userId: 'owner-1',
++    consentReceiptId: 'consent-1',
++    quotaRemaining: 1,
++    durationSeconds: 10,
++    resolution: '720p',
++  });
++
++  assert.deepEqual(result, { allowed: false, code: 'TRIAL_SCOPE_EXCEEDED' });
++});
+diff --git a/lib/app/mirror_scorpion_app.dart b/lib/app/mirror_scorpion_app.dart
+index 5ac84e2..6a389d4 100644
+--- a/lib/app/mirror_scorpion_app.dart
++++ b/lib/app/mirror_scorpion_app.dart
+@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
+ import 'package:provider/provider.dart';
+ 
+ import '../core/localization/language_preferences.dart';
++import '../core/media/fal_video_service.dart';
+ import '../core/speech/elevenlabs_voice_service.dart';
+ import '../features/home/dashboard_screen.dart';
+ import 'royal_dark_theme.dart';
+@@ -19,6 +20,7 @@ class MirrorScorpionApp extends StatelessWidget {
+           value: languagePreferences ?? LanguagePreferences(),
+         ),
+         ChangeNotifierProvider(create: (_) => ElevenLabsVoiceService()),
++        ChangeNotifierProvider(create: (_) => FalVideoService()),
+       ],
+       child: Builder(
+         builder: (context) {
+diff --git a/lib/core/media/fal_video_service.dart b/lib/core/media/fal_video_service.dart
+new file mode 100644
+index 0000000..0df9e08
+--- /dev/null
++++ b/lib/core/media/fal_video_service.dart
+@@ -0,0 +1,54 @@
++import 'package:flutter/foundation.dart';
++
++class FalVideoPreflight {
++  const FalVideoPreflight({
++    required this.allowed,
++    required this.code,
++    required this.message,
++  });
++
++  final bool allowed;
++  final String code;
++  final String message;
++}
++
++/// واجهة Fal في التطبيق لا تتصل بالشبكة.
++/// يبقى طلب الفيديو في الخادم فقط بعد اعتماد حد مالي ومفتاح وموافقة.
++class FalVideoService extends ChangeNotifier {
++  static const providerName = 'Fal';
++  static const modelId = 'fal-ai/wan-25-preview/text-to-video';
++  static const maxDurationSeconds = 5;
++  static const resolution = '480p';
++
++  bool get enabled => false;
++  bool get externalCallsAllowed => false;
++
++  String get statusMessage =>
++      'Fal مُعد كتجربة فيديو قصيرة ($maxDurationSeconds ثوانٍ، $resolution) '
++      'لكنه مغلق الآن: لا مفتاح، لا حصة مالية، ولا تُرسل قصة أو صورة خارج الجهاز.';
++
++  FalVideoPreflight prepareStoryVideo({
++    required String draft,
++    required bool hasExplicitConsent,
++  }) {
++    if (draft.trim().isEmpty) {
++      return const FalVideoPreflight(
++        allowed: false,
++        code: 'STORY_REQUIRED',
++        message: 'اكتب مسودة القصة أولاً قبل طلب فيديو.',
++      );
++    }
++    if (!hasExplicitConsent) {
++      return const FalVideoPreflight(
++        allowed: false,
++        code: 'CONSENT_REQUIRED',
++        message: 'أكّد موافقتك الصريحة على إرسال النص المختار قبل أي خدمة فيديو مستقبلية.',
++      );
++    }
++    return FalVideoPreflight(
++      allowed: false,
++      code: 'GATEWAY_DISABLED',
++      message: '$statusMessage لا يمكن إنشاء فيديو أو احتساب تكلفة في هذا الإصدار.',
++    );
++  }
++}
+diff --git a/lib/features/feature_hub_screen.dart b/lib/features/feature_hub_screen.dart
+index 7312905..121318b 100644
+--- a/lib/features/feature_hub_screen.dart
++++ b/lib/features/feature_hub_screen.dart
+@@ -14,6 +14,7 @@ import '../core/content/github_content_catalog_service.dart';
+ import '../core/games/chess_game_controller.dart';
+ import '../core/inspiration/inspiration_safety.dart';
+ import '../core/documents/local_document_text_service.dart';
++import '../core/media/fal_video_service.dart';
+ import '../core/mlkit/on_device_ocr_service.dart';
+ import '../core/mlkit/on_device_translation_service.dart';
+ import '../core/pro/premium_verification_service.dart';
+@@ -1143,6 +1144,7 @@ class _StoriesPanelState extends State<_StoriesPanel> {
+   late Future<List<OfflinePackageRecord>> _packagesFuture;
+   String? _notice;
+   bool _consentToAi = false;
++  bool _consentToFalVideo = false;
+   bool _threeHourReminder = false;
+ 
+   @override
+@@ -1355,6 +1357,19 @@ class _StoriesPanelState extends State<_StoriesPanel> {
+     setState(() => _notice = result.message);
+   }
+ 
++  void _prepareFalVideo() {
++    final safety = InspirationSafety.assessStoryDraft(_storyDraftController.text);
++    if (safety.level != InspirationSafetyLevel.safe) {
++      setState(() => _notice = safety.message);
++      return;
++    }
++    final preflight = context.read<FalVideoService>().prepareStoryVideo(
++          draft: _storyDraftController.text,
++          hasExplicitConsent: _consentToFalVideo,
++        );
++    setState(() => _notice = preflight.message);
++  }
++
+   @override
+   void dispose() {
+     _speechService.removeListener(_onSpeechChanged);
+@@ -1426,7 +1441,7 @@ class _StoriesPanelState extends State<_StoriesPanel> {
+               children: [
+                 const Text('قصة المستخدم إلى فيديو', style: TextStyle(color: RoyalColors.teal, fontWeight: FontWeight.bold)),
+                 const SizedBox(height: 8),
+-                const Text('الفحص التالي لا ينشئ فيديو. يرفض محلياً مؤشرات الكراهية والتنمر والإهانة والمحتوى الجنسي والألفاظ البذيئة قبل أي خدمة فيديو مستقبلية.'),
++                const Text('تفحص المسودة محلياً أولاً. Fal مُعد لتجربة فيديو نصي قصيرة، لكنه لا ينشئ فيديو ولا يرسل نصاً قبل اعتماد المفتاح والحصة المالية والخادم.'),
+                 const SizedBox(height: 10),
+                 TextField(
+                   controller: _storyDraftController,
+@@ -1440,6 +1455,31 @@ class _StoriesPanelState extends State<_StoriesPanel> {
+                   icon: const Icon(Icons.verified_user_outlined),
+                   label: const Text('فحص مسودة القصة'),
+                 ),
++                CheckboxListTile(
++                  value: _consentToFalVideo,
++                  contentPadding: EdgeInsets.zero,
++                  title: const Text('أوافق على إرسال مسودة القصة المختارة فقط إلى Fal مستقبلاً بعد تفعيل الخدمة.'),
++                  subtitle: const Text('لا يشمل ذلك صوراً أو أصواتاً أو قصصاً أخرى، ولا يرسل شيئاً الآن.'),
++                  onChanged: (value) => setState(() => _consentToFalVideo = value ?? false),
++                ),
++                Consumer<FalVideoService>(
++                  builder: (context, falVideo, _) => Column(
++                    crossAxisAlignment: CrossAxisAlignment.stretch,
++                    children: [
++                      ListTile(
++                        contentPadding: EdgeInsets.zero,
++                        leading: const Icon(Icons.lock_outline, color: RoyalColors.gold),
++                        title: const Text('Fal: فيديو قصير تجريبي — مغلق'),
++                        subtitle: Text(falVideo.statusMessage),
++                      ),
++                      FilledButton.icon(
++                        onPressed: _prepareFalVideo,
++                        icon: const Icon(Icons.video_settings_outlined),
++                        label: const Text('تحقق من جاهزية Fal'),
++                      ),
++                    ],
++                  ),
++                ),
+               ],
+             ),
+           ),
+diff --git a/test/fal_video_service_test.dart b/test/fal_video_service_test.dart
+new file mode 100644
+index 0000000..e643334
+--- /dev/null
++++ b/test/fal_video_service_test.dart
+@@ -0,0 +1,31 @@
++import 'package:flutter_test/flutter_test.dart';
++import 'package:mirror_scorpion_v4/core/media/fal_video_service.dart';
++
++void main() {
++  test('Fal video gateway stays disabled in Flutter', () {
++    final service = FalVideoService();
++
++    expect(service.enabled, isFalse);
++    expect(service.externalCallsAllowed, isFalse);
++    expect(service.modelId, 'fal-ai/wan-25-preview/text-to-video');
++    expect(service.maxDurationSeconds, 5);
++    expect(service.resolution, '480p');
++  });
++
++  test('Fal video requires a draft and explicit consent before disabled state', () {
++    final service = FalVideoService();
++
++    expect(
++      service.prepareStoryVideo(draft: '', hasExplicitConsent: true).code,
++      'STORY_REQUIRED',
++    );
++    expect(
++      service.prepareStoryVideo(draft: 'قصة هادفة', hasExplicitConsent: false).code,
++      'CONSENT_REQUIRED',
++    );
++    expect(
++      service.prepareStoryVideo(draft: 'قصة هادفة', hasExplicitConsent: true).code,
++      'GATEWAY_DISABLED',
++    );
++  });
++}
+diff --git a/todo.md b/todo.md
+index 1895425..4b5d544 100644
+--- a/todo.md
++++ b/todo.md
+@@ -213,6 +213,11 @@
+ 
+ ## بحث أدوات نسخ الصوت والفيديو — 2026-08-24
+ 
++- [x] اختيار Fal Wan 2.5 كمسار تجريبي مع 5 ثوانٍ و480p فقط، ومنع أي سعر ثابت أو اتصال قبل اعتماد المالك.
++- [x] توثيق موافقة القصة وإفصاح الذكاء الاصطناعي والحذف والإلغاء لمسار الفيديو.
++- [x] إعداد بوابة Firebase معطلة لـFal واختبارات حصة وموافقة ونطاق تجربة من دون مفتاح أو طلب شبكة.
++- [x] إضافة واجهة Fal معطلة في Flutter وحاجز CI يمنع مفتاح Fal أو الاتصال المباشر من APK.
++- [ ] تحديد سقف مالي شهري وحصة يومية قبل إضافة مفتاح Fal أو تشغيل أي فيديو تجريبي.
+ - [x] التحقق من خدمات Google الرسمية: هل تدعم نسخ الصوت أو الفيديو، وما الحصة المجانية والفوترة الفعلية لكل خدمة.
+ - [x] مقارنة مزودين رسميين لنسخ الصوت مع أدوات محلية مفتوحة المصدر من حيث التكلفة والخصوصية ومنع انتحال صوت الغير.
+ - [x] مقارنة مزودي توليد الفيديو ذوي الحصة المجانية أو التجريبية مع الأدوات المحلية، من حيث السعر والحقوق والاحتفاظ بالمحتوى.
+-- 
+2.43.0
+

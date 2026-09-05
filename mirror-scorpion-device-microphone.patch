@@ -1,0 +1,322 @@
+From ec90303adc9e16dc2015e3c1530177c47d276253 Mon Sep 17 00:00:00 2001
+From: magdymeko456-cell
+ <2.88837127e+08+magdymeko456-cell@users.noreply.github.com>
+Date: Sun, 23 Aug 2026 16:21:10 +0000
+Subject: [PATCH] feat(translation): add device microphone recognition
+
+---
+ .github/workflows/build_apk.yml               |  11 +-
+ .../device_speech_recognition_service.dart    | 114 ++++++++++++++++++
+ lib/features/feature_hub_screen.dart          |  53 +++++++-
+ pubspec.yaml                                  |   1 +
+ ...evice_speech_recognition_service_test.dart |  26 ++++
+ 5 files changed, 201 insertions(+), 4 deletions(-)
+ create mode 100644 lib/core/speech/device_speech_recognition_service.dart
+ create mode 100644 test/device_speech_recognition_service_test.dart
+
+diff --git a/.github/workflows/build_apk.yml b/.github/workflows/build_apk.yml
+index 37103ca..a379990 100644
+--- a/.github/workflows/build_apk.yml
++++ b/.github/workflows/build_apk.yml
+@@ -82,11 +82,20 @@ jobs:
+               "    implementation 'com.google.mlkit:text-recognition-korean:16.0.1'" \
+               '}' >> android/app/build.gradle
+           fi
+-      - name: Configure Android TTS visibility
++      - name: Configure Android speech visibility and microphone permission
+         run: |
++          if ! grep -q 'android.permission.RECORD_AUDIO' android/app/src/main/AndroidManifest.xml; then
++            sed -i '/<application/i\    <uses-permission android:name="android.permission.RECORD_AUDIO" />' android/app/src/main/AndroidManifest.xml
++          fi
++          if ! grep -q 'android.permission.INTERNET' android/app/src/main/AndroidManifest.xml; then
++            sed -i '/<application/i\    <uses-permission android:name="android.permission.INTERNET" />' android/app/src/main/AndroidManifest.xml
++          fi
+           if ! grep -q 'android.intent.action.TTS_SERVICE' android/app/src/main/AndroidManifest.xml; then
+             sed -i '/<application/i\    <queries><intent><action android:name="android.intent.action.TTS_SERVICE" /></intent></queries>' android/app/src/main/AndroidManifest.xml
+           fi
++          if ! grep -q 'android.speech.RecognitionService' android/app/src/main/AndroidManifest.xml; then
++            sed -i '/<application/i\    <queries><intent><action android:name="android.speech.RecognitionService" /></intent></queries>' android/app/src/main/AndroidManifest.xml
++          fi
+       - name: Install dependencies
+         run: flutter pub get
+       - name: Static analysis
+diff --git a/lib/core/speech/device_speech_recognition_service.dart b/lib/core/speech/device_speech_recognition_service.dart
+new file mode 100644
+index 0000000..931806a
+--- /dev/null
++++ b/lib/core/speech/device_speech_recognition_service.dart
+@@ -0,0 +1,114 @@
++import 'package:flutter/foundation.dart';
++import 'package:speech_to_text/speech_recognition_error.dart';
++import 'package:speech_to_text/speech_recognition_result.dart';
++import 'package:speech_to_text/speech_to_text.dart' as stt;
++
++/// غلاف محدود لتعرف الكلام الذي يوفره جهاز المستخدم. لا يسجل الصوت في
++/// التطبيق ولا يرفع ملفات صوتية؛ طريقة المعالجة (محلية/عن بُعد) يحددها نظام
++/// التعرف المثبت على الهاتف.
++class DeviceSpeechRecognitionService extends ChangeNotifier {
++  DeviceSpeechRecognitionService({stt.SpeechToText? speechToText})
++      : _speechToText = speechToText ?? stt.SpeechToText();
++
++  final stt.SpeechToText _speechToText;
++  bool _isReady = false;
++  String? _message;
++  ValueChanged<String>? _onText;
++
++  bool get isListening => _speechToText.isListening;
++  bool get isReady => _isReady;
++  String? get message => _message;
++
++  Future<bool> start({
++    required String languageCode,
++    required ValueChanged<String> onText,
++  }) async {
++    _onText = onText;
++    try {
++      if (!_isReady) {
++        _isReady = await _speechToText.initialize(
++          onStatus: _handleStatus,
++          onError: _handleError,
++        );
++      }
++      if (!_isReady) {
++        _message = 'تعرف الكلام غير متاح أو رُفض إذن الميكروفون على هذا الجهاز.';
++        notifyListeners();
++        return false;
++      }
++
++      final installedLocales = await _speechToText.locales();
++      final localeId = SpeechLocaleResolver.preferredLocaleId(
++        languageCode: languageCode,
++        installedLocaleIds: installedLocales.map((locale) => locale.localeId),
++      );
++      await _speechToText.listen(
++        localeId: localeId,
++        onResult: _handleResult,
++      );
++      _message = 'استمع الآن؛ سيظهر النص المعترف به في محرر المصدر.';
++      notifyListeners();
++      return true;
++    } catch (_) {
++      _message = 'تعذر بدء تعرف الكلام. تأكد من إذن الميكروفون وخدمة التعرف في الهاتف.';
++      notifyListeners();
++      return false;
++    }
++  }
++
++  Future<void> stop() async {
++    try {
++      await _speechToText.stop();
++    } catch (_) {
++      _message = 'تعذر إيقاف تعرف الكلام بشكل سليم.';
++      notifyListeners();
++    }
++  }
++
++  void _handleResult(SpeechRecognitionResult result) {
++    final text = result.recognizedWords.trim();
++    if (text.isNotEmpty) _onText?.call(text);
++  }
++
++  void _handleStatus(String status) {
++    if (status == 'done' || status == 'notListening') {
++      _message = 'انتهى الاستماع. راجع النص قبل ترجمته.';
++    }
++    notifyListeners();
++  }
++
++  void _handleError(SpeechRecognitionError error) {
++    _message = error.permanent
++        ? 'تعذر تعرف الكلام: ${error.errorMsg}. راجع إعدادات الجهاز.'
++        : 'توقف تعرف الكلام مؤقتاً: ${error.errorMsg}.';
++    notifyListeners();
++  }
++
++  @override
++  void dispose() {
++    _speechToText.cancel();
++    super.dispose();
++  }
++}
++
++/// يطابق لغة المصدر مع لغة تعرف مثبّتة على الهاتف، ثم يعيد null ليستعمل
++/// النظام لغته الافتراضية عندما لا تتوفر مطابقة صريحة.
++class SpeechLocaleResolver {
++  const SpeechLocaleResolver._();
++
++  static String? preferredLocaleId({
++    required String languageCode,
++    required Iterable<String> installedLocaleIds,
++  }) {
++    final normalized = languageCode.toLowerCase();
++    for (final localeId in installedLocaleIds) {
++      final localeLanguage = localeId
++          .replaceAll('_', '-')
++          .split('-')
++          .first
++          .toLowerCase();
++      if (localeLanguage == normalized) return localeId;
++    }
++    return null;
++  }
++}
+diff --git a/lib/features/feature_hub_screen.dart b/lib/features/feature_hub_screen.dart
+index 1f6674a..7ca8158 100644
+--- a/lib/features/feature_hub_screen.dart
++++ b/lib/features/feature_hub_screen.dart
+@@ -10,6 +10,7 @@ import '../core/localization/language_preferences.dart';
+ import '../core/mlkit/on_device_ocr_service.dart';
+ import '../core/mlkit/on_device_translation_service.dart';
+ import '../core/pro/premium_verification_service.dart';
++import '../core/speech/device_speech_recognition_service.dart';
+ import '../core/speech/system_tts_service.dart';
+ 
+ enum FeatureKind { translation, dialogue, documents, stories, games, settings }
+@@ -57,6 +58,7 @@ class _TranslationPanelState extends State<_TranslationPanel> {
+   final _output = TextEditingController();
+   final _translationService = const OnDeviceTranslationService();
+   final _speechService = SystemTtsService();
++  final _recognitionService = DeviceSpeechRecognitionService();
+   String _selectedLanguage = 'ar';
+   String? _notice;
+   bool _clearOnNextInput = false;
+@@ -89,6 +91,7 @@ class _TranslationPanelState extends State<_TranslationPanel> {
+     super.initState();
+     _speechService.addListener(_onSpeechChanged);
+     _speechService.initialize();
++    _recognitionService.addListener(_onSpeechChanged);
+   }
+ 
+   @override
+@@ -125,6 +128,40 @@ class _TranslationPanelState extends State<_TranslationPanel> {
+     }
+   }
+ 
++  Future<void> _toggleMicrophone() async {
++    if (_recognitionService.isListening) {
++      await _recognitionService.stop();
++      if (mounted && _recognitionService.message != null) {
++        setState(() => _notice = _recognitionService.message);
++      }
++      return;
++    }
++    await _speechService.stop();
++    final sourceLanguage = context.read<LanguagePreferences>().translationSourceLanguage;
++    await _recognitionService.start(
++      languageCode: sourceLanguage,
++      onText: (recognizedText) {
++        if (!mounted) return;
++        if (_clearOnNextInput) {
++          _input.clear();
++          _output.clear();
++          _clearOnNextInput = false;
++        }
++        _input.text = recognizedText;
++        _queueTranslation(recognizedText);
++      },
++    );
++    if (mounted && _recognitionService.message != null) {
++      setState(() => _notice = _recognitionService.message);
++    }
++  }
++
++  void _audioUploadUnavailable() {
++    setState(() {
++      _notice = 'اختيار الملف موجود في محرر المصدر، لكن تفريغ الملفات وترجمتها لم يُربطا بعد بخدمة صوت حية؛ لن يُنتج التطبيق ترجمة وهمية.';
++    });
++  }
++
+   void _beginNewInput(String action) {
+     if (_clearOnNextInput) {
+       _input.clear();
+@@ -180,6 +217,8 @@ class _TranslationPanelState extends State<_TranslationPanel> {
+     _translationDebounce?.cancel();
+     _speechService.removeListener(_onSpeechChanged);
+     _speechService.stop();
++    _recognitionService.removeListener(_onSpeechChanged);
++    _recognitionService.dispose();
+     _input.dispose();
+     _output.dispose();
+     super.dispose();
+@@ -248,7 +287,16 @@ class _TranslationPanelState extends State<_TranslationPanel> {
+           },
+           onChanged: _queueTranslation,
+           actions: [
+-            _EditorAction(icon: Icons.mic, tooltip: 'التقاط الكلام', onPressed: () => _beginNewInput('التقاط الكلام')),
++            _EditorAction(
++              icon: _recognitionService.isListening ? Icons.stop_circle_outlined : Icons.mic,
++              tooltip: _recognitionService.isListening ? 'إيقاف التقاط الكلام' : 'التقاط الكلام من ميكروفون الجهاز',
++              onPressed: _toggleMicrophone,
++            ),
++            _EditorAction(
++              icon: Icons.attach_file,
++              tooltip: 'اختيار ملف صوتي لترجمته',
++              onPressed: _audioUploadUnavailable,
++            ),
+           ],
+         ),
+         if (_notice != null)
+@@ -278,7 +326,6 @@ class _TranslationPanelState extends State<_TranslationPanel> {
+           actions: [
+             _EditorAction(icon: _speechService.isSpeaking ? Icons.stop_circle_outlined : Icons.volume_up, tooltip: _speechService.isSpeaking ? 'إيقاف النطق' : 'نطق الترجمة بصوت النظام', onPressed: _speakTranslation),
+             _EditorAction(icon: Icons.share, tooltip: 'مشاركة ملف صوت مترجم', onPressed: () => _beginNewInput('مشاركة الترجمة')),
+-            _EditorAction(icon: Icons.attach_file, tooltip: 'رفع ملف صوتي', onPressed: () => _beginNewInput('رفع الملف الصوتي')),
+             _EditorAction(icon: Icons.copy, tooltip: 'نسخ الترجمة', onPressed: () async {
+               if (_output.text.isNotEmpty) await Clipboard.setData(ClipboardData(text: _output.text));
+               if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('لا يوجد نص مترجم لنسخه بعد.')));
+@@ -286,7 +333,7 @@ class _TranslationPanelState extends State<_TranslationPanel> {
+           ],
+         ),
+         const SizedBox(height: 18),
+-        const _SectionNotice(title: 'ترجمة محلية صادقة', detail: 'تبدأ تفضيلات الترجمة من لغة الجهاز ثم تحفظ آخر لغة مصدر وهدف. تحدد ML Kit لغة النص وتنزّل نموذجَي المصدر والهدف عند الحاجة، ثم تترجم على الجهاز. صوت القراءة هو صوت النظام المتاح، وليس أحد الأصوات المميزة أو صوت المستخدم بعد.'),
++        const _SectionNotice(title: 'ترجمة محلية صادقة', detail: 'تبدأ تفضيلات الترجمة من لغة الجهاز ثم تحفظ آخر لغة مصدر وهدف. يطلب زر الميكروفون إذنًا صريحًا ويستخدم تعرف الكلام المتاح في الجهاز للجمل القصيرة، ثم تمرر النتيجة إلى ML Kit للترجمة المحلية. دبوس محرر المصدر مخصص لملفات الصوت، لكنه ينتظر خدمة تفريغ فعلية ولا ينتج ترجمة مصطنعة. صوت القراءة هو صوت النظام المتاح، وليس أحد الأصوات المميزة أو صوت المستخدم بعد.'),
+       ],
+     );
+   }
+diff --git a/pubspec.yaml b/pubspec.yaml
+index d915834..de95120 100644
+--- a/pubspec.yaml
++++ b/pubspec.yaml
+@@ -18,6 +18,7 @@ dependencies:
+   google_mlkit_text_recognition: ^0.17.1
+   image_picker: ^1.2.3
+   flutter_tts: ^4.2.5
++  speech_to_text: ^7.4.0
+ 
+ dev_dependencies:
+   flutter_test:
+diff --git a/test/device_speech_recognition_service_test.dart b/test/device_speech_recognition_service_test.dart
+new file mode 100644
+index 0000000..df9f31c
+--- /dev/null
++++ b/test/device_speech_recognition_service_test.dart
+@@ -0,0 +1,26 @@
++import 'package:flutter_test/flutter_test.dart';
++import 'package:mirror_scorpion_v4/core/speech/device_speech_recognition_service.dart';
++
++void main() {
++  group('SpeechLocaleResolver', () {
++    test('matches a source language to an installed recognition locale', () {
++      expect(
++        SpeechLocaleResolver.preferredLocaleId(
++          languageCode: 'ar',
++          installedLocaleIds: const ['en_US', 'ar-EG'],
++        ),
++        'ar-EG',
++      );
++    });
++
++    test('allows the device default when a matching locale is absent', () {
++      expect(
++        SpeechLocaleResolver.preferredLocaleId(
++          languageCode: 'ar',
++          installedLocaleIds: const ['en_US', 'fr-FR'],
++        ),
++        isNull,
++      );
++    });
++  });
++}
+-- 
+2.43.0
+

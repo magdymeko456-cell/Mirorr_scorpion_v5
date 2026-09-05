@@ -1,0 +1,178 @@
+From f96e27a70b8206ca81941eb0198ecf1d37d00afc Mon Sep 17 00:00:00 2001
+From: magdymeko456-cell
+ <2.88837127e+08+magdymeko456-cell@users.noreply.github.com>
+Date: Mon, 24 Aug 2026 03:37:37 +0000
+Subject: [PATCH] feat(content): add owner inspiration and app profile
+
+---
+ assets/data/content_manifest.json     | 10 ++++
+ assets/data/owner_inspiration_ar.json | 73 +++++++++++++++++++++++++++
+ lib/features/feature_hub_screen.dart  | 44 ++++++++++++----
+ 3 files changed, 118 insertions(+), 9 deletions(-)
+ create mode 100644 assets/data/owner_inspiration_ar.json
+
+diff --git a/assets/data/content_manifest.json b/assets/data/content_manifest.json
+index e4df54f..e166dac 100644
+--- a/assets/data/content_manifest.json
++++ b/assets/data/content_manifest.json
+@@ -12,6 +12,16 @@
+       "source": "Mirror Scorpion starter content",
+       "asset": "assets/data/starter_original_ar.json"
+     },
++    {
++      "id": "owner-inspiration-ar",
++      "title": "تأملات ورسائل إنسانية",
++      "category": "owner_provided_inspiration",
++      "language": "ar",
++      "distribution": "bundled",
++      "license": "owner-provided-content",
++      "source": "نصوص قدمها مالك التطبيق",
++      "asset": "assets/data/owner_inspiration_ar.json"
++    },
+     {
+       "id": "hadith-qudsi-verified",
+       "title": "الحديث القدسي — فهرس موثق",
+diff --git a/assets/data/owner_inspiration_ar.json b/assets/data/owner_inspiration_ar.json
+new file mode 100644
+index 0000000..6f08aac
+--- /dev/null
++++ b/assets/data/owner_inspiration_ar.json
+@@ -0,0 +1,73 @@
++{
++  "schemaVersion": 1,
++  "packageId": "owner-inspiration-ar",
++  "license": "owner-provided-content",
++  "stories": [
++    {
++      "id": "being-human",
++      "title": "أن تكون إنساناً",
++      "category": "owner_provided_inspiration",
++      "language": "ar",
++      "summary": "رسالة عن احتواء الكسر والكمال، والحزن والفرح، والرجاء في الفرج.",
++      "body": "أن تكون إنساناً يعني أن تحمل كسرك وكمالك معاً، وأن تسمح للحزن أن يجلس بجوار الفرح، وأن تدرك أن ضعفك لا ينفي قوتك. فإذا أراد الله لك الفرج خضعت جميع المستحيلات.",
++      "source": "محتوى قدمه مالك التطبيق",
++      "citation": "نص مقدم من Tamer Eldosoky",
++      "rights": "owner-provided-content"
++    },
++    {
++      "id": "dignity",
++      "title": "عزة النفس",
++      "category": "owner_provided_inspiration",
++      "language": "ar",
++      "summary": "رسالة عن ترك ما يؤذي النفس بهدوء ومن دون خصومة.",
++      "body": "وعندما عزّت علي نفسي، هجرت من كان لي أغلى من نفسي؛ فعزيز النفس لا يعادي، بل يترك الجمل بما حمل.",
++      "source": "محتوى قدمه مالك التطبيق",
++      "citation": "نص مقدم من Tamer Eldosoky",
++      "rights": "owner-provided-content"
++    },
++    {
++      "id": "support-and-betrayal",
++      "title": "أثر السند والخذلان",
++      "category": "owner_provided_inspiration",
++      "language": "ar",
++      "summary": "كلمات عن الأثر الطويل للسند الصادق والخذلان المفاجئ.",
++      "body": "شيئان يتركان أثراً لا تمحوه السنين: سندٌ صادق انتشلك في عزّ انهيارك، وخذلانٌ مفاجئ أسقطك في عزّ ضعفك.",
++      "source": "محتوى قدمه مالك التطبيق",
++      "citation": "نص مقدم من Tamer Eldosoky",
++      "rights": "owner-provided-content"
++    },
++    {
++      "id": "elegance",
++      "title": "الأناقة",
++      "category": "owner_provided_inspiration",
++      "language": "ar",
++      "summary": "رسالة قصيرة عن الأثر الهادئ في الذاكرة.",
++      "body": "الأناقة ليست في أن تلفت الأنظار، بل في أن تبقى عالقاً في الذاكرة.",
++      "source": "محتوى قدمه مالك التطبيق",
++      "citation": "نص مقدم من Tamer Eldosoky",
++      "rights": "owner-provided-content"
++    },
++    {
++      "id": "eyes-of-love",
++      "title": "كلّ يراك بعين طبعه",
++      "category": "owner_provided_inspiration",
++      "language": "ar",
++      "summary": "تأمل في اختلاف نظرة الناس للإنسان بحسب محبتهم وموقعه في قلوبهم.",
++      "body": "كلّ يراك بعين طبعه، وبقدر محبتك في قلبه. ستجد في حياتك من يراك أطيب الناس، وستجد من يراك أسوأهم. ستقابل أشخاصاً ينسون خمسين موقفاً جميلاً منك لأنك قصّرت مرة، وستجد أشخاصاً يبحثون لك عن أعذار ويظهرون لك كم أنت جميل. ستقابل أشخاصاً لا يكفّون عن انتقادك، وآخرين لا يكفيهم كل الكلام الجميل في وصفك. ستقابل أشخاصاً يكرهونك بلا سبب، وأشخاصاً يخترعون أسباباً تحبّبهم فيك. وفي النهاية أنت نفس الشخص، ولكن كل عين تراك على قدر محبتها لك، وكلّ يراك من الزاوية التي تقف فيها من قلبه.",
++      "source": "محتوى قدمه مالك التطبيق",
++      "citation": "نص مقدم من Tamer Eldosoky",
++      "rights": "owner-provided-content"
++    },
++    {
++      "id": "loyalty",
++      "title": "الوفاء الحقيقي",
++      "category": "owner_provided_inspiration",
++      "language": "ar",
++      "summary": "تأمل في أنواع الرفقة ومعنى البقاء في كل الظروف.",
++      "body": "في حياتك ستصادف ثلاثة أنواع من الناس: ناس معك لأنهم لم يجدوا غيرك، وناس معك إلى أن يجدوا غيرك، وناس معك لأنهم لا يريدون غيرك. والوفاء الحقيقي أن يبقى معك أحدهم في كل الظروف لا حسب الظروف. فإذا وجدت هذا النوع من الناس فلا تفرّط فيه أبداً.",
++      "source": "محتوى قدمه مالك التطبيق",
++      "citation": "نص مقدم من Tamer Eldosoky",
++      "rights": "owner-provided-content"
++    }
++  ]
++}
+diff --git a/lib/features/feature_hub_screen.dart b/lib/features/feature_hub_screen.dart
+index edaba6c..115a8b7 100644
+--- a/lib/features/feature_hub_screen.dart
++++ b/lib/features/feature_hub_screen.dart
+@@ -1180,11 +1180,17 @@ class _StoriesPanelState extends State<_StoriesPanel> {
+   }
+ 
+   Future<List<_StoryEntry>> _loadBundledStories() async {
+-    final decoded = jsonDecode(
+-      await rootBundle.loadString('assets/data/starter_original_ar.json'),
+-    ) as Map<String, dynamic>;
+-    final stories = decoded['stories'] as List<dynamic>? ?? const [];
+-    return stories
++    const assets = <String>[
++      'assets/data/starter_original_ar.json',
++      'assets/data/owner_inspiration_ar.json',
++    ];
++    final packages = await Future.wait(
++      assets.map((asset) async => jsonDecode(
++            await rootBundle.loadString(asset),
++          ) as Map<String, dynamic>),
++    );
++    return packages
++        .expand((package) => package['stories'] as List<dynamic>? ?? const [])
+         .whereType<Map<String, dynamic>>()
+         .map(_StoryEntry.fromJson)
+         .toList();
+@@ -1757,10 +1763,30 @@ class _SettingsPanel extends StatelessWidget {
+           ),
+           const SizedBox(height: 12),
+           const Card(
+-            child: ListTile(
+-              leading: Icon(Icons.info_outline, color: RoyalColors.gold),
+-              title: Text('حول Mirror Scorpion'),
+-              subtitle: Text('ترجمة محلية عندما تدعمها نماذج الجهاز، محتوى أوفلاين اختياري، وخصوصية قائمة على الفعل الصريح للمستخدم.'),
++            child: Padding(
++              padding: EdgeInsets.all(16),
++              child: Column(
++                crossAxisAlignment: CrossAxisAlignment.start,
++                children: [
++                  Row(
++                    children: [
++                      Icon(Icons.info_outline, color: RoyalColors.gold),
++                      SizedBox(width: 10),
++                      Text('نبذة عن التطبيق', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
++                    ],
++                  ),
++                  SizedBox(height: 12),
++                  Text('ميرور سكربيون: حيث تُصنع البدايات', style: TextStyle(color: RoyalColors.cyan, fontWeight: FontWeight.w700, fontSize: 17)),
++                  SizedBox(height: 10),
++                  Text('الوقت هو العملة الأغلى التي مُنحت للإنسان. هنا، نحن لا نقيس أعمارنا بالسنوات، بل بكل ثانية نصنع فيها إنجازاً حقيقياً.\n\nهنا ستكتشف أن كل انكسار مررت به لم يكن إلا تمهيداً لانطلاقة أعظم؛ فالماضي ليس للمحو، بل للتعلّم، والمستقبل هو ما يستحق انتباهك الآن.\n\nتذكّر دائماً: قصتك لا تزال تُكتب، والنهاية لم يحن وقتها بعد.', style: TextStyle(color: RoyalColors.muted, height: 1.65, fontSize: 15)),
++                  SizedBox(height: 14),
++                  Divider(),
++                  SizedBox(height: 8),
++                  Text('المطور', style: TextStyle(color: RoyalColors.gold, fontWeight: FontWeight.w700)),
++                  SizedBox(height: 4),
++                  Text('Tamer Eldosoky', textDirection: TextDirection.ltr, style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
++                ],
++              ),
+             ),
+           ),
+         ],
+-- 
+2.43.0
+

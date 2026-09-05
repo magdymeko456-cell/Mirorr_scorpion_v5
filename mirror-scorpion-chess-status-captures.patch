@@ -1,0 +1,447 @@
+From c5ac3e5819921f6c92944c2b413cac60e8e0ba53 Mon Sep 17 00:00:00 2001
+From: magdymeko456-cell
+ <2.88837127e+08+magdymeko456-cell@users.noreply.github.com>
+Date: Wed, 26 Aug 2026 22:50:24 +0000
+Subject: [PATCH] feat(games): add chess status and captures
+
+---
+ lib/core/games/chess_game_controller.dart |  78 ++++++++--
+ lib/features/feature_hub_screen.dart      | 166 ++++++++++++++++++++--
+ test/chess_game_controller_test.dart      |  13 ++
+ todo.md                                   |   2 +
+ 4 files changed, 238 insertions(+), 21 deletions(-)
+
+diff --git a/lib/core/games/chess_game_controller.dart b/lib/core/games/chess_game_controller.dart
+index dc0822d..0746610 100644
+--- a/lib/core/games/chess_game_controller.dart
++++ b/lib/core/games/chess_game_controller.dart
+@@ -12,6 +12,22 @@ extension ChessComputerLevelLabel on ChessComputerLevel {
+       };
+ }
+ 
++class ChessMoveSummary {
++  const ChessMoveSummary({
++    required this.from,
++    required this.to,
++    required this.movedByWhite,
++    this.capturedSymbol = '',
++  });
++
++  final String from;
++  final String to;
++  final bool movedByWhite;
++  final String capturedSymbol;
++
++  bool get isCapture => capturedSymbol.isNotEmpty;
++}
++
+ /// قواعد شطرنج قانونية محلية وخصم مادي بسيط. لا يمثل هذا الملف مشهداً 3D؛
+ /// يبقى عرض القطع ثلاثي الأبعاد مرحلة منفصلة بعد نموذج توافق المحرك.
+ class ChessGameController {
+@@ -19,6 +35,7 @@ class ChessGameController {
+ 
+   chess.Chess _game;
+   final Random _random = Random();
++  ChessMoveSummary? _lastMove;
+ 
+   chess.Piece? pieceAt(String square) => _game.get(square);
+   static String pieceSymbol(chess.Piece? piece) {
+@@ -48,6 +65,7 @@ class ChessGameController {
+   bool get isCheckmate => _game.in_checkmate;
+   bool get isDraw => _game.in_draw;
+   String get pgn => _game.pgn();
++  ChessMoveSummary? get lastMove => _lastMove;
+ 
+   List<String> legalMovesFrom(String square) {
+     final legalTargets = <String>[];
+@@ -61,23 +79,23 @@ class ChessGameController {
+ 
+   bool moveHuman(String from, String to) {
+     if (gameOver) return false;
+-    return _game.move({'from': from, 'to': to, 'promotion': 'q'});
++    return _applyMove({'from': from, 'to': to, 'promotion': 'q'});
+   }
+ 
+   bool moveComputer({ChessComputerLevel level = ChessComputerLevel.medium}) {
+     if (isWhiteTurn || gameOver) return false;
+-    final moves = _game.moves().whereType<String>().toList();
++    final moves = _verboseMoves();
+     if (moves.isEmpty) return false;
+ 
+     if (level == ChessComputerLevel.normal) {
+-      return _game.move(moves[_random.nextInt(moves.length)]);
++      return _applyMove(moves[_random.nextInt(moves.length)]);
+     }
+ 
+     var bestScore = 1 << 30;
+-    final bestMoves = <String>[];
++    final bestMoves = <Map<String, dynamic>>[];
+     for (final move in moves) {
+       final candidate = _game.copy();
+-      if (!candidate.move(move)) continue;
++      if (!_applyMoveTo(candidate, move)) continue;
+       final score = level == ChessComputerLevel.skilled
+           ? _scoreAfterBestWhiteReply(candidate)
+           : _materialScore(candidate);
+@@ -91,16 +109,16 @@ class ChessGameController {
+       }
+     }
+     if (bestMoves.isEmpty) return false;
+-    return _game.move(bestMoves[_random.nextInt(bestMoves.length)]);
++    return _applyMove(bestMoves[_random.nextInt(bestMoves.length)]);
+   }
+ 
+   int _scoreAfterBestWhiteReply(chess.Chess position) {
+-    final replies = position.moves().whereType<String>().toList();
++    final replies = _verboseMoves(position);
+     if (replies.isEmpty) return _materialScore(position);
+     var whiteBestScore = -(1 << 30);
+     for (final reply in replies) {
+       final afterReply = position.copy();
+-      if (!afterReply.move(reply)) continue;
++      if (!_applyMoveTo(afterReply, reply)) continue;
+       whiteBestScore = max(whiteBestScore, _materialScore(afterReply));
+     }
+     return whiteBestScore == -(1 << 30)
+@@ -108,7 +126,49 @@ class ChessGameController {
+         : whiteBestScore;
+   }
+ 
+-  void reset() => _game = chess.Chess();
++  List<Map<String, dynamic>> _verboseMoves([chess.Chess? position]) {
++    final activeGame = position ?? _game;
++    return activeGame
++        .moves({'verbose': true})
++        .whereType<Map>()
++        .map((move) => Map<String, dynamic>.from(move))
++        .where((move) => move['from'] is String && move['to'] is String)
++        .toList();
++  }
++
++  bool _applyMove(Map<String, dynamic> move) {
++    final from = move['from'] as String;
++    final to = move['to'] as String;
++    final movingPiece = _game.get(from);
++    var capturedPiece = _game.get(to);
++    if (capturedPiece == null &&
++        movingPiece?.type == chess.Chess.PAWN &&
++        from.substring(0, 1) != to.substring(0, 1)) {
++      capturedPiece = _game.get('${to.substring(0, 1)}${from.substring(1, 2)}');
++    }
++    final movedByWhite = isWhiteTurn;
++    if (!_applyMoveTo(_game, move)) return false;
++    _lastMove = ChessMoveSummary(
++      from: from,
++      to: to,
++      movedByWhite: movedByWhite,
++      capturedSymbol: pieceSymbol(capturedPiece),
++    );
++    return true;
++  }
++
++  bool _applyMoveTo(chess.Chess position, Map<String, dynamic> move) {
++    return position.move({
++      'from': move['from'],
++      'to': move['to'],
++      'promotion': move['promotion'] ?? 'q',
++    });
++  }
++
++  void reset() {
++    _game = chess.Chess();
++    _lastMove = null;
++  }
+ 
+   int _materialScore(chess.Chess position) {
+     final values = {
+diff --git a/lib/features/feature_hub_screen.dart b/lib/features/feature_hub_screen.dart
+index b502139..4ac5707 100644
+--- a/lib/features/feature_hub_screen.dart
++++ b/lib/features/feature_hub_screen.dart
+@@ -1905,6 +1905,15 @@ class _GamesPanelState extends State<_GamesPanel> {
+   bool _playAgainstComputer = true;
+   ChessComputerLevel _computerLevel = ChessComputerLevel.normal;
+   String _gameNotice = 'اختر وضع اللعب ثم انقل قطعة بيضاء لبدء المباراة.';
++  final _capturedByWhite = <String>[];
++  final _capturedByBlack = <String>[];
++
++  void _recordLastCapture() {
++    final move = _chess.lastMove;
++    if (move == null || !move.isCapture) return;
++    (move.movedByWhite ? _capturedByWhite : _capturedByBlack)
++        .add(move.capturedSymbol);
++  }
+ 
+   Future<void> _tapSquare(String square) async {
+     if (_computerThinking || _chess.gameOver) return;
+@@ -1940,6 +1949,7 @@ class _GamesPanelState extends State<_GamesPanel> {
+ 
+     final moved = _chess.moveHuman(_selectedSquare!, square);
+     if (!moved) return;
++    _recordLastCapture();
+     if (_chess.gameOver) {
+       setState(() {
+         _selectedSquare = null;
+@@ -1961,7 +1971,8 @@ class _GamesPanelState extends State<_GamesPanel> {
+     });
+     await Future<void>.delayed(const Duration(milliseconds: 450));
+     if (!mounted) return;
+-    _chess.moveComputer(level: _computerLevel);
++    final computerMoved = _chess.moveComputer(level: _computerLevel);
++    if (computerMoved) _recordLastCapture();
+     if (!mounted) return;
+     setState(() {
+       _computerThinking = false;
+@@ -1984,6 +1995,8 @@ class _GamesPanelState extends State<_GamesPanel> {
+       _selectedSquare = null;
+       _legalTargets = const [];
+       _computerThinking = false;
++      _capturedByWhite.clear();
++      _capturedByBlack.clear();
+       _gameNotice = 'بدأت مباراة جديدة. دور الأبيض.';
+     });
+   }
+@@ -1995,6 +2008,8 @@ class _GamesPanelState extends State<_GamesPanel> {
+       _selectedSquare = null;
+       _legalTargets = const [];
+       _computerThinking = false;
++      _capturedByWhite.clear();
++      _capturedByBlack.clear();
+       _gameNotice = againstComputer
+           ? 'وضع لاعب واحد: أنت بالأبيض والكمبيوتر بالأسود.'
+           : 'وضع لاعبين محليين: يتبادل اللاعبان الجهاز.';
+@@ -2008,10 +2023,76 @@ class _GamesPanelState extends State<_GamesPanel> {
+       _selectedSquare = null;
+       _legalTargets = const [];
+       _computerThinking = false;
++      _capturedByWhite.clear();
++      _capturedByBlack.clear();
+       _gameNotice = 'مستوى الكمبيوتر: ${level.label}. بدأت مباراة جديدة.';
+     });
+   }
+ 
++  Widget _buildMatchStatus() {
++    final isWhiteTurn = _chess.isWhiteTurn;
++    final title = _chess.isCheckmate
++        ? 'كش مات — فاز ${isWhiteTurn ? 'الأسود' : 'الأبيض'}'
++        : _chess.isDraw
++            ? 'تعادل وفق قواعد الشطرنج'
++            : _computerThinking
++                ? 'الكمبيوتر يفكر — ${_computerLevel.label}'
++                : isWhiteTurn
++                    ? 'دور الأبيض'
++                    : _playAgainstComputer
++                        ? 'دور الكمبيوتر الأسود'
++                        : 'دور الأسود';
++    final subtitle = _playAgainstComputer
++        ? 'أنت بالأبيض • الكمبيوتر بالأسود'
++        : 'تناوب الجهاز بين اللاعب الأبيض والأسود';
++    return Container(
++      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
++      decoration: BoxDecoration(
++        gradient: LinearGradient(
++          colors: [const Color(0xFF172938), const Color(0xFF0E1A24).withValues(alpha: 0.86)],
++        ),
++        borderRadius: BorderRadius.circular(15),
++        border: Border.all(color: RoyalColors.gold.withValues(alpha: 0.42)),
++      ),
++      child: Row(
++        children: [
++          Container(
++            width: 31,
++            height: 31,
++            decoration: BoxDecoration(
++              shape: BoxShape.circle,
++              color: isWhiteTurn ? const Color(0xFFFFF8E6) : const Color(0xFF14222B),
++              border: Border.all(color: RoyalColors.gold, width: 1.5),
++              boxShadow: [BoxShadow(color: RoyalColors.gold.withValues(alpha: 0.22), blurRadius: 8)],
++            ),
++          ),
++          const SizedBox(width: 10),
++          Expanded(
++            child: Column(
++              crossAxisAlignment: CrossAxisAlignment.start,
++              children: [
++                Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: RoyalColors.gold)),
++                const SizedBox(height: 2),
++                Text(subtitle, style: const TextStyle(fontSize: 12, color: RoyalColors.muted)),
++              ],
++            ),
++          ),
++          const Icon(Icons.auto_awesome, color: RoyalColors.gold, size: 19),
++        ],
++      ),
++    );
++  }
++
++  Widget _buildCapturedPieces() {
++    return Row(
++      children: [
++        Expanded(child: _CapturedPiecesPane(label: 'أسر الأبيض', symbols: _capturedByWhite, isWhiteSide: true)),
++        const SizedBox(width: 8),
++        Expanded(child: _CapturedPiecesPane(label: 'أسر الأسود', symbols: _capturedByBlack, isWhiteSide: false)),
++      ],
++    );
++  }
++
+   Widget _buildChessBoard() {
+     const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+     return AspectRatio(
+@@ -2050,18 +2131,23 @@ class _GamesPanelState extends State<_GamesPanel> {
+                       final isLight = (index ~/ 8 + index % 8).isEven;
+                       final isSelected = _selectedSquare == square;
+                       final isTarget = _legalTargets.contains(square);
++                      final lastMove = _chess.lastMove;
++                      final isLastMove = lastMove?.from == square || lastMove?.to == square;
++                      final squareColor = isSelected
++                          ? const Color(0xFFE6B948)
++                          : isTarget
++                              ? const Color(0xFF77AE80)
++                              : isLastMove
++                                  ? (isLight ? const Color(0xFFE9C96E) : const Color(0xFF567866))
++                                  : isLight
++                                      ? const Color(0xFFE4D5B4)
++                                      : const Color(0xFF3C5A67);
+                       return GestureDetector(
+                         onTap: () => _tapSquare(square),
+                         child: AnimatedContainer(
+                           duration: const Duration(milliseconds: 130),
+                           decoration: BoxDecoration(
+-                            color: isSelected
+-                                ? const Color(0xFFE6B948)
+-                                : isTarget
+-                                    ? const Color(0xFF77AE80)
+-                                    : isLight
+-                                        ? const Color(0xFFE4D5B4)
+-                                        : const Color(0xFF3C5A67),
++                            color: squareColor,
+                             border: Border.all(
+                               color: Colors.black.withValues(alpha: isLight ? 0.035 : 0.10),
+                               width: 0.3,
+@@ -2070,13 +2156,21 @@ class _GamesPanelState extends State<_GamesPanel> {
+                           child: Stack(
+                             alignment: Alignment.center,
+                             children: [
+-                              if (isTarget && piece == null)
++                              if (isTarget)
+                                 Container(
+-                                  width: 12,
+-                                  height: 12,
++                                  width: piece == null ? 12 : 35,
++                                  height: piece == null ? 12 : 35,
+                                   decoration: BoxDecoration(
+-                                    color: const Color(0xFF133B2B).withValues(alpha: 0.72),
++                                    color: piece == null
++                                        ? const Color(0xFF133B2B).withValues(alpha: 0.72)
++                                        : Colors.transparent,
+                                     shape: BoxShape.circle,
++                                    border: piece == null
++                                        ? null
++                                        : Border.all(
++                                            color: const Color(0xFFB63737).withValues(alpha: 0.86),
++                                            width: 2.4,
++                                          ),
+                                   ),
+                                 ),
+                               AnimatedScale(
+@@ -2182,8 +2276,12 @@ class _GamesPanelState extends State<_GamesPanel> {
+                   ),
+                 ],
+                 const SizedBox(height: 14),
++                _buildMatchStatus(),
++                const SizedBox(height: 12),
+                 Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 440), child: _buildChessBoard())),
+                 const SizedBox(height: 12),
++                _buildCapturedPieces(),
++                const SizedBox(height: 12),
+                 Text(_gameNotice, textAlign: TextAlign.center, style: const TextStyle(color: RoyalColors.gold, height: 1.5)),
+                 const SizedBox(height: 10),
+                 OutlinedButton.icon(onPressed: _resetGame, icon: const Icon(Icons.restart_alt), label: const Text('مباراة جديدة')),
+@@ -2254,6 +2352,50 @@ class _ChessPieceToken extends StatelessWidget {
+   }
+ }
+ 
++class _CapturedPiecesPane extends StatelessWidget {
++  const _CapturedPiecesPane({
++    required this.label,
++    required this.symbols,
++    required this.isWhiteSide,
++  });
++
++  final String label;
++  final List<String> symbols;
++  final bool isWhiteSide;
++
++  @override
++  Widget build(BuildContext context) {
++    return Container(
++      constraints: const BoxConstraints(minHeight: 54),
++      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
++      decoration: BoxDecoration(
++        color: Colors.black.withValues(alpha: 0.14),
++        borderRadius: BorderRadius.circular(12),
++        border: Border.all(color: RoyalColors.border.withValues(alpha: 0.7)),
++      ),
++      child: Column(
++        crossAxisAlignment: CrossAxisAlignment.start,
++        children: [
++          Text(label, style: const TextStyle(fontSize: 11, color: RoyalColors.muted, fontWeight: FontWeight.w700)),
++          const SizedBox(height: 3),
++          Text(
++            symbols.isEmpty ? '—' : symbols.join(' '),
++            textDirection: TextDirection.ltr,
++            maxLines: 1,
++            overflow: TextOverflow.ellipsis,
++            style: TextStyle(
++              fontSize: 18,
++              height: 1,
++              color: isWhiteSide ? const Color(0xFFFFF1C9) : const Color(0xFF9DB9C5),
++              shadows: [Shadow(color: Colors.black.withValues(alpha: 0.58), blurRadius: 2, offset: const Offset(1, 1))],
++            ),
++          ),
++        ],
++      ),
++    );
++  }
++}
++
+ class _SettingsPanel extends StatelessWidget {
+   const _SettingsPanel();
+ 
+diff --git a/test/chess_game_controller_test.dart b/test/chess_game_controller_test.dart
+index 727501d..06f28b1 100644
+--- a/test/chess_game_controller_test.dart
++++ b/test/chess_game_controller_test.dart
+@@ -40,6 +40,19 @@ void main() {
+     expect(game.moveComputer(level: ChessComputerLevel.skilled), isFalse);
+   });
+ 
++  test('records the last move and its captured piece for the board UI', () {
++    final game = ChessGameController();
++
++    expect(game.moveHuman('e2', 'e4'), isTrue);
++    expect(game.moveHuman('d7', 'd5'), isTrue);
++    expect(game.moveHuman('e4', 'd5'), isTrue);
++
++    expect(game.lastMove?.from, 'e4');
++    expect(game.lastMove?.to, 'd5');
++    expect(game.lastMove?.movedByWhite, isTrue);
++    expect(game.lastMove?.capturedSymbol, '♟');
++  });
++
+   test('maps starting pieces to visible Unicode chess symbols', () {
+     final game = ChessGameController();
+ 
+diff --git a/todo.md b/todo.md
+index a8928e4..8eb1df6 100644
+--- a/todo.md
++++ b/todo.md
+@@ -270,3 +270,5 @@
+ - [ ] توسيع القصص والإلهام بأصول مرخصة فقط مع لغة الجهاز وقراءة محلية، ومنع فيديو 10–15 دقيقة أو حصص عامة حتى يعتمد السقف والخصوصية والمزود.
+ - [x] تكبير رقعة الشطرنج قليلاً وتحسين مظهر القطع بأسلوب شطرنج حديث، مع الحفاظ على وضوحها وقابلية اللمس على الهاتف.
+ - [x] إضفاء هوية شطرنج حديثة أصلية عالية الجودة: إطار عميق وقطع أنيقة وتباين وخامات محسّنة، مستوحاة من مستوى تطبيقات الشطرنج المعاصرة دون نسخ علامة أو أصول أي تطبيق آخر.
++- [x] إضافة شريط حالة ملكي وقطع مأسورة وتمييز قانوني للحركة والأسر إلى شاشة الشطرنج الحالية، مع إبقاء الرقعة الكبيرة ومحرك اللعب كما هما.
++- [ ] التحقق من هوية المصدر والرخصة أو إذن إعادة النشر لكتاب لا تحزن عبر مكتبة عين الجامعة قبل إدراج تنزيل أو محتوى داخل ركن الإلهام.
+-- 
+2.43.0
+

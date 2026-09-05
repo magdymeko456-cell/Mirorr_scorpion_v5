@@ -1,0 +1,57 @@
+From d5c059b0b86e8d92fb0950f10ef5fc66f193cabc Mon Sep 17 00:00:00 2001
+From: magdymeko456-cell
+ <2.88837127e+08+magdymeko456-cell@users.noreply.github.com>
+Date: Sun, 23 Aug 2026 14:59:52 +0000
+Subject: [PATCH] fix(ci): include ML Kit OCR script modules
+
+---
+ .github/workflows/build_apk.yml | 21 +++++++++++++++++++++
+ todo.md                         |  2 ++
+ 2 files changed, 23 insertions(+)
+
+diff --git a/.github/workflows/build_apk.yml b/.github/workflows/build_apk.yml
+index dedfee8..d002031 100644
+--- a/.github/workflows/build_apk.yml
++++ b/.github/workflows/build_apk.yml
+@@ -65,6 +65,27 @@ jobs:
+             echo "Android app Gradle file was not generated."
+             exit 1
+           fi
++          if [ -f android/app/build.gradle.kts ]; then
++            cat <<'EOF' >> android/app/build.gradle.kts
++
++dependencies {
++    implementation("com.google.mlkit:text-recognition-chinese:16.0.1")
++    implementation("com.google.mlkit:text-recognition-devanagari:16.0.1")
++    implementation("com.google.mlkit:text-recognition-japanese:16.0.1")
++    implementation("com.google.mlkit:text-recognition-korean:16.0.1")
++}
++EOF
++          else
++            cat <<'EOF' >> android/app/build.gradle
++
++dependencies {
++    implementation 'com.google.mlkit:text-recognition-chinese:16.0.1'
++    implementation 'com.google.mlkit:text-recognition-devanagari:16.0.1'
++    implementation 'com.google.mlkit:text-recognition-japanese:16.0.1'
++    implementation 'com.google.mlkit:text-recognition-korean:16.0.1'
++}
++EOF
++          fi
+       - name: Install dependencies
+         run: flutter pub get
+       - name: Static analysis
+diff --git a/todo.md b/todo.md
+index cf5ff0f..ac90c3e 100644
+--- a/todo.md
++++ b/todo.md
+@@ -121,4 +121,6 @@
+ - [x] اختبار تهيئة Firebase عبر GitHub Actions وAPK دون وضع ملف الإعداد في Git
+ - [ ] تنفيذ خدمات محلية قابلة للاختبار دون نشر دوال حية، مع إبقاء جميع مزايا PRO غير مقفلة
+ - [ ] إضافة OCR محلي حقيقي للصور عبر ML Kit مع اختيار من الكاميرا أو المعرض وحالات فشل صادقة
++- [ ] تشخيص وإصلاح فشل GitHub Actions رقم `32646736497` الخاص بمرحلة OCR ثم إعادة بناء APK بنجاح
++- [ ] إعداد مراجعة قبول تفصيلية للوصف الأخير تغطي الكروت الستة والذكاء والقصص والألعاب والفقاعة وPRO والأمان
+ - [ ] استئناف نشر `healthCheck` والاختبار الحي بعد اكتمال الخدمات وقبل تطبيق أي قفل PRO
+-- 
+2.43.0
+

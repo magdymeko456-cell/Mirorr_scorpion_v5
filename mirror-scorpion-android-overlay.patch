@@ -1,0 +1,380 @@
+From 0e781fad5e7d54372bdc59ff08f4ea75c96a6a86 Mon Sep 17 00:00:00 2001
+From: magdymeko456-cell
+ <2.88837127e+08+magdymeko456-cell@users.noreply.github.com>
+Date: Wed, 26 Aug 2026 04:22:38 +0000
+Subject: [PATCH] feat(android): add user-initiated translation overlay
+
+---
+ .github/workflows/build_apk.yml               |  16 +++
+ ...ed-services-activation-order-2026-08-26.md |  44 +++++++
+ .../platform/android_overlay_service.dart     | 118 ++++++++++++++++++
+ lib/features/feature_hub_screen.dart          |  73 +++++++++--
+ lib/main.dart                                 |   7 ++
+ pubspec.yaml                                  |   1 +
+ todo.md                                       |   4 +
+ 7 files changed, 254 insertions(+), 9 deletions(-)
+ create mode 100644 docs/disabled-services-activation-order-2026-08-26.md
+ create mode 100644 lib/core/platform/android_overlay_service.dart
+
+diff --git a/.github/workflows/build_apk.yml b/.github/workflows/build_apk.yml
+index 6eb4021..295b7cc 100644
+--- a/.github/workflows/build_apk.yml
++++ b/.github/workflows/build_apk.yml
+@@ -108,6 +108,22 @@ jobs:
+           if ! grep -q 'android.speech.RecognitionService' android/app/src/main/AndroidManifest.xml; then
+             sed -i '/<application/i\    <queries><intent><action android:name="android.speech.RecognitionService" /></intent></queries>' android/app/src/main/AndroidManifest.xml
+           fi
++      - name: Configure Android translation overlay permission
++        run: |
++          MANIFEST=android/app/src/main/AndroidManifest.xml
++          for permission in \
++            android.permission.SYSTEM_ALERT_WINDOW \
++            android.permission.FOREGROUND_SERVICE \
++            android.permission.FOREGROUND_SERVICE_SPECIAL_USE; do
++            if ! grep -q "$permission" "$MANIFEST"; then
++              sed -i "/<application/i\    <uses-permission android:name=\"$permission\" />" "$MANIFEST"
++            fi
++          done
++          if ! grep -q 'flutter.overlay.window.flutter_overlay_window.OverlayService' "$MANIFEST"; then
++            sed -i '/<\/application>/i\        <service android:name="flutter.overlay.window.flutter_overlay_window.OverlayService" android:exported="false" android:foregroundServiceType="specialUse">\
++            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User initiated translation shortcut overlay." />\
++        </service>' "$MANIFEST"
++          fi
+       - name: Configure PDF text extraction R8 rule
+         run: |
+           cat > android/app/mirror-scorpion-pdf-r8.pro <<'EOF'
+diff --git a/docs/disabled-services-activation-order-2026-08-26.md b/docs/disabled-services-activation-order-2026-08-26.md
+new file mode 100644
+index 0000000..c9d3478
+--- /dev/null
++++ b/docs/disabled-services-activation-order-2026-08-26.md
+@@ -0,0 +1,44 @@
++# ترتيب تفعيل الخدمات غير المفعلة — Mirror Scorpion v4
++
++**التاريخ:** 26 أغسطس 2026
++**آخر قبول Android:** تشغيل GitHub Actions `32928918118` ناجح، وتم قبول الترجمة والحوار ومعاينة المستند على الهاتف.
++
++## قاعدة التفعيل
++
++تُفعل الخدمات على دفعات مستقلة قابلة للاختبار. لا يكفي أن يظهر زر في الواجهة؛ يجب أن يثبت التدفق الحقيقي على APK وأن يفصح التطبيق عن حدوده. لا تُرسل قصة أو تسجيل صوت أو نص انفعالي أو ملف إلى خارج الجهاز قبل موافقة صريحة خاصة بهذا الغرض، وسياسة احتفاظ وحذف، وسقف تكلفة معتمد.
++
++| الترتيب | الخدمة | حالتها الحالية | الاعتماد | قرار التنفيذ |
++|---|---|---|---|---|
++| 1 | الفقاعة فوق التطبيقات | غير منفذة؛ الواجهة تعرض «قيد الإعداد» فقط. | إذن Android خاص، خدمة foreground مرئية، اختبار هاتف حقيقي. | تبدأ الآن، ولا تقرأ تطبيقات أخرى أو الإشعارات أو الحافظة تلقائياً. |
++| 2 | مشاركة المخرجات المحلية | النسخ النصي موجود؛ لا ملف صادر أو مشاركة حقيقية. | مشاركة Android وملف نصي محلي موقّع. | تبدأ بعد الفقاعة؛ لا تسمى «مشاركة صوت» قبل وجود ملف صوت حقيقي. |
++| 3 | حزم المحتوى واللغة | توجد حزم تجريبية صغيرة واستيراد JSON. | حقوق نشر موثقة، فهرس ورخص وإسناد وحذف. | تبدأ بعد تثبيت مخطط الحزمة والحقوق؛ لا تنزيل لنصوص غير مرخصة. |
++| 4 | تفريغ/ترجمة ملف صوت | دبوس اختيار الملف يشرح أن الخدمة غير موجودة. | نموذج محلي أو مزود خادمي، خصوصية للمادة الصوتية. | مؤجل إلى قرار مزود وحدود وحق رفع الملف؛ لا نولد تفريغاً مصطنعاً. |
++| 5 | أصوات سحابية ونسخ صوت | Android TTS يعمل بملفات أداء؛ نسخ الصوت مقفل. | موافقة مالك الصوت، إثبات الملكية، مزود ممول، حذف. | مؤجل؛ لا يمكن وصف ملفات الأداء بأنها أصوات بشرية مضمونة. |
++| 6 | إلهام ذكي وتذكيرات | فحص سلامة محلي فقط؛ لا خدمة أو إشعار. | نموذج خادمي، مسار أزمة، سياسة احتفاظ، أذونات إشعار. | مؤجل إلى عقد خدمة مستقل؛ لا تشخيص نفسي أو وعود علاجية. |
++| 7 | فيديو Runware | عقد Firebase مقفل، حصة يومية وشهرية صفر، ولا مفتاح. | قرار تكلفة ومدة ودقة ومنطقة واحتفاظ وحذف، ومفتاح خادمي فقط. | يبقى مقفلاً؛ لا يوجد «غير محدود» ولا فيديو فعلي حالياً. |
++| 8 | PRO/الدفع | تحقق محلي مبدئي وبطاقة حدود؛ لا شراء. | منتجات متجر، تحقق خادمي، سياسة استرداد/ضرائب/بلدان. | مؤجل إلى اكتمال وظائف المنتج واعتماد طريقة البيع. |
++
++## الفقاعة: نطاق الدفعة الأولى
++
++تعرض الفقاعة رمزاً صغيراً قابلاً للسحب فوق التطبيقات **فقط بعد أن يضغط المستخدم التفعيل ويمنح إذن الظهور فوق التطبيقات**. في هذه الدفعة، ضغط الرمز يوقف الفقاعة بوضوح؛ ولا تتعامل مع ميكروفون أو كاميرا أو ملفات أو نصوص تطبيقات أخرى في الخلفية. يمكن لاحقاً إضافة استقبال النص الذي يرسله المستخدم بنفسه عبر Android Share أو Process Text، لكنه ليس جزءاً من الدفعة الأولى.
++
++> لا تطلب الفقاعة `AccessibilityService` أو `NotificationListenerService`، ولا تقرأ WhatsApp أو البريد أو الرسائل أو الإشعارات أو الحافظة تلقائياً.
++
++يوثق Android أن `Settings.canDrawOverlays` يفحص صلاحية الرسم فوق التطبيقات وأن شاشة الإذن الخاصة موجودة. كما تشترط الإصدارات الحديثة إعلان نوع خدمة foreground وصلاحيتها؛ وعلى Android 15 لا يكفي امتلاك إذن overlay لبدء خدمة foreground من الخلفية إلا إذا كانت نافذة overlay مرئية أو تحقق استثناء آخر. [1] [2]
++
++تُقيَّم حزمة `flutter_overlay_window` كمرشح تقني للدفعة، إذ توثق طلب الإذن وإظهار فقاعة قابلة للسحب وخدمة overlay، لكنها تتطلب إذن overlay وخدمة foreground داخل Manifest. ستُثبت عبر CI وAPK قبل اعتمادها؛ لا يفترض توافقها لمجرد وجودها في pub.dev. [3]
++
++## معايير القبول
++
++| الخدمة | اختبار القبول المطلوب |
++|---|---|
++| الفقاعة | الإذن يظهر فقط بعد الضغط، يظهر رمز قابل للسحب، إشعار foreground واضح، زر إيقاف يعيده للشاشة، ولا تظهر قراءة أو طلب صلاحية Accessibility أو Notification Listener. |
++| المشاركة | ينشئ التطبيق ملف نص محلياً يحمل توقيعاً ظاهراً، ثم يفتح Android Share Sheet بعد ضغط المستخدم. لا يزعم أنه MP3 أو PDF إلا إذا كان الملف فعلاً بهذا النوع. |
++| حزم المحتوى | الحزمة تعرض الاسم واللغة والرخصة والرابط والإسناد والحذف قبل الحفظ؛ ترفض الحزمة ناقصة الحقوق. |
++| خدمة سحابية | تعرض الحصة والتكلفة والاحتفاظ قبل الإرسال، تتطلب موافقة، وتعرض الفشل والإلغاء والحذف بصدق. |
++
++## المراجع
++
++[1]: https://developer.android.com/reference/android/provider/Settings#canDrawOverlays(android.content.Context) "Android Settings.canDrawOverlays reference"
++[2]: https://developer.android.com/develop/background-work/services/fgs/changes "Android foreground-service changes"
++[3]: https://pub.dev/packages/flutter_overlay_window "flutter_overlay_window package documentation"
+diff --git a/lib/core/platform/android_overlay_service.dart b/lib/core/platform/android_overlay_service.dart
+new file mode 100644
+index 0000000..0fe4e8b
+--- /dev/null
++++ b/lib/core/platform/android_overlay_service.dart
+@@ -0,0 +1,118 @@
++import 'package:flutter/foundation.dart';
++import 'package:flutter/material.dart';
++import 'package:flutter_overlay_window/flutter_overlay_window.dart';
++
++enum AndroidOverlayState { started, stopped, unsupported, permissionDenied, failed }
++
++class AndroidOverlayResult {
++  const AndroidOverlayResult(this.state, this.message);
++
++  final AndroidOverlayState state;
++  final String message;
++
++  bool get isStarted => state == AndroidOverlayState.started;
++}
++
++/// طبقة Android فقط لفقاعة ظاهرة يطلبها المستخدم صراحة.
++/// لا تطلب Accessibility أو Notification Listener، ولا تقرأ نصوص تطبيقات أخرى.
++class AndroidOverlayService {
++  bool _isVisible = false;
++
++  bool get isSupported =>
++      !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
++  bool get isVisible => _isVisible;
++
++  Future<AndroidOverlayResult> showBubble() async {
++    if (!isSupported) {
++      return const AndroidOverlayResult(
++        AndroidOverlayState.unsupported,
++        'الفقاعة فوق التطبيقات متاحة على Android فقط.',
++      );
++    }
++    try {
++      var permitted = await FlutterOverlayWindow.isPermissionGranted();
++      if (!permitted) {
++        permitted = await FlutterOverlayWindow.requestPermission();
++      }
++      if (!permitted) {
++        return const AndroidOverlayResult(
++          AndroidOverlayState.permissionDenied,
++          'لم يُمنح إذن الظهور فوق التطبيقات؛ لم تبدأ الفقاعة.',
++        );
++      }
++      await FlutterOverlayWindow.showOverlay(
++        height: 84,
++        width: 84,
++        enableDrag: true,
++        flag: OverlayFlag.defaultFlag,
++        positionGravity: PositionGravity.auto,
++        startPosition: OverlayPosition(0, 156),
++        overlayTitle: 'Mirror Scorpion',
++        overlayContent: 'فقاعة ترجمة يفعّلها المستخدم',
++      );
++      _isVisible = true;
++      return const AndroidOverlayResult(
++        AndroidOverlayState.started,
++        'ظهرت الفقاعة القابلة للسحب مع إشعار foreground. لا تقرأ تطبيقات أخرى.',
++      );
++    } catch (_) {
++      return const AndroidOverlayResult(
++        AndroidOverlayState.failed,
++        'تعذر بدء الفقاعة. تحقق من إذن الظهور فوق التطبيقات ثم أعد المحاولة.',
++      );
++    }
++  }
++
++  Future<AndroidOverlayResult> closeBubble() async {
++    if (!isSupported) {
++      return const AndroidOverlayResult(
++        AndroidOverlayState.unsupported,
++        'الفقاعة فوق التطبيقات متاحة على Android فقط.',
++      );
++    }
++    try {
++      await FlutterOverlayWindow.closeOverlay();
++      _isVisible = false;
++      return const AndroidOverlayResult(
++        AndroidOverlayState.stopped,
++        'تم إيقاف الفقاعة وإزالة إشعار foreground.',
++      );
++    } catch (_) {
++      return const AndroidOverlayResult(
++        AndroidOverlayState.failed,
++        'تعذر إيقاف الفقاعة من هذه الجلسة. أوقفها من الإشعار أو أعد فتح التطبيق.',
++      );
++    }
++  }
++}
++
++class MirrorScorpionOverlayApp extends StatelessWidget {
++  const MirrorScorpionOverlayApp({super.key});
++
++  @override
++  Widget build(BuildContext context) {
++    return MaterialApp(
++      debugShowCheckedModeBanner: false,
++      home: Material(
++        color: Colors.transparent,
++        child: Center(
++          child: Container(
++            width: 76,
++            height: 76,
++            decoration: BoxDecoration(
++              shape: BoxShape.circle,
++              color: const Color(0xFF102840),
++              border: Border.all(color: Colors.cyanAccent, width: 2),
++              boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 12)],
++            ),
++            child: IconButton(
++              tooltip: 'إيقاف فقاعة ميرور سكربيون',
++              onPressed: FlutterOverlayWindow.closeOverlay,
++              icon: const Icon(Icons.translate, color: Colors.cyanAccent, size: 34),
++            ),
++          ),
++        ),
++      ),
++    );
++  }
++}
+diff --git a/lib/features/feature_hub_screen.dart b/lib/features/feature_hub_screen.dart
+index 4e1d754..f31e3fd 100644
+--- a/lib/features/feature_hub_screen.dart
++++ b/lib/features/feature_hub_screen.dart
+@@ -17,6 +17,7 @@ import '../core/documents/local_document_text_service.dart';
+ import '../core/media/runware_video_service.dart';
+ import '../core/mlkit/on_device_ocr_service.dart';
+ import '../core/mlkit/on_device_translation_service.dart';
++import '../core/platform/android_overlay_service.dart';
+ import '../core/pro/premium_verification_service.dart';
+ import '../core/speech/device_speech_recognition_service.dart';
+ import '../core/speech/elevenlabs_voice_service.dart';
+@@ -2124,7 +2125,7 @@ class _SettingsPanel extends StatelessWidget {
+             child: ListTile(
+               leading: const Icon(Icons.bubble_chart_outlined, color: RoyalColors.teal),
+               title: const Text('الفقاعة العائمة والخصوصية'),
+-              subtitle: const Text('غير مفعلة حتى يكتمل إذن Android وخدمة foreground واختبار الهاتف.'),
++              subtitle: const Text('Android فقط: إذن صريح وفقاعة قابلة للسحب، بلا قراءة للتطبيقات الأخرى.'),
+               trailing: const Icon(Icons.chevron_left),
+               onTap: () => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => const _BubblePrivacyPage())),
+             ),
+@@ -2536,9 +2537,38 @@ class _OfflinePackagesPageState extends State<_OfflinePackagesPage> {
+   }
+ }
+ 
+-class _BubblePrivacyPage extends StatelessWidget {
++class _BubblePrivacyPage extends StatefulWidget {
+   const _BubblePrivacyPage();
+ 
++  @override
++  State<_BubblePrivacyPage> createState() => _BubblePrivacyPageState();
++}
++
++class _BubblePrivacyPageState extends State<_BubblePrivacyPage> {
++  final _overlayService = AndroidOverlayService();
++  String? _notice;
++  bool _isWorking = false;
++
++  Future<void> _startBubble() async {
++    setState(() => _isWorking = true);
++    final result = await _overlayService.showBubble();
++    if (!mounted) return;
++    setState(() {
++      _isWorking = false;
++      _notice = result.message;
++    });
++  }
++
++  Future<void> _stopBubble() async {
++    setState(() => _isWorking = true);
++    final result = await _overlayService.closeBubble();
++    if (!mounted) return;
++    setState(() {
++      _isWorking = false;
++      _notice = result.message;
++    });
++  }
++
+   @override
+   Widget build(BuildContext context) {
+     return Directionality(
+@@ -2547,15 +2577,40 @@ class _BubblePrivacyPage extends StatelessWidget {
+         appBar: AppBar(title: const Text('الفقاعة العائمة والخصوصية')),
+         body: ListView(
+           padding: const EdgeInsets.all(18),
+-          children: const [
+-            _SectionNotice(
++          children: [
++            const _SectionNotice(
+               title: 'حدود الفقاعة',
+-              detail: 'عند تنفيذها ستحتاج الفقاعة إلى إذن Android صريح للظهور فوق التطبيقات وخدمة foreground. ستعمل فقط عندما يطلب المستخدم ترجمة نص عبر Share أو Process Text أو من داخل الفقاعة نفسها.',
++              detail: 'هذه هي الدفعة الأولى: فقاعة Android قابلة للسحب تظهر فقط بعد إذنك وتحت إشعار foreground. لا تستقبل بعد نص Share أو Process Text؛ لا تقرأ التطبيقات الأخرى مطلقاً.',
++            ),
++            const SizedBox(height: 12),
++            const Card(child: ListTile(leading: Icon(Icons.block_outlined, color: Colors.redAccent), title: Text('غير مسموح'), subtitle: Text('لا خدمة Accessibility، ولا Notification Listener، ولا قراءة تلقائية لرسائل WhatsApp أو البريد أو Messenger.'))),
++            const SizedBox(height: 12),
++            Card(
++              child: ListTile(
++                leading: const Icon(Icons.info_outline, color: RoyalColors.gold),
++                title: Text(_overlayService.isSupported ? 'Android Overlay متاح للاختبار' : 'هذه المنصة لا تدعم Overlay'),
++                subtitle: const Text('تفعيل الفقاعة يفتح صفحة الإذن الرسمية من Android عند الحاجة.'),
++              ),
+             ),
+-            SizedBox(height: 12),
+-            Card(child: ListTile(leading: Icon(Icons.block_outlined, color: Colors.redAccent), title: Text('غير مسموح'), subtitle: Text('لا خدمة Accessibility، ولا Notification Listener، ولا قراءة تلقائية لرسائل WhatsApp أو البريد أو Messenger.'))),
+-            SizedBox(height: 12),
+-            Card(child: ListTile(leading: Icon(Icons.check_circle_outline, color: Colors.greenAccent), title: Text('مسموح بعد الاختبار'), subtitle: Text('إظهار فقاعة قابلة للسحب، وفتح محرر الترجمة للنص الذي شاركه المستخدم بوضوح.'))),
++            const SizedBox(height: 16),
++            FilledButton.icon(
++              onPressed: _isWorking || !_overlayService.isSupported ? null : _startBubble,
++              icon: _isWorking
++                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
++                  : const Icon(Icons.bubble_chart_outlined),
++              label: const Text('تفعيل الفقاعة فوق التطبيقات'),
++            ),
++            const SizedBox(height: 10),
++            OutlinedButton.icon(
++              onPressed: _isWorking || !_overlayService.isSupported ? null : _stopBubble,
++              icon: const Icon(Icons.close),
++              label: const Text('إيقاف الفقاعة'),
++            ),
++            if (_notice != null)
++              Padding(
++                padding: const EdgeInsets.only(top: 14),
++                child: Text(_notice!, style: const TextStyle(color: RoyalColors.gold, height: 1.5)),
++              ),
+           ],
+         ),
+       ),
+diff --git a/lib/main.dart b/lib/main.dart
+index a624098..cca3a75 100644
+--- a/lib/main.dart
++++ b/lib/main.dart
+@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
+ 
+ import 'app/mirror_scorpion_app.dart';
+ import 'core/localization/language_preferences.dart';
++import 'core/platform/android_overlay_service.dart';
+ import 'core/pro/premium_verification_service.dart';
+ 
+ Future<void> main() async {
+@@ -25,3 +26,9 @@ Future<void> main() async {
+     ),
+   );
+ }
++
++@pragma('vm:entry-point')
++void overlayMain() {
++  WidgetsFlutterBinding.ensureInitialized();
++  runApp(const MirrorScorpionOverlayApp());
++}
+diff --git a/pubspec.yaml b/pubspec.yaml
+index 50aa5dd..901c0bd 100644
+--- a/pubspec.yaml
++++ b/pubspec.yaml
+@@ -24,6 +24,7 @@ dependencies:
+   flutter_tts: ^4.2.5
+   speech_to_text: ^7.4.0
+   read_pdf_text: ^0.3.1
++  flutter_overlay_window: ^0.5.0
+ 
+ dev_dependencies:
+   flutter_test:
+diff --git a/todo.md b/todo.md
+index 8058b51..83e2fda 100644
+--- a/todo.md
++++ b/todo.md
+@@ -245,6 +245,10 @@
+ - [ ] تنفيذ تفريغ وترجمة الملفات الصوتية إلى لغة الجهاز بعد اعتماد خدمة أو نموذج محلي قابل للاختبار وموافقة مناسبة.
+ - [ ] تحسين مساحة محرري الحوار والتحقق من ميكروفون المصدر والزرين والتبديل والإخلاء عند جلسة مايك جديدة على Android.
+ - [x] تنفيذ إخلاء واضح لمحرري الترجمة والحوار عند بدء جلسة جديدة بعد نتيجة ناجحة، وتوسيط اختيار لغة الهدف وتوسيع محرر الحوار إلى 300px؛ ما زال قبول Android مطلوباً.
++- [x] اجتياز GitHub Actions للتحسينات المحلية في التشغيل `32928918118`: التحليل والاختبارات وبناء APK ورفع الأثر نجحت في 26 أغسطس 2026.
++- [x] قبول Android لدفعة الترجمة والحوار ومعاينة المستند بعد التشغيل `32928918118`.
++- [ ] تفعيل الخدمات غير المفعلة تدريجياً: الفقاعة Android أولاً، ثم مشاركة المخرجات المحلية، ثم حزم المحتوى واللغات؛ لا تفعيل لخدمات AI سحابية قبل قرار الخصوصية والتكلفة والموافقة.
++- [x] تصنيف الخدمات غير المفعلة وترتيب تفعيلها بحسب الخصوصية والتبعيات والاختبار؛ راجع `docs/disabled-services-activation-order-2026-08-26.md`.
+ - [ ] رفع قبول المستندات والعدسة: اختيار الملف، OCR، تحديد لغة المصدر، الترجمة إلى لغة الجهاز، حد الصفحات، المعاينة الطويلة، والمشاركة الموقعة.
+ - [x] إضافة معاينة محلية ملء الشاشة للنص المترجم: انتظار ثلاث ثوانٍ، ضغط مطول لرؤية الأصل، وختم مرئي؛ لا تصدير PDF أو مشاركة ملف حتى يُنفذ المسار فعلياً.
+ - [ ] اختبار الفقاعة الأصلية على APK حقيقي: إذن Overlay وخدمة foreground والمشاركة بنص يحدده المستخدم، من دون Accessibility أو قراءة WhatsApp أو البريد أو الإشعارات تلقائياً.
+-- 
+2.43.0
+

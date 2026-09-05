@@ -1,0 +1,26 @@
+From 1fafd062392f3af4377c37c63fdc895682bce904 Mon Sep 17 00:00:00 2001
+From: magdymeko456-cell
+ <2.88837127e+08+magdymeko456-cell@users.noreply.github.com>
+Date: Wed, 26 Aug 2026 04:32:28 +0000
+Subject: [PATCH] fix(android): handle nullable overlay permission result
+
+---
+ lib/core/platform/android_overlay_service.dart | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/lib/core/platform/android_overlay_service.dart b/lib/core/platform/android_overlay_service.dart
+index 0fe4e8b..98c07d2 100644
+--- a/lib/core/platform/android_overlay_service.dart
++++ b/lib/core/platform/android_overlay_service.dart
+@@ -32,7 +32,7 @@ class AndroidOverlayService {
+     try {
+       var permitted = await FlutterOverlayWindow.isPermissionGranted();
+       if (!permitted) {
+-        permitted = await FlutterOverlayWindow.requestPermission();
++        permitted = await FlutterOverlayWindow.requestPermission() ?? false;
+       }
+       if (!permitted) {
+         return const AndroidOverlayResult(
+-- 
+2.43.0
+

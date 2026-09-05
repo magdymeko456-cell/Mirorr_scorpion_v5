@@ -1,0 +1,409 @@
+From 075691eca0f3739996a79a5f8148de179c4b9c8e Mon Sep 17 00:00:00 2001
+From: magdymeko456-cell
+ <2.88837127e+08+magdymeko456-cell@users.noreply.github.com>
+Date: Sun, 23 Aug 2026 20:05:33 +0000
+Subject: [PATCH] feat(dialogue): add local microphone translation
+
+---
+ lib/features/feature_hub_screen.dart | 367 ++++++++++++++++++++++++++-
+ 1 file changed, 359 insertions(+), 8 deletions(-)
+
+diff --git a/lib/features/feature_hub_screen.dart b/lib/features/feature_hub_screen.dart
+index b62d4d4..a4467ce 100644
+--- a/lib/features/feature_hub_screen.dart
++++ b/lib/features/feature_hub_screen.dart
+@@ -450,13 +450,163 @@ class _DialoguePanel extends StatefulWidget {
+ }
+ 
+ class _DialoguePanelState extends State<_DialoguePanel> {
+-  final _left = TextEditingController();
+-  final _right = TextEditingController();
++  final _source = TextEditingController();
++  final _translated = TextEditingController();
++  final _translationService = const OnDeviceTranslationService();
++  final _recognitionService = DeviceSpeechRecognitionService();
++  final _speechService = SystemTtsService();
++  Timer? _translationDebounce;
++  String _rightSourceLanguage = 'ar';
++  String _leftTargetLanguage = 'en';
++  String? _notice;
++  bool _isTranslating = false;
++  bool _loadedLanguagePreferences = false;
++
++  @override
++  void initState() {
++    super.initState();
++    _recognitionService.addListener(_onServiceChanged);
++    _speechService.addListener(_onServiceChanged);
++    _speechService.initialize();
++  }
++
++  @override
++  void didChangeDependencies() {
++    super.didChangeDependencies();
++    if (_loadedLanguagePreferences) return;
++    final preferences = context.read<LanguagePreferences>();
++    _rightSourceLanguage = preferences.translationSourceLanguage;
++    _leftTargetLanguage = preferences.translationTargetLanguage;
++    _loadedLanguagePreferences = true;
++  }
++
++  void _onServiceChanged() {
++    if (mounted) setState(() {});
++  }
++
++  Future<void> _selectRightSourceLanguage(String code) async {
++    setState(() => _rightSourceLanguage = code);
++    await context.read<LanguagePreferences>().setTranslationSourceLanguage(code);
++    _queueTranslation(_source.text, sourceLanguageCode: code);
++  }
++
++  Future<void> _selectLeftTargetLanguage(String code) async {
++    setState(() => _leftTargetLanguage = code);
++    await context.read<LanguagePreferences>().setTranslationTargetLanguage(code);
++    _queueTranslation(_source.text, sourceLanguageCode: _rightSourceLanguage);
++  }
++
++  Future<void> _swapLanguages() async {
++    await context.read<LanguagePreferences>().swapTranslationLanguages();
++    if (!mounted) return;
++    final preferences = context.read<LanguagePreferences>();
++    setState(() {
++      _rightSourceLanguage = preferences.translationSourceLanguage;
++      _leftTargetLanguage = preferences.translationTargetLanguage;
++      _source.clear();
++      _translated.clear();
++      _notice = 'تم تبديل اللغتين. يبقى المحرر العلوي دائماً تابعاً لزر اللغة في اليمين.';
++    });
++  }
++
++  Future<void> _toggleMicrophone() async {
++    if (_recognitionService.isListening) {
++      await _recognitionService.stop();
++      if (mounted && _recognitionService.message != null) {
++        setState(() => _notice = _recognitionService.message);
++      }
++      return;
++    }
++    await _speechService.stop();
++    final sourceLanguage = _rightSourceLanguage;
++    await _recognitionService.start(
++      languageCode: sourceLanguage,
++      onText: (recognizedText) {
++        if (!mounted) return;
++        _source.text = recognizedText;
++        _queueTranslation(
++          recognizedText,
++          sourceLanguageCode: sourceLanguage,
++        );
++      },
++    );
++    if (mounted && _recognitionService.message != null) {
++      setState(() => _notice = _recognitionService.message);
++    }
++  }
++
++  void _queueTranslation(String value, {String? sourceLanguageCode}) {
++    _translationDebounce?.cancel();
++    if (value.trim().isEmpty) {
++      setState(() {
++        _translated.clear();
++        _notice = null;
++        _isTranslating = false;
++      });
++      return;
++    }
++    _translationDebounce = Timer(const Duration(milliseconds: 650), () {
++      _translateDialogue(value, sourceLanguageCode: sourceLanguageCode);
++    });
++  }
++
++  Future<void> _translateDialogue(
++    String value, {
++    String? sourceLanguageCode,
++  }) async {
++    if (!mounted || value.trim() != _source.text.trim()) return;
++    final targetLanguage = _leftTargetLanguage;
++    setState(() {
++      _isTranslating = true;
++      _notice = 'جارٍ تجهيز ترجمة الحوار المحلية…';
++    });
++    final result = await _translationService.translate(
++      text: value,
++      targetLanguageCode: targetLanguage,
++      sourceLanguageCode: sourceLanguageCode ?? _rightSourceLanguage,
++      onProgress: (progress) {
++        if (mounted && value.trim() == _source.text.trim()) {
++          setState(() => _notice = _translationProgressMessage(progress));
++        }
++      },
++    );
++    if (!mounted || value.trim() != _source.text.trim() || targetLanguage != _leftTargetLanguage) return;
++    setState(() {
++      _isTranslating = false;
++      _translated.text = result.isSuccess ? result.text ?? '' : '';
++      _notice = result.message;
++    });
++  }
++
++  Future<void> _speakTranslatedText() async {
++    if (_speechService.isSpeaking) {
++      await _speechService.stop();
++      return;
++    }
++    await _speechService.speak(
++      text: _translated.text,
++      languageCode: _leftTargetLanguage,
++    );
++    if (mounted && _speechService.message != null) {
++      setState(() => _notice = _speechService.message);
++    }
++  }
++
++  void _audioFileUnavailable() {
++    setState(() {
++      _notice = 'دبوس محرر المصدر جاهز لاختيار ملف صوت، لكن تفريغ الملف وترجمته يحتاجان خدمة صوت حية؛ لا توجد نتيجة بديلة مصطنعة.';
++    });
++  }
+ 
+   @override
+   void dispose() {
+-    _left.dispose();
+-    _right.dispose();
++    _translationDebounce?.cancel();
++    _recognitionService.removeListener(_onServiceChanged);
++    _recognitionService.dispose();
++    _speechService.removeListener(_onServiceChanged);
++    _speechService.stop();
++    _source.dispose();
++    _translated.dispose();
+     super.dispose();
+   }
+ 
+@@ -465,18 +615,219 @@ class _DialoguePanelState extends State<_DialoguePanel> {
+     return ListView(
+       padding: const EdgeInsets.all(18),
+       children: [
+-        const _SectionNotice(title: 'حوار ثنائي اللغة', detail: 'يُحافظ هذا القسم على طرفي الحوار ولا يُترجم النص يدوياً داخل الجهاز. التسجيل والترجمة الفعلية يرتبطان بمسار الصوت الخادمي.'),
++        const _SectionNotice(title: 'حوار ثنائي اللغة محلي', detail: 'المحرر العلوي هو المصدر ويتبع زر اللغة في اليمين دائماً، والمحرر السفلي هو الناتج ويتبع زر اللغة في اليسار. يلتقط الميكروفون كلام الطرف العلوي فقط بإذن صريح ثم يترجمه ML Kit محلياً.'),
+         const SizedBox(height: 16),
+-        TextField(controller: _left, minLines: 5, maxLines: 8, decoration: const InputDecoration(labelText: 'طرف الحوار الأول', alignLabelWithHint: true)),
++        _DialogueEditor(
++          controller: _source,
++          label: 'المحرر العلوي — المصدر (زر اليمين)',
++          hint: 'اكتب أو اضغط الميكروفون ليسمع لغة المصدر…',
++          actions: [
++            _EditorAction(
++              icon: Icons.attach_file,
++              tooltip: 'اختيار ملف صوت لمصدر الحوار',
++              onPressed: _audioFileUnavailable,
++            ),
++          ],
++          onChanged: (value) => _queueTranslation(
++            value,
++            sourceLanguageCode: _rightSourceLanguage,
++          ),
++        ),
+         const SizedBox(height: 12),
+-        const Icon(Icons.swap_vert, color: RoyalColors.teal),
++        Container(
++          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
++          decoration: BoxDecoration(
++            color: const Color(0xFF1B2838),
++            borderRadius: BorderRadius.circular(24),
++            border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.35)),
++          ),
++          child: Row(
++            textDirection: TextDirection.ltr,
++            children: [
++              Expanded(
++                child: _DialogueLanguageMenu(
++                  value: _leftTargetLanguage,
++                  label: 'الهدف — يسار',
++                  onChanged: _selectLeftTargetLanguage,
++                ),
++              ),
++              IconButton(
++                icon: const Icon(Icons.swap_horiz, color: RoyalColors.gold, size: 28),
++                tooltip: 'تبديل لغة المصدر والهدف',
++                onPressed: _swapLanguages,
++              ),
++              GestureDetector(
++                onTap: _toggleMicrophone,
++                child: Container(
++                  width: 56,
++                  height: 56,
++                  decoration: BoxDecoration(
++                    color: _recognitionService.isListening
++                        ? Colors.redAccent
++                        : Colors.blueAccent,
++                    shape: BoxShape.circle,
++                  ),
++                  child: Icon(
++                    _recognitionService.isListening ? Icons.stop : Icons.mic,
++                    color: Colors.white,
++                    size: 30,
++                  ),
++                ),
++              ),
++              const SizedBox(width: 8),
++              Expanded(
++                child: _DialogueLanguageMenu(
++                  value: _rightSourceLanguage,
++                  label: 'المصدر — يمين',
++                  onChanged: _selectRightSourceLanguage,
++                ),
++              ),
++            ],
++          ),
++        ),
+         const SizedBox(height: 12),
+-        TextField(controller: _right, minLines: 5, maxLines: 8, decoration: const InputDecoration(labelText: 'طرف الحوار الثاني', alignLabelWithHint: true)),
++        _DialogueEditor(
++          controller: _translated,
++          label: 'المحرر السفلي — ترجمة الهدف (زر اليسار)',
++          hint: 'ستظهر ترجمة الحوار المحلية هنا…',
++          readOnly: true,
++          actions: [
++            _EditorAction(
++              icon: _speechService.isSpeaking
++                  ? Icons.stop_circle_outlined
++                  : Icons.volume_up,
++              tooltip: _speechService.isSpeaking ? 'إيقاف النطق' : 'نطق ترجمة الحوار',
++              onPressed: _speakTranslatedText,
++            ),
++            _EditorAction(
++              icon: Icons.copy,
++              tooltip: 'نسخ ترجمة الحوار',
++              onPressed: () async {
++                if (_translated.text.isNotEmpty) {
++                  await Clipboard.setData(ClipboardData(text: _translated.text));
++                }
++              },
++            ),
++          ],
++        ),
++        if (_notice != null)
++          Padding(
++            padding: const EdgeInsets.only(top: 12),
++            child: Row(
++              children: [
++                if (_isTranslating)
++                  const Padding(
++                    padding: EdgeInsetsDirectional.only(end: 8),
++                    child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
++                  ),
++                Expanded(child: Text(_notice!, style: const TextStyle(color: RoyalColors.gold))),
++              ],
++            ),
++          ),
++      ],
++    );
++  }
++}
++
++class _DialogueLanguageMenu extends StatelessWidget {
++  const _DialogueLanguageMenu({
++    required this.value,
++    required this.label,
++    required this.onChanged,
++  });
++
++  final String value;
++  final String label;
++  final ValueChanged<String> onChanged;
++
++  @override
++  Widget build(BuildContext context) {
++    return Column(
++      crossAxisAlignment: CrossAxisAlignment.stretch,
++      children: [
++        Text(label, style: const TextStyle(color: RoyalColors.muted, fontSize: 10)),
++        DropdownButtonHideUnderline(
++          child: DropdownButton<String>(
++            value: value,
++            isExpanded: true,
++            dropdownColor: const Color(0xFF1B2838),
++            items: TranslationLanguageCatalog.labels.entries
++                .map((entry) => DropdownMenuItem(value: entry.key, child: Text(entry.value, overflow: TextOverflow.ellipsis)))
++                .toList(),
++            onChanged: (code) {
++              if (code != null) onChanged(code);
++            },
++          ),
++        ),
+       ],
+     );
+   }
+ }
+ 
++class _DialogueEditor extends StatelessWidget {
++  const _DialogueEditor({
++    required this.controller,
++    required this.label,
++    required this.hint,
++    required this.actions,
++    this.readOnly = false,
++    this.onChanged,
++  });
++
++  final TextEditingController controller;
++  final String label;
++  final String hint;
++  final List<_EditorAction> actions;
++  final bool readOnly;
++  final ValueChanged<String>? onChanged;
++
++  @override
++  Widget build(BuildContext context) {
++    return Container(
++      height: 210,
++      padding: const EdgeInsets.all(14),
++      decoration: BoxDecoration(
++        color: Colors.white.withValues(alpha: 0.04),
++        borderRadius: BorderRadius.circular(20),
++        border: Border.all(color: Colors.white12),
++      ),
++      child: Column(
++        crossAxisAlignment: CrossAxisAlignment.stretch,
++        children: [
++          Text(label, style: const TextStyle(color: RoyalColors.teal, fontSize: 12)),
++          const SizedBox(height: 8),
++          Expanded(
++            child: TextField(
++              controller: controller,
++              readOnly: readOnly,
++              minLines: 5,
++              maxLines: null,
++              style: const TextStyle(color: Colors.white, fontSize: 17),
++              decoration: InputDecoration(
++                hintText: hint,
++                hintStyle: const TextStyle(color: Colors.white30),
++                border: InputBorder.none,
++              ),
++              onChanged: onChanged,
++            ),
++          ),
++          if (actions.isNotEmpty)
++            Row(
++              mainAxisAlignment: MainAxisAlignment.end,
++              children: actions
++                  .map((action) => IconButton(
++                        tooltip: action.tooltip,
++                        onPressed: action.onPressed,
++                        icon: Icon(action.icon, color: Colors.cyanAccent),
++                      ))
++                  .toList(),
++            ),
++        ],
++      ),
++    );
++  }
++}
++
+ class _DocumentsPanel extends StatefulWidget {
+   const _DocumentsPanel();
+ 
+-- 
+2.43.0
+

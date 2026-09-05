@@ -1,0 +1,197 @@
+{
+  "catalogVersion": 1,
+  "catalogId": "mirror-scorpion-content",
+  "title": "فهرس محتوى Mirror Scorpion",
+  "updatedAt": "2026-08-24T00:00:00Z",
+  "releaseRef": "content-v1.1.0",
+  "packages": [
+    {
+      "packageId": "owner-inspiration-ar",
+      "version": "1.0.0",
+      "order": 10,
+      "status": "available",
+      "title": "تأملات ورسائل إنسانية",
+      "scope": "inspiration",
+      "language": "ar",
+      "estimatedBytes": 3850,
+      "sourceCitation": {
+        "name": "محتوى قدمه مالك التطبيق",
+        "reference": "owner-submission-2026-08-24"
+      },
+      "license": {
+        "usage": "owner-provided-content",
+        "rightsHolder": "Tamer Eldosoky"
+      },
+      "contentPath": "content_catalog/packages/owner-inspiration-ar-1.0.0.json",
+      "contentSha256": "55321d51f3264df4e0fe6fa8d78d6c1501ec2605841a6eb20fee8a1834f679cc"
+    },
+    {
+      "packageId": "ibn-al-qayyim-al-fawaid-ar",
+      "version": "1.0.0",
+      "order": 20,
+      "status": "available",
+      "title": "تأملات من كتاب الفوائد",
+      "scope": "licensed_religious_inspiration",
+      "language": "ar",
+      "estimatedBytes": 9491,
+      "sourceCitation": {
+        "name": "ويكي مصدر — كتاب الفوائد/2",
+        "work": "كتاب الفوائد",
+        "author": "ابن القيم",
+        "reference": "https://ar.wikisource.org/w/index.php?title=كتاب_الفوائد/2&oldid=281174"
+      },
+      "license": {
+        "usage": "CC-BY-SA-4.0",
+        "name": "Creative Commons Attribution-ShareAlike 4.0 International",
+        "url": "https://creativecommons.org/licenses/by-sa/4.0/"
+      },
+      "contentPath": "content_catalog/packages/ibn-al-qayyim-al-fawaid-ar-1.0.0.json",
+      "contentSha256": "2604f5dc13718ab8e1380eb5aa7b9966726a8cc23c89ba8e67cd6b75efae780c"
+    },
+    {
+      "packageId": "jalalayn-asbab-al-nuzul",
+      "version": null,
+      "order": 100,
+      "status": "requires_review",
+      "title": "أسباب النزول — تفسير الجلالين ولباب النقول",
+      "scope": "asbab_al_nuzul",
+      "language": "ar",
+      "sourceCitation": {
+        "work": "تفسير الجلالين وبهامشه لباب النقول في أسباب النزول",
+        "authors": ["جلال الدين المحلي", "جلال الدين السيوطي"],
+        "publisher": "دار الكتب العلمية",
+        "year": 2019,
+        "isbn": "9782745138996"
+      },
+      "license": null,
+      "rightsEvidence": "https://ar.wikisource.org/wiki/ملف:تفسير_الجلالين.pdf",
+      "secondaryRightsEvidence": "https://archive.org/details/FakirlerinHizmetcisi_20150818_1430",
+      "candidatePath": "content_catalog/source_candidates/",
+      "candidateAssets": [
+        {
+          "file": "jalalayn-public-domain/tafsir-jalalayn.pdf",
+          "format": "pdf",
+          "bytes": 49079327,
+          "sha256": "eb76af490dd22c9d0848d55afc81d07068f22008b5775a01d57a4d62cbc03e48",
+          "rights": "public-domain-statement-on-wikisource-file-page"
+        },
+        {
+          "file": "lubab-al-nuqul-internet-archive/lubab-al-nuqul.pdf",
+          "format": "pdf",
+          "bytes": 6026987,
+          "sha256": "311915d045858f481ddcfc126e56c8d34465a944a61b871cbbdd375a09ba662b",
+          "rights": "public-domain-mark-1.0-on-internet-archive-item"
+        },
+        {
+          "file": "lubab-al-nuqul-internet-archive/lubab-al-nuqul.epub",
+          "format": "epub",
+          "bytes": 464307,
+          "sha256": "6e9137e8bde14eead0f4318f34921663aaaf3417e59f9d5948fd5539027cc3e8",
+          "rights": "public-domain-mark-1.0-on-internet-archive-item"
+        }
+      ],
+      "candidateStatus": "public-domain-candidates-needs-edition-and-quality-check",
+      "reason": "ملف ويكي مصدر المرشح موسوم بالملكية العامة، لكن بيانات الطبعة والمسح تحتاج مراجعة قبل النشر."
+    },
+    {
+      "packageId": "ibn-kathir-prophets",
+      "version": null,
+      "order": 110,
+      "status": "requires_review",
+      "title": "قصص الأنبياء — ابن كثير",
+      "scope": "ibn_kathir_prophets",
+      "language": "ar",
+      "sourceCitation": {
+        "work": "قصص الأنبياء",
+        "author": "ابن كثير",
+        "publisher": "المكتبة التوفيقية للطبع والنشر والتوزيع",
+        "year": 1998,
+        "pages": 608
+      },
+      "license": {
+        "name": "CC BY-SA 4.0",
+        "url": "https://creativecommons.org/licenses/by-sa/4.0/"
+      },
+      "rightsEvidence": "https://ar.wikisource.org/wiki/قصص_الأنبياء_لابن_كثير/الجزء_الأول",
+      "candidatePath": "content_catalog/source_candidates/ibn-kathir-wikisource/",
+      "candidateAssets": [
+        {
+          "file": "part-1.wikitext",
+          "bytes": 635325,
+          "sha256": "f9bdb2bb23819f70c2b06b639f54681f2dd939928cd308fd6d383a6a7f2b76d2"
+        },
+        {
+          "file": "part-2.wikitext",
+          "bytes": 870108,
+          "sha256": "7e66395402712c8a5b3227f8ca18bbd855b06d36d852c53f6fbd1edcd08cf597"
+        }
+      ],
+      "candidateStatus": "licensed-candidate-needs-quality-review",
+      "reason": "نص ويكي مصدر مرشح تحت CC BY-SA 4.0، لكنه مصنف مجهول المصدر ويحتاج فحص جودة قبل تحويله إلى حزمة."
+    },
+    {
+      "packageId": "ibn-kathir-women",
+      "version": null,
+      "order": 120,
+      "status": "requires_review",
+      "title": "قصص النساء — من مصادر ابن كثير",
+      "scope": "ibn_kathir_women",
+      "language": "ar",
+      "sourceCitation": {
+        "work": "قصص الأنبياء ومواضع النساء في مؤلفات ابن كثير",
+        "author": "ابن كثير",
+        "referenceStatus": "يجب تحديد الموضع والطبعة قبل الاقتباس"
+      },
+      "license": {
+        "name": "CC BY-SA 4.0 inherited from Wikisource candidate",
+        "url": "https://creativecommons.org/licenses/by-sa/4.0/"
+      },
+      "rightsEvidence": "https://ar.wikisource.org/wiki/قصص_الأنبياء_لابن_كثير/الجزء_الأول",
+      "candidatePath": "content_catalog/source_candidates/ibn-kathir-wikisource/",
+      "candidateStatus": "needs-selection-and-quality-review",
+      "reason": "توجد مواضع مرشحة داخل نص ويكي مصدر، لكن يلزم تحديد القصص ومراجعة النص قبل إعداد حزمة مستقلة."
+    },
+    {
+      "packageId": "ibn-kathir-peoples",
+      "version": null,
+      "order": 130,
+      "status": "requires_review",
+      "title": "قصص الأقوام — من مصادر ابن كثير",
+      "scope": "ibn_kathir_peoples",
+      "language": "ar",
+      "sourceCitation": {
+        "work": "قصص الأنبياء ومواضع الأقوام في مؤلفات ابن كثير",
+        "author": "ابن كثير",
+        "referenceStatus": "يجب تحديد الموضع والطبعة قبل الاقتباس"
+      },
+      "license": {
+        "name": "CC BY-SA 4.0 inherited from Wikisource candidate",
+        "url": "https://creativecommons.org/licenses/by-sa/4.0/"
+      },
+      "rightsEvidence": "https://ar.wikisource.org/wiki/قصص_الأنبياء_لابن_كثير/الجزء_الأول",
+      "candidatePath": "content_catalog/source_candidates/ibn-kathir-wikisource/",
+      "candidateStatus": "needs-selection-and-quality-review",
+      "reason": "توجد مواضع مرشحة داخل نص ويكي مصدر، لكن يلزم تحديد الأقوام ومراجعة النص قبل إعداد حزمة مستقلة."
+    },
+    {
+      "packageId": "la-tahzan-inspiration",
+      "version": null,
+      "order": 140,
+      "status": "requires_review",
+      "title": "الإلهام — لا تحزن",
+      "scope": "la_tahzan_inspiration",
+      "language": "ar",
+      "sourceCitation": {
+        "work": "لا تحزن",
+        "author": "عائض بن عبد الله القرني",
+        "publisher": "مكتبة الصحابة للطباعة والنشر والتوزيع",
+        "year": 1999,
+        "pages": 424
+      },
+      "license": null,
+      "rightsEvidence": "https://archive.org/details/LaTahzan_201503",
+      "candidateStatus": "no-republish-license-found",
+      "reason": "لا يوجد في السجل المفحوص ترخيص إعادة نشر صريح؛ الرابط مرجع ببليوغرافي فقط وليس مصدراً لتنزيل حزمة التطبيق."
+    }
+  ]
+}

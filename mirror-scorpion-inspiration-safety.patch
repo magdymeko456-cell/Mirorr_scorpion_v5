@@ -1,0 +1,268 @@
+From 5140ffc63359421a61d1748d66fdd0fb26334501 Mon Sep 17 00:00:00 2001
+From: magdymeko456-cell
+ <2.88837127e+08+magdymeko456-cell@users.noreply.github.com>
+Date: Sun, 23 Aug 2026 20:42:53 +0000
+Subject: [PATCH] feat(inspiration): add opt-in safety intake
+
+---
+ lib/core/inspiration/inspiration_safety.dart | 75 +++++++++++++++
+ lib/features/feature_hub_screen.dart         | 99 ++++++++++++++++++++
+ test/inspiration_safety_test.dart            | 26 +++++
+ 3 files changed, 200 insertions(+)
+ create mode 100644 lib/core/inspiration/inspiration_safety.dart
+ create mode 100644 test/inspiration_safety_test.dart
+
+diff --git a/lib/core/inspiration/inspiration_safety.dart b/lib/core/inspiration/inspiration_safety.dart
+new file mode 100644
+index 0000000..6d201a8
+--- /dev/null
++++ b/lib/core/inspiration/inspiration_safety.dart
+@@ -0,0 +1,75 @@
++enum InspirationSafetyLevel { supportive, crisis }
++
++class InspirationSafetyResult {
++  const InspirationSafetyResult({
++    required this.level,
++    required this.message,
++  });
++
++  final InspirationSafetyLevel level;
++  final String message;
++}
++
++/// فحص محلي أولي ومحدود. لا يشخّص الحالة النفسية ولا يراقب أي تطبيق أو
++/// محتوى خارج ما يكتبه المستخدم صراحة في هذه الشاشة. يبقى الفحص الخادمي
++/// المستقل شرطاً قبل إرسال أي طلب إلى نموذج ذكاء أو مولد فيديو.
++class InspirationSafety {
++  const InspirationSafety._();
++
++  static InspirationSafetyResult assessMoodText(String text) {
++    final normalized = text.toLowerCase();
++    const crisisCues = [
++      'انتحار',
++      'اقتل نفسي',
++      'أقتل نفسي',
++      'انهي حياتي',
++      'أنهي حياتي',
++      'لا أريد أن أعيش',
++      'لا اريد ان اعيش',
++      'إيذاء نفسي',
++      'ايذاء نفسي',
++    ];
++    if (crisisCues.any(normalized.contains)) {
++      return const InspirationSafetyResult(
++        level: InspirationSafetyLevel.crisis,
++        message: 'يبدو أن ما كتبته قد يشير إلى خطر فوري. لست وحدك: تواصل الآن مع شخص موثوق قريب منك، واتصل بخدمات الطوارئ المحلية أو خط دعم الأزمات في بلدك. لا تعتمد على التطبيق وحده في هذه اللحظة.',
++      );
++    }
++    return const InspirationSafetyResult(
++      level: InspirationSafetyLevel.supportive,
++      message: 'سيبقى ما تكتبه داخل هذه الجلسة المحلية إلى أن تختار بنفسك طلب مساعدة ذكية من خدمة منشورة. لا توجد مراقبة سلبية للتطبيقات أو الرسائل.',
++    );
++  }
++
++  static StoryModerationResult assessStoryDraft(String text) {
++    final normalized = text.toLowerCase();
++    const disallowedCues = [
++      'كراهية',
++      'تنمر',
++      'إهانة',
++      'شتيمة',
++      'بذيء',
++      'جنسي',
++    ];
++    if (disallowedCues.any(normalized.contains)) {
++      return const StoryModerationResult(
++        allowedForDraft: false,
++        message: 'لا يمكن تجهيز هذا النص للفيديو قبل إزالة الكراهية أو التنمر أو الإهانات أو المحتوى الجنسي أو الألفاظ البذيئة. سيُعاد فحصه خادمياً قبل أي توليد مستقبلي.',
++      );
++    }
++    return const StoryModerationResult(
++      allowedForDraft: true,
++      message: 'اجتاز النص الفحص المحلي الأولي فقط. لن يُرسل إلى مولد فيديو حتى يوافق المستخدم وتتحقق خدمة الخادم من المحتوى والحقوق.',
++    );
++  }
++}
++
++class StoryModerationResult {
++  const StoryModerationResult({
++    required this.allowedForDraft,
++    required this.message,
++  });
++
++  final bool allowedForDraft;
++  final String message;
++}
+diff --git a/lib/features/feature_hub_screen.dart b/lib/features/feature_hub_screen.dart
+index ad2178a..7644320 100644
+--- a/lib/features/feature_hub_screen.dart
++++ b/lib/features/feature_hub_screen.dart
+@@ -10,6 +10,7 @@ import 'package:provider/provider.dart';
+ import '../app/royal_dark_theme.dart';
+ import '../core/localization/language_preferences.dart';
+ import '../core/content/offline_content_storage.dart';
++import '../core/inspiration/inspiration_safety.dart';
+ import '../core/mlkit/on_device_ocr_service.dart';
+ import '../core/mlkit/on_device_translation_service.dart';
+ import '../core/pro/premium_verification_service.dart';
+@@ -1076,9 +1077,13 @@ class _StoriesPanel extends StatefulWidget {
+ class _StoriesPanelState extends State<_StoriesPanel> {
+   final _speechService = SystemTtsService();
+   final _contentStorage = const OfflineContentStorage();
++  final _moodController = TextEditingController();
++  final _storyDraftController = TextEditingController();
+   late Future<List<_StoryEntry>> _storiesFuture;
+   late Future<List<OfflinePackageRecord>> _packagesFuture;
+   String? _notice;
++  bool _consentToAi = false;
++  bool _threeHourReminder = false;
+ 
+   @override
+   void initState() {
+@@ -1165,10 +1170,30 @@ class _StoriesPanelState extends State<_StoriesPanel> {
+     );
+   }
+ 
++  void _requestInspiration() {
++    final result = InspirationSafety.assessMoodText(_moodController.text);
++    setState(() {
++      if (result.level == InspirationSafetyLevel.crisis) {
++        _notice = result.message;
++      } else if (!_consentToAi) {
++        _notice = 'للمتابعة إلى خدمة الإلهام الذكية مستقبلاً، فعّل موافقتك الصريحة أولاً. لا تُرسل الكتابة حالياً إلى أي خدمة.';
++      } else {
++        _notice = '${result.message}\nتم تجهيز طلب محلي فقط. تحتاج الرسالة الذكية الفعلية إلى نشر خدمة خادمية وموديل محدد وسياسة احتفاظ واضحة.';
++      }
++    });
++  }
++
++  void _checkStoryDraft() {
++    final result = InspirationSafety.assessStoryDraft(_storyDraftController.text);
++    setState(() => _notice = result.message);
++  }
++
+   @override
+   void dispose() {
+     _speechService.removeListener(_onSpeechChanged);
+     _speechService.stop();
++    _moodController.dispose();
++    _storyDraftController.dispose();
+     super.dispose();
+   }
+ 
+@@ -1179,6 +1204,80 @@ class _StoriesPanelState extends State<_StoriesPanel> {
+       children: [
+         const _SectionNotice(title: 'قصص وإلهام آمن', detail: 'تبدأ هذه النسخة بحزمة أصلية مرفقة وقارئ داخلي. الفهارس الدينية لا تعرض نصاً حتى يتحقق المصدر والحقوق. يمكن استيراد حزمة JSON محلية إلى مساحة التطبيق؛ أما التنزيل الشبكي وسيناريو الفيديو فيتطلبان خدمات منفصلة.'),
+         const SizedBox(height: 12),
++        Card(
++          color: Colors.blueAccent.withValues(alpha: 0.06),
++          child: Padding(
++            padding: const EdgeInsets.all(14),
++            child: Column(
++              crossAxisAlignment: CrossAxisAlignment.stretch,
++              children: [
++                const Text('إلهام اختياري وآمن', style: TextStyle(color: RoyalColors.gold, fontWeight: FontWeight.bold)),
++                const SizedBox(height: 8),
++                const Text('اكتب ما ترغب في مشاركته. لا يقرأ التطبيق رسائلك أو سلوكك في التطبيقات الأخرى، ولا يشخّص حالتك.'),
++                const SizedBox(height: 10),
++                TextField(
++                  controller: _moodController,
++                  minLines: 2,
++                  maxLines: 4,
++                  decoration: const InputDecoration(hintText: 'مثال: أشعر بتشتت وأحتاج خطوة صغيرة أبدأ بها…'),
++                ),
++                CheckboxListTile(
++                  value: _consentToAi,
++                  contentPadding: EdgeInsets.zero,
++                  title: const Text('أوافق صراحة على إرسال ما أكتبه إلى خدمة إلهام مستقبلية عندما تُنشر.'),
++                  onChanged: (value) => setState(() => _consentToAi = value ?? false),
++                ),
++                FilledButton.icon(
++                  onPressed: _requestInspiration,
++                  icon: const Icon(Icons.auto_awesome_outlined),
++                  label: const Text('فحص طلب الإلهام'),
++                ),
++                SwitchListTile(
++                  value: _threeHourReminder,
++                  contentPadding: EdgeInsets.zero,
++                  title: const Text('تذكير اختياري كل 3 ساعات'),
++                  subtitle: const Text('مغلق افتراضياً؛ يتطلب نشر إشعارات محلية واختبار Android قبل التفعيل.'),
++                  onChanged: (value) {
++                    setState(() {
++                      _threeHourReminder = false;
++                      _notice = value
++                          ? 'لا يمكن تفعيل التذكير بعد؛ سيتم ربطه بإشعارات محلية صريحة بعد اختبارها.'
++                          : 'ظل تذكير الإلهام مغلقاً.';
++                    });
++                  },
++                ),
++              ],
++            ),
++          ),
++        ),
++        const SizedBox(height: 12),
++        Card(
++          child: Padding(
++            padding: const EdgeInsets.all(14),
++            child: Column(
++              crossAxisAlignment: CrossAxisAlignment.stretch,
++              children: [
++                const Text('قصة المستخدم إلى فيديو', style: TextStyle(color: RoyalColors.teal, fontWeight: FontWeight.bold)),
++                const SizedBox(height: 8),
++                const Text('الفحص التالي لا ينشئ فيديو. يرفض محلياً مؤشرات الكراهية والتنمر والإهانة والمحتوى الجنسي والألفاظ البذيئة قبل أي خدمة فيديو مستقبلية.'),
++                const SizedBox(height: 10),
++                TextField(
++                  controller: _storyDraftController,
++                  minLines: 3,
++                  maxLines: 6,
++                  decoration: const InputDecoration(hintText: 'اكتب مسودة قصتك الهادفة…'),
++                ),
++                const SizedBox(height: 10),
++                OutlinedButton.icon(
++                  onPressed: _checkStoryDraft,
++                  icon: const Icon(Icons.verified_user_outlined),
++                  label: const Text('فحص مسودة القصة'),
++                ),
++              ],
++            ),
++          ),
++        ),
++        const SizedBox(height: 12),
+         Card(
+           child: ListTile(
+             leading: const Icon(Icons.folder_copy_outlined, color: RoyalColors.gold),
+diff --git a/test/inspiration_safety_test.dart b/test/inspiration_safety_test.dart
+new file mode 100644
+index 0000000..167f7bd
+--- /dev/null
++++ b/test/inspiration_safety_test.dart
+@@ -0,0 +1,26 @@
++import 'package:flutter_test/flutter_test.dart';
++import 'package:mirror_scorpion_v4/core/inspiration/inspiration_safety.dart';
++
++void main() {
++  group('InspirationSafety', () {
++    test('routes clear crisis wording to immediate human help', () {
++      final result = InspirationSafety.assessMoodText('لا أريد أن أعيش اليوم');
++
++      expect(result.level, InspirationSafetyLevel.crisis);
++      expect(result.message, contains('خدمات الطوارئ'));
++    });
++
++    test('keeps ordinary opt-in mood input supportive', () {
++      final result = InspirationSafety.assessMoodText('أحتاج إلى بداية هادئة اليوم');
++
++      expect(result.level, InspirationSafetyLevel.supportive);
++      expect(result.message, contains('لا توجد مراقبة'));
++    });
++
++    test('blocks a story draft containing a disallowed cue', () {
++      final result = InspirationSafety.assessStoryDraft('هذه قصة فيها تنمر على شخص آخر');
++
++      expect(result.allowedForDraft, isFalse);
++    });
++  });
++}
+-- 
+2.43.0
+

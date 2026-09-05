@@ -1,0 +1,262 @@
+From ed3248cf3eacf904b19f51e4857a205170ed895e Mon Sep 17 00:00:00 2001
+From: magdymeko456-cell
+ <2.88837127e+08+magdymeko456-cell@users.noreply.github.com>
+Date: Sun, 23 Aug 2026 14:50:00 +0000
+Subject: [PATCH] feat(documents): add on-device image OCR
+
+---
+ docs/on-device-ocr-images.md              | 25 +++++++
+ lib/core/mlkit/on_device_ocr_service.dart | 67 ++++++++++++++++++
+ lib/features/feature_hub_screen.dart      | 85 +++++++++++++++++++++--
+ pubspec.yaml                              |  2 +
+ todo.md                                   |  1 +
+ 5 files changed, 176 insertions(+), 4 deletions(-)
+ create mode 100644 docs/on-device-ocr-images.md
+ create mode 100644 lib/core/mlkit/on_device_ocr_service.dart
+
+diff --git a/docs/on-device-ocr-images.md b/docs/on-device-ocr-images.md
+new file mode 100644
+index 0000000..2cb2539
+--- /dev/null
++++ b/docs/on-device-ocr-images.md
+@@ -0,0 +1,25 @@
++# OCR المحلي للصور
++
++## ما يعمل في هذه المرحلة
++
++كرت المستندات والعدسة يتيح للمستخدم اختيار صورة من المعرض أو التقاطها بالكاميرا، ثم يمرر المسار إلى ML Kit ويعرض النص الذي استخرجه المحرك فعلياً. يبقى مؤشر التقدم ظاهراً مدة ثلاث ثوانٍ على الأقل، لكنه لا يختلق نتيجة أثناء الانتظار.
++
++| المجال | الحالة |
++|---|---|
++| اختيار صورة | يعمل من الكاميرا أو معرض Android/iOS عبر `image_picker` |
++| OCR | يعمل محلياً للنص اللاتيني عبر ML Kit |
++| النص العربي في صورة | غير مدعوم من محرك النص اللاتيني الحالي؛ تظهر حالة صادقة بلا مخرجات |
++| PDF | مؤجل لمسار تحليل ملفات منفصل، وليس محولاً إلى نتيجة مزيفة |
++| ترجمة النص المستخرج | مؤجلة؛ يمكن توصيلها لاحقاً بالترجمة المحلية حيث تدعم لغة النص |
++
++## اختبار Android المطلوب
++
++1. التقط صورة تحتوي نصاً إنجليزياً واضحاً وتأكد من ظهور النص الحقيقي بعد شريط التقدم.
++2. اختر صورة بلا نص واضح وتأكد من أن الرسالة لا تعرض مخرجات قديمة.
++3. اختبر إلغاء منتقي الصور وتأكد من ظهور حالة الإلغاء.
++4. اختبر صورة عربية وتأكد من عدم ادعاء دعم OCR عربي في هذه المرحلة.
++
++## المراجع
++
++[1]: https://pub.dev/packages/google_mlkit_text_recognition "Google's ML Kit Text Recognition for Flutter"
++[2]: https://pub.dev/packages/image_picker "Image Picker plugin for Flutter"
+diff --git a/lib/core/mlkit/on_device_ocr_service.dart b/lib/core/mlkit/on_device_ocr_service.dart
+new file mode 100644
+index 0000000..d733345
+--- /dev/null
++++ b/lib/core/mlkit/on_device_ocr_service.dart
+@@ -0,0 +1,67 @@
++import 'package:flutter/foundation.dart';
++import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
++
++enum OnDeviceOcrState {
++  recognized,
++  empty,
++  unsupportedPlatform,
++  failed,
++}
++
++class OnDeviceOcrResult {
++  const OnDeviceOcrResult({
++    required this.state,
++    this.text,
++    this.message,
++  });
++
++  final OnDeviceOcrState state;
++  final String? text;
++  final String? message;
++
++  bool get isSuccess => state == OnDeviceOcrState.recognized;
++}
++
++/// خدمة OCR محلية للصور فقط. يستخدم الإصدار الحالي محرك النص اللاتيني،
++/// ولذلك لا يزعم قراءة العربية أو PDF قبل ربط محرك مناسب لهما.
++class OnDeviceOcrService {
++  const OnDeviceOcrService();
++
++  static bool get isNativePlatform =>
++      !kIsWeb &&
++      (defaultTargetPlatform == TargetPlatform.android ||
++          defaultTargetPlatform == TargetPlatform.iOS);
++
++  Future<OnDeviceOcrResult> recognizeImagePath(String path) async {
++    if (!isNativePlatform) {
++      return const OnDeviceOcrResult(
++        state: OnDeviceOcrState.unsupportedPlatform,
++        message: 'OCR المحلي متاح على Android وiOS فقط.',
++      );
++    }
++
++    final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
++    try {
++      final recognized = await recognizer.processImage(InputImage.fromFilePath(path));
++      final text = recognized.text.trim();
++      if (text.isEmpty) {
++        return const OnDeviceOcrResult(
++          state: OnDeviceOcrState.empty,
++          message: 'لم يعثر المحرك المحلي على نص لاتيني واضح في الصورة.',
++        );
++      }
++      return OnDeviceOcrResult(
++        state: OnDeviceOcrState.recognized,
++        text: text,
++        message: 'تم استخراج النص محلياً من الصورة. لم تتم ترجمة المستند بعد.',
++      );
++    } catch (_) {
++      return const OnDeviceOcrResult(
++        state: OnDeviceOcrState.failed,
++        message: 'تعذر تحليل الصورة محلياً. جرّب صورة أوضح أو أعد المحاولة.',
++      );
++    } finally {
++      await recognizer.close();
++    }
++  }
++}
+diff --git a/lib/features/feature_hub_screen.dart b/lib/features/feature_hub_screen.dart
+index 7e3612f..fc9bba6 100644
+--- a/lib/features/feature_hub_screen.dart
++++ b/lib/features/feature_hub_screen.dart
+@@ -2,10 +2,12 @@ import 'dart:async';
+ 
+ import 'package:flutter/material.dart';
+ import 'package:flutter/services.dart';
++import 'package:image_picker/image_picker.dart';
+ import 'package:provider/provider.dart';
+ import 'package:shared_preferences/shared_preferences.dart';
+ 
+ import '../app/royal_dark_theme.dart';
++import '../core/mlkit/on_device_ocr_service.dart';
+ import '../core/mlkit/on_device_translation_service.dart';
+ import '../core/pro/premium_verification_service.dart';
+ 
+@@ -369,19 +371,94 @@ class _DialoguePanelState extends State<_DialoguePanel> {
+   }
+ }
+ 
+-class _DocumentsPanel extends StatelessWidget {
++class _DocumentsPanel extends StatefulWidget {
+   const _DocumentsPanel();
+ 
++  @override
++  State<_DocumentsPanel> createState() => _DocumentsPanelState();
++}
++
++class _DocumentsPanelState extends State<_DocumentsPanel> {
++  final _picker = ImagePicker();
++  final _ocrService = const OnDeviceOcrService();
++  bool _isScanning = false;
++  String? _selectedFileName;
++  String? _extractedText;
++  String? _notice;
++
++  Future<void> _scanImage(ImageSource source) async {
++    final image = await _picker.pickImage(source: source, imageQuality: 100);
++    if (image == null) {
++      if (mounted) setState(() => _notice = 'لم يتم اختيار صورة.');
++      return;
++    }
++    final stopwatch = Stopwatch()..start();
++    setState(() {
++      _isScanning = true;
++      _selectedFileName = image.name;
++      _extractedText = null;
++      _notice = 'جارٍ فحص الصورة محلياً…';
++    });
++    final result = await _ocrService.recognizeImagePath(image.path);
++    final remaining = const Duration(seconds: 3) - stopwatch.elapsed;
++    if (remaining > Duration.zero) await Future<void>.delayed(remaining);
++    if (!mounted) return;
++    setState(() {
++      _isScanning = false;
++      _extractedText = result.isSuccess ? result.text : null;
++      _notice = result.message;
++    });
++  }
++
+   @override
+   Widget build(BuildContext context) {
+     return ListView(
+       padding: const EdgeInsets.all(18),
+       children: [
+-        const _SectionNotice(title: 'OCR بلا نتيجة مصطنعة', detail: 'ستستخدم العدسة الكاميرا وML Kit للصور، ويُرسل PDF إلى الخادم. ينتظر العرض ثلاث ثوانٍ على الأقل ثم يعرض نتيجة OCR الحقيقية أو سبب الفشل.'),
++        const _SectionNotice(title: 'OCR بلا نتيجة مصطنعة', detail: 'تفحص العدسة الصورة المختارة محلياً وتعرض النص المستخرج بعد ثلاث ثوانٍ على الأقل. الإصدار المحلي الحالي يقرأ النص اللاتيني فقط؛ العربية وPDF يتطلبان محركاً مناسباً أو خدمة خادم لاحقاً.'),
+         const SizedBox(height: 20),
+-        Card(child: ListTile(leading: const Icon(Icons.camera_alt_outlined, color: RoyalColors.gold), title: const Text('عدسة ذكية'), subtitle: const Text('تحتاج ربط camera وML Kit في مرحلة الخدمات الأصلية.'), trailing: const Icon(Icons.chevron_left))),
++        Card(
++          child: ListTile(
++            leading: const Icon(Icons.camera_alt_outlined, color: RoyalColors.gold),
++            title: const Text('عدسة ذكية'),
++            subtitle: const Text('التقاط صورة وفحص النص محلياً'),
++            trailing: const Icon(Icons.chevron_left),
++            onTap: _isScanning ? null : () => _scanImage(ImageSource.camera),
++          ),
++        ),
+         const SizedBox(height: 12),
+-        Card(child: ListTile(leading: const Icon(Icons.attach_file, color: RoyalColors.gold), title: const Text('رفع مستند أو صورة'), subtitle: const Text('تحتاج file_picker ومسار OCR خادمي للـPDF.'), trailing: const Icon(Icons.chevron_left))),
++        Card(
++          child: ListTile(
++            leading: const Icon(Icons.photo_library_outlined, color: RoyalColors.gold),
++            title: const Text('اختيار صورة من الجهاز'),
++            subtitle: const Text('OCR محلي للصورة؛ PDF مؤجل لمسار مستقل'),
++            trailing: const Icon(Icons.chevron_left),
++            onTap: _isScanning ? null : () => _scanImage(ImageSource.gallery),
++          ),
++        ),
++        if (_selectedFileName != null)
++          Padding(
++            padding: const EdgeInsets.only(top: 18),
++            child: Text('الصورة المختارة: $_selectedFileName', style: const TextStyle(color: RoyalColors.muted)),
++          ),
++        if (_isScanning)
++          const Padding(
++            padding: EdgeInsets.only(top: 18),
++            child: LinearProgressIndicator(),
++          ),
++        if (_notice != null)
++          Padding(
++            padding: const EdgeInsets.only(top: 14),
++            child: Text(_notice!, style: const TextStyle(color: RoyalColors.gold, height: 1.5)),
++          ),
++        if (_extractedText != null)
++          Card(
++            margin: const EdgeInsets.only(top: 16),
++            child: Padding(
++              padding: const EdgeInsets.all(16),
++              child: SelectableText(_extractedText!, style: const TextStyle(height: 1.6)),
++            ),
++          ),
+       ],
+     );
+   }
+diff --git a/pubspec.yaml b/pubspec.yaml
+index d9c31ce..7d4529e 100644
+--- a/pubspec.yaml
++++ b/pubspec.yaml
+@@ -15,6 +15,8 @@ dependencies:
+   firebase_core: ^4.13.0
+   google_mlkit_language_id: ^0.15.1
+   google_mlkit_translation: ^0.15.1
++  google_mlkit_text_recognition: ^0.17.1
++  image_picker: ^1.2.3
+ 
+ dev_dependencies:
+   flutter_test:
+diff --git a/todo.md b/todo.md
+index 6623541..cf5ff0f 100644
+--- a/todo.md
++++ b/todo.md
+@@ -120,4 +120,5 @@
+ - [x] إضافة `firebase_core` وتهيئة Firebase الآمنة عند بدء تطبيق Android
+ - [x] اختبار تهيئة Firebase عبر GitHub Actions وAPK دون وضع ملف الإعداد في Git
+ - [ ] تنفيذ خدمات محلية قابلة للاختبار دون نشر دوال حية، مع إبقاء جميع مزايا PRO غير مقفلة
++- [ ] إضافة OCR محلي حقيقي للصور عبر ML Kit مع اختيار من الكاميرا أو المعرض وحالات فشل صادقة
+ - [ ] استئناف نشر `healthCheck` والاختبار الحي بعد اكتمال الخدمات وقبل تطبيق أي قفل PRO
+-- 
+2.43.0
+

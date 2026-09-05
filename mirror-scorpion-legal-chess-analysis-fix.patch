@@ -1,0 +1,36 @@
+From 8619df0700c127f014c21d2dfb06d1189ca56148 Mon Sep 17 00:00:00 2001
+From: magdymeko456-cell
+ <2.88837127e+08+magdymeko456-cell@users.noreply.github.com>
+Date: Sun, 23 Aug 2026 21:25:20 +0000
+Subject: [PATCH] fix(games): use chess piece constants
+
+---
+ lib/core/games/chess_game_controller.dart | 12 ++++++------
+ 1 file changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/lib/core/games/chess_game_controller.dart b/lib/core/games/chess_game_controller.dart
+index 6e33ced..7dec188 100644
+--- a/lib/core/games/chess_game_controller.dart
++++ b/lib/core/games/chess_game_controller.dart
+@@ -60,12 +60,12 @@ class ChessGameController {
+ 
+   int _materialScore(chess.Chess position) {
+     const values = {
+-      chess.PAWN: 100,
+-      chess.KNIGHT: 320,
+-      chess.BISHOP: 330,
+-      chess.ROOK: 500,
+-      chess.QUEEN: 900,
+-      chess.KING: 20000,
++      chess.Chess.PAWN: 100,
++      chess.Chess.KNIGHT: 320,
++      chess.Chess.BISHOP: 330,
++      chess.Chess.ROOK: 500,
++      chess.Chess.QUEEN: 900,
++      chess.Chess.KING: 20000,
+     };
+     var score = 0;
+     for (final file in const ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']) {
+-- 
+2.43.0
+

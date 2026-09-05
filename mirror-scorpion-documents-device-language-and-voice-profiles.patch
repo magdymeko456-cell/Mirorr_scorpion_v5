@@ -1,0 +1,689 @@
+From 2b80604070cd1365ed71ad5d3bf8ef9ede6030fc Mon Sep 17 00:00:00 2001
+From: Manus Patch Builder <patch-builder@users.noreply.github.com>
+Date: Tue, 25 Aug 2026 17:43:47 +0000
+Subject: [PATCH] feat(documents): translate local files to device language
+
+---
+ ...nts-audio-and-share-contract-2026-08-25.md |  64 ++++++++
+ .../local_document_text_service.dart          | 109 +++++++++++++
+ lib/core/speech/system_tts_service.dart       |  65 +++++++-
+ lib/features/feature_hub_screen.dart          | 154 ++++++++++--------
+ lib/features/home/dashboard_screen.dart       |   2 +-
+ pubspec.yaml                                  |   1 +
+ test/dashboard_test.dart                      |   2 +
+ test/local_document_text_service_test.dart    |  41 +++++
+ test/system_tts_voice_test.dart               |  23 +++
+ 9 files changed, 390 insertions(+), 71 deletions(-)
+ create mode 100644 docs/documents-audio-and-share-contract-2026-08-25.md
+ create mode 100644 lib/core/documents/local_document_text_service.dart
+ create mode 100644 test/local_document_text_service_test.dart
+
+diff --git a/docs/documents-audio-and-share-contract-2026-08-25.md b/docs/documents-audio-and-share-contract-2026-08-25.md
+new file mode 100644
+index 0000000..ee0846b
+--- /dev/null
++++ b/docs/documents-audio-and-share-contract-2026-08-25.md
+@@ -0,0 +1,64 @@
++# عقد المستندات والملف الصوتي ومشاركة الترجمة — 2026-08-25
++
++**الحالة:** يحدد هذا العقد ما ستفعله الدفعات القادمة. لا يعني أن تفريغ الصوت السحابي أو تصدير MP3 مفعّلان في APK الحالي.
++
++## 1. النتائج المطلوبة واتجاه الترجمة
++
++| المدخل | المسار | لغة المصدر | لغة الهدف | المخرج |
++|---|---|---|---|---|
++| نص مكتوب أو مايك مباشر | ترجمة محلية ML Kit | لغة جهاز المستخدم | اللغة التي اختارها المستخدم | نص مترجم يمكن قراءته بصوت النظام |
++| PDF نصي أو ملف TXT محلي | استخراج محلي ثم ترجمة ML Kit | اللغة المكتشفة في النص | **لغة جهاز المستخدم** | الأصل والترجمة داخل التطبيق |
++| ملف صوتي وارد | تفريغ حقيقي ثم ترجمة ML Kit | اللغة التي يكتشفها محرك التفريغ | **لغة جهاز المستخدم** | تفريغ أصلي وترجمة إلى لغة الجهاز |
++| نص مترجم مشارك | مشاركة نظام Android | لا ينطبق | لا ينطبق | نص يحمل توقيع Mirror Scorpion، مع خيار النسخ |
++| صوت مترجم مشارك | توليد صوت حقيقي في خادم معتمد | نص الترجمة | لغة الترجمة | ملف صوتي مثل MP3، بعد الموافقة والحصة |
++
++## 2. المستندات المحلية وPDF
++
++يختار المستخدم الملف بقرار صريح؛ لا يرفع التطبيق PDF أو TXT في الخلفية. تدعم الدفعة المحلية الأولى PDF النصي وTXT. يستخرج PDF النصي محلياً، ثم تحدد الخدمة لغة النص وتترجمه دائماً إلى لغة جهاز المستخدم؛ لا توجد قائمة لغة هدف في قسم العدسة أو المستندات. أما PDF الممسوح ضوئياً أو المحمي بكلمة مرور أو الذي لا يحوي طبقة نص، فلا يجوز عرض ترجمة مصطنعة له. سيظهر للمستخدم أن هذا النوع يحتاج OCR لكل صفحة في دفعة منفصلة.
++
++تعتمد الدفعة المقترحة على `read_pdf_text` بترخيص MIT لاستخراج النص محلياً عبر PDFBox في Android وPDFKit في iOS. المكتبة مناسبة للنص المضمن في PDF ولا تحول صفحات الصور إلى نص بذاتها. [1]
++
++## 3. تفريغ الملف الصوتي
++
++الاختيار الحالي للملف الصوتي لا يفعل سوى اختيار اسم الملف؛ لا تفريغ ولا ترجمة تتم. لذلك سيبقى الزر صريحاً حتى يكتمل المسار التالي:
++
++1. يختار المستخدم الملف ويوافق على الإرسال لمعالجة التفريغ.
++2. يرفع التطبيق الملف إلى خادم وسيط معتمد، لا مباشرة إلى مزود، وبحد الحجم والمدة ومفتاح خارج APK.
++3. يستدعي الخادم واجهة التفريغ ثم يحذف الملف المؤقت والنتيجة وفق سياسة احتفاظ معلنة.
++4. يعيد التفريغ ولغة الصوت المكتشفة فقط، ثم تترجم ML Kit النص إلى لغة جهاز المستخدم حيثما كانت اللغة مدعومة.
++5. يظهر النص الأصلي والترجمة وحالة الحذف بوضوح.
++
++يمكن أن يكون ElevenLabs Scribe v2 مزود التفريغ المعتمد لاحقاً؛ توثيقه يذكر دعم أكثر من 90 لغة ورفع صيغ صوت وفيديو عديدة، لكن الاستخدام يسعّر بمدة الصوت ويستلزم خادماً ومفتاحاً وحصة صارمة. [2] [3]
++
++## 4. المشاركة والتوقيع
++
++النص المترجم يشارك بالنص التالي، مع احتفاظ المستخدم بحرية حذفه أو تعديله قبل الإرسال عبر واجهة المشاركة:
++
++> `…النص المترجم…\n\n— تمت الترجمة عبر Mirror Scorpion`
++
++لا ينبغي أن يزعم هذا التوقيع توثيقاً لغوياً أو طبياً أو قانونياً. وهو مختلف عن توقيع رقمي تشفيري.
++
++## 5. الأصوات والملفات المشتركة
++
++**سلمى وسيف وسما وساره** ملفات أداء محلية تضبط السرعة والطبقة فوق صوت Android المثبت. يمكنها القراءة الحية داخل التطبيق فقط. لا تضمن Android APIs إنتاج ملف MP3 يمكن مشاركته بطريقة موحدة على جميع الأجهزة، ولذلك لا يظهر زر «مشاركة ملف صوتي» كأنه يعمل قبل وجود مولد صوت فعلي.
++
++بعد تفعيل ElevenLabs بموافقة منفصلة، يختار المستخدم صوتاً مسموحاً له به (ملف أداء رسمي أو صوت يملكه ووافق عليه)، ويولّد الخادم ملفاً قصيراً مع حد حروف وتكلفة، ثم يتيح للمستخدم حفظه أو مشاركته. لا ترفع عينة صوت ولا يستخدم «صوت المستخدم» قبل إقرار الملكية والموافقة والحذف في العقد السابق.
++
++## 6. معايير القبول
++
++| الاختبار | النتيجة المقبولة |
++|---|---|
++| PDF نصي | يظهر النص المستخرج ثم الترجمة، أو رسالة استخراج واضحة عند الفشل |
++| TXT محلي | يظهر النص والترجمة بلا رفع شبكة |
++| PDF مصور | لا يظهر ناتج وهمي؛ يشرح الحاجة لمسار OCR مستقل |
++| ملف صوتي قبل تفعيل الخادم | لا يرفع الملف ولا يدعي تفريغه؛ يشرح شرط الموافقة والخدمة |
++| مشاركة نص مترجم | تفتح واجهة مشاركة Android بالنص والتوقيع القابل للحذف |
++| مشاركة صوت | تبقى معطلة ومعللة إلى أن يتوفر توليد صوت فعلي وموافق عليه |
++
++## المراجع
++
++[1] [read_pdf_text — استخراج نص PDF محلياً في Flutter، MIT](https://pub.dev/packages/read_pdf_text)
++
++[2] [ElevenLabs — توثيق Speech to Text (Scribe v2)](https://elevenlabs.io/docs/overview/capabilities/speech-to-text)
++
++[3] [ElevenLabs — تسعير Speech to Text وText to Speech API](https://elevenlabs.io/pricing/api)
+diff --git a/lib/core/documents/local_document_text_service.dart b/lib/core/documents/local_document_text_service.dart
+new file mode 100644
+index 0000000..15b056c
+--- /dev/null
++++ b/lib/core/documents/local_document_text_service.dart
+@@ -0,0 +1,109 @@
++import 'dart:convert';
++import 'dart:io';
++
++import 'package:read_pdf_text/read_pdf_text.dart';
++
++enum LocalDocumentKind { pdf, plainText, unsupported }
++
++class LocalDocumentTextResult {
++  const LocalDocumentTextResult({
++    required this.isSuccess,
++    required this.message,
++    this.text,
++  });
++
++  final bool isSuccess;
++  final String message;
++  final String? text;
++}
++
++/// سياسة قسم المستندات: لغة جهاز المستخدم هي هدف الترجمة الوحيد.
++abstract final class DocumentTranslationPolicy {
++  static String targetForDevice(String deviceLanguageCode) =>
++      deviceLanguageCode.trim().toLowerCase();
++}
++
++/// يستخرج نصاً مضمنًا في PDF أو ملف TXT محلياً.
++/// لا يحوّل PDF المصوّر إلى نص ولا يرفع الملف خارج الجهاز.
++class LocalDocumentTextService {
++  const LocalDocumentTextService();
++
++  static LocalDocumentKind kindForName(String fileName) {
++    final normalized = fileName.trim().toLowerCase();
++    if (normalized.endsWith('.pdf')) return LocalDocumentKind.pdf;
++    if (normalized.endsWith('.txt')) return LocalDocumentKind.plainText;
++    return LocalDocumentKind.unsupported;
++  }
++
++  Future<LocalDocumentTextResult> extract({
++    required String path,
++    required String fileName,
++  }) async {
++    if (path.trim().isEmpty) {
++      return const LocalDocumentTextResult(
++        isSuccess: false,
++        message: 'تعذر فتح الملف محلياً. اختر ملفاً متاحاً من الجهاز ثم أعد المحاولة.',
++      );
++    }
++    switch (kindForName(fileName)) {
++      case LocalDocumentKind.plainText:
++        return _extractPlainText(path);
++      case LocalDocumentKind.pdf:
++        return _extractPdfText(path);
++      case LocalDocumentKind.unsupported:
++        return const LocalDocumentTextResult(
++          isSuccess: false,
++          message: 'يدعم هذا الإصدار ملفات PDF النصية وTXT فقط.',
++        );
++    }
++  }
++
++  Future<LocalDocumentTextResult> _extractPlainText(String path) async {
++    try {
++      final text = utf8.decode(await File(path).readAsBytes()).trim();
++      if (text.isEmpty) {
++        return const LocalDocumentTextResult(
++          isSuccess: false,
++          message: 'ملف النص فارغ أو لا يحتوي على نص قابل للترجمة.',
++        );
++      }
++      return LocalDocumentTextResult(
++        isSuccess: true,
++        text: text,
++        message: 'تمت قراءة ملف النص محلياً. جارٍ اكتشاف لغته وترجمته إلى لغة جهازك…',
++      );
++    } on FileSystemException {
++      return const LocalDocumentTextResult(
++        isSuccess: false,
++        message: 'تعذر قراءة ملف النص من مساحة الجهاز.',
++      );
++    } on FormatException {
++      return const LocalDocumentTextResult(
++        isSuccess: false,
++        message: 'ترميز ملف النص غير مدعوم. احفظه بترميز UTF-8 ثم أعد المحاولة.',
++      );
++    }
++  }
++
++  Future<LocalDocumentTextResult> _extractPdfText(String path) async {
++    try {
++      final text = (await ReadPdfText.getPDFtext(path)).trim();
++      if (text.isEmpty) {
++        return const LocalDocumentTextResult(
++          isSuccess: false,
++          message: 'لم يعثر PDF على طبقة نص. قد يكون ممسوحاً ضوئياً أو محمياً؛ يحتاج هذا النوع إلى OCR لكل صفحة.',
++        );
++      }
++      return LocalDocumentTextResult(
++        isSuccess: true,
++        text: text,
++        message: 'تم استخراج نص PDF محلياً. جارٍ اكتشاف لغته وترجمته إلى لغة جهازك…',
++      );
++    } catch (_) {
++      return const LocalDocumentTextResult(
++        isSuccess: false,
++        message: 'تعذر استخراج نص PDF. جرّب ملف PDF نصياً غير محمي أو ملف TXT.',
++      );
++    }
++  }
++}
+diff --git a/lib/core/speech/system_tts_service.dart b/lib/core/speech/system_tts_service.dart
+index e7c1e61..0083a99 100644
+--- a/lib/core/speech/system_tts_service.dart
++++ b/lib/core/speech/system_tts_service.dart
+@@ -3,6 +3,45 @@ import 'package:flutter_tts/flutter_tts.dart';
+ 
+ enum SystemSpeechState { idle, speaking, unavailable, failed }
+ 
++/// ملفات أداء محلية تضبط سرعة وطبقة صوت Android المختار.
++///
++/// لا تمثل هذه الملفات أصواتاً بشرية مستقلة ولا تضمن جنساً أو نبرة ثابتة؛
++/// فالنتيجة تعتمد على صوت النظام المثبت والمتوافق مع لغة النص في الجهاز.
++enum SystemVoiceProfile {
++  salma,
++  saif,
++  sama,
++  sara;
++
++  String get label => switch (this) {
++        SystemVoiceProfile.salma => 'سلمى',
++        SystemVoiceProfile.saif => 'سيف',
++        SystemVoiceProfile.sama => 'سما',
++        SystemVoiceProfile.sara => 'ساره',
++      };
++
++  String get styleDescription => switch (this) {
++        SystemVoiceProfile.salma => 'أداء هادئ ولطيف',
++        SystemVoiceProfile.saif => 'أداء جاد ومتزن',
++        SystemVoiceProfile.sama => 'أداء نشط وحيوي',
++        SystemVoiceProfile.sara => 'أداء مبهج ودافئ',
++      };
++
++  double get speechRate => switch (this) {
++        SystemVoiceProfile.salma => 0.42,
++        SystemVoiceProfile.saif => 0.40,
++        SystemVoiceProfile.sama => 0.52,
++        SystemVoiceProfile.sara => 0.48,
++      };
++
++  double get pitch => switch (this) {
++        SystemVoiceProfile.salma => 1.02,
++        SystemVoiceProfile.saif => 0.90,
++        SystemVoiceProfile.sama => 1.12,
++        SystemVoiceProfile.sara => 1.08,
++      };
++}
++
+ class SystemTtsVoice {
+   const SystemTtsVoice({required this.name, required this.locale});
+ 
+@@ -45,11 +84,13 @@ class SystemTtsService extends ChangeNotifier {
+   SystemSpeechState _state = SystemSpeechState.idle;
+   String? _message;
+   SystemTtsVoice? _selectedVoice;
++  SystemVoiceProfile _selectedProfile = SystemVoiceProfile.salma;
+ 
+   SystemSpeechState get state => _state;
+   String? get message => _message;
+   bool get isSpeaking => _state == SystemSpeechState.speaking;
+   SystemTtsVoice? get selectedVoice => _selectedVoice;
++  SystemVoiceProfile get selectedProfile => _selectedProfile;
+ 
+   Future<void> initialize() async {
+     _tts.setStartHandler(() {
+@@ -64,8 +105,7 @@ class SystemTtsService extends ChangeNotifier {
+       _message = 'تعذر تشغيل صوت النظام للنص المحدد.';
+       notifyListeners();
+     });
+-    await _tts.setSpeechRate(0.45);
+-    await _tts.setPitch(1.0);
++    await _applyProfile();
+   }
+ 
+   Future<bool> speak({required String text, required String languageCode}) async {
+@@ -87,6 +127,7 @@ class SystemTtsService extends ChangeNotifier {
+       }
+       await _tts.stop();
+       await _tts.setLanguage(locale);
++      await _applyProfile();
+       final voice = _selectedVoice;
+       if (voice != null && voice.supportsLocale(locale)) {
+         await _tts.setVoice(voice.toPlatformMap());
+@@ -168,12 +209,32 @@ class SystemTtsService extends ChangeNotifier {
+     }
+   }
+ 
++  Future<void> selectProfile(SystemVoiceProfile profile) async {
++    _selectedProfile = profile;
++    try {
++      await _applyProfile();
++      _state = SystemSpeechState.idle;
++      _message = 'تم اختيار ملف الأداء المحلي: ${profile.label} — '
++          '${profile.styleDescription}. يعتمد الصوت الفعلي على صوت Android '
++          'المثبت في جهازك.';
++    } catch (_) {
++      _state = SystemSpeechState.failed;
++      _message = 'تعذر تطبيق ملف الأداء المحلي المطلوب على صوت النظام.';
++    }
++    notifyListeners();
++  }
++
+   void _markIdle() {
+     _state = SystemSpeechState.idle;
+     _message = null;
+     notifyListeners();
+   }
+ 
++  Future<void> _applyProfile() async {
++    await _tts.setSpeechRate(_selectedProfile.speechRate);
++    await _tts.setPitch(_selectedProfile.pitch);
++  }
++
+   String _localeFor(String languageCode) {
+     switch (languageCode.toLowerCase()) {
+       case 'ar':
+diff --git a/lib/features/feature_hub_screen.dart b/lib/features/feature_hub_screen.dart
+index 3dcc86a..7312905 100644
+--- a/lib/features/feature_hub_screen.dart
++++ b/lib/features/feature_hub_screen.dart
+@@ -13,6 +13,7 @@ import '../core/content/offline_content_storage.dart';
+ import '../core/content/github_content_catalog_service.dart';
+ import '../core/games/chess_game_controller.dart';
+ import '../core/inspiration/inspiration_safety.dart';
++import '../core/documents/local_document_text_service.dart';
+ import '../core/mlkit/on_device_ocr_service.dart';
+ import '../core/mlkit/on_device_translation_service.dart';
+ import '../core/pro/premium_verification_service.dart';
+@@ -926,27 +927,15 @@ class _DocumentsPanel extends StatefulWidget {
+ class _DocumentsPanelState extends State<_DocumentsPanel> {
+   final _picker = ImagePicker();
+   final _ocrService = const OnDeviceOcrService();
++  final _documentTextService = const LocalDocumentTextService();
+   final _translationService = const OnDeviceTranslationService();
+   bool _isScanning = false;
+   bool _isTranslating = false;
+   String? _selectedFileName;
+-  PlatformFile? _selectedPdf;
++  String? _selectedDocumentName;
+   String? _extractedText;
+   String? _translatedText;
+   String? _notice;
+-  String _targetLanguage = 'en';
+-  bool _loadedLanguagePreference = false;
+-
+-  @override
+-  void didChangeDependencies() {
+-    super.didChangeDependencies();
+-    if (_loadedLanguagePreference) return;
+-    final saved = context.read<LanguagePreferences>().translationTargetLanguage;
+-    if (TranslationLanguageCatalog.labels.containsKey(saved)) {
+-      _targetLanguage = saved;
+-    }
+-    _loadedLanguagePreference = true;
+-  }
+ 
+   Future<void> _scanImage(ImageSource source) async {
+     final image = await _picker.pickImage(
+@@ -983,11 +972,14 @@ class _DocumentsPanelState extends State<_DocumentsPanel> {
+ 
+   Future<void> _translateExtractedText(String text) async {
+     if (!mounted) return;
+-    final targetLanguage = _targetLanguage;
++    final targetLanguage = DocumentTranslationPolicy.targetForDevice(
++      context.read<LanguagePreferences>().deviceLanguageCode,
++    );
+     setState(() {
+       _isTranslating = true;
+       _translatedText = null;
+-      _notice = 'جارٍ ترجمة النص المستخرج إلى ${TranslationLanguageCatalog.labels[targetLanguage] ?? targetLanguage}…';
++      _notice = 'جارٍ اكتشاف لغة المستند وترجمته إلى لغة جهازك: '
++          '${TranslationLanguageCatalog.labels[targetLanguage] ?? targetLanguage}…';
+     });
+     final result = await _translationService.translate(
+       text: text,
+@@ -1006,27 +998,41 @@ class _DocumentsPanelState extends State<_DocumentsPanel> {
+     });
+   }
+ 
+-  Future<void> _selectTargetLanguage(String code) async {
+-    setState(() => _targetLanguage = code);
+-    await context.read<LanguagePreferences>().setTranslationTargetLanguage(code);
+-    final extractedText = _extractedText;
+-    if (extractedText != null && extractedText.trim().isNotEmpty) {
+-      await _translateExtractedText(extractedText);
+-    }
+-  }
+-
+-  Future<void> _pickPdf() async {
++  Future<void> _pickLocalDocument() async {
+     final file = await FilePicker.pickFile(
+       type: FileType.custom,
+-      allowedExtensions: const ['pdf'],
++      allowedExtensions: const ['pdf', 'txt'],
+     );
+     if (!mounted) return;
++    if (file == null) {
++      setState(() => _notice = 'لم يتم اختيار مستند.');
++      return;
++    }
++    final path = file.path;
++    if (path == null || path.isEmpty) {
++      setState(() => _notice = 'تعذر الوصول إلى المستند محلياً من هذا الموفر.');
++      return;
++    }
+     setState(() {
+-      _selectedPdf = file;
+-      _notice = file == null
+-          ? 'لم يتم اختيار PDF.'
+-          : 'تم اختيار «${file.name}» محلياً. استخراج صفحات PDF وترجمتها مسار مستقل لم يُفعّل بعد؛ لن يعرض التطبيق نتيجة مصطنعة.';
++      _isScanning = true;
++      _selectedDocumentName = file.name;
++      _extractedText = null;
++      _translatedText = null;
++      _notice = 'جارٍ قراءة «${file.name}» محلياً…';
++    });
++    final result = await _documentTextService.extract(
++      path: path,
++      fileName: file.name,
++    );
++    if (!mounted) return;
++    setState(() {
++      _isScanning = false;
++      _extractedText = result.isSuccess ? result.text : null;
++      _notice = result.message;
+     });
++    if (result.isSuccess && result.text != null && result.text!.trim().isNotEmpty) {
++      await _translateExtractedText(result.text!);
++    }
+   }
+ 
+   @override
+@@ -1034,31 +1040,11 @@ class _DocumentsPanelState extends State<_DocumentsPanel> {
+     return ListView(
+       padding: const EdgeInsets.all(18),
+       children: [
+-        const _SectionNotice(title: 'عدسة OCR وترجمة محلية', detail: 'تفحص العدسة الصورة المختارة محلياً ثم تمرر النص المستخرج إلى ML Kit للترجمة نحو اللغة المختارة. الإصدار المحلي الحالي يقرأ النص اللاتيني فقط؛ العربية وPDF يتطلبان محركاً مناسباً أو خدمة خادم لاحقاً.'),
++        const _SectionNotice(title: 'عدسة وPDF ومستندات محلية', detail: 'تستخرج العدسة أو المستند النص محلياً، ثم تكتشف لغته وتترجمه دائماً إلى لغة جهازك. لا توجد لغة هدف قابلة للتغيير في هذا القسم.'),
+         const SizedBox(height: 20),
+-        Container(
+-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+-          decoration: BoxDecoration(
+-            color: const Color(0xFF1B2838),
+-            borderRadius: BorderRadius.circular(14),
+-            border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.4)),
+-          ),
+-          child: DropdownButtonHideUnderline(
+-            child: DropdownButton<String>(
+-              value: _targetLanguage,
+-              isExpanded: true,
+-              dropdownColor: const Color(0xFF1B2838),
+-              icon: const Icon(Icons.translate, color: Colors.cyanAccent),
+-              items: TranslationLanguageCatalog.labels.entries
+-                  .map((entry) => DropdownMenuItem(value: entry.key, child: Text('ترجمة إلى: ${entry.value}')))
+-                  .toList(),
+-              onChanged: _isScanning || _isTranslating
+-                  ? null
+-                  : (code) {
+-                      if (code != null) _selectTargetLanguage(code);
+-                    },
+-            ),
+-          ),
++        _DeviceSpeechLanguageLabel(
++          languageCode: context.watch<LanguagePreferences>().deviceLanguageCode,
++          label: 'الترجمة إلى لغة جهازك',
+         ),
+         const SizedBox(height: 12),
+         Card(
+@@ -1075,7 +1061,7 @@ class _DocumentsPanelState extends State<_DocumentsPanel> {
+           child: ListTile(
+             leading: const Icon(Icons.photo_library_outlined, color: RoyalColors.gold),
+             title: const Text('اختيار صورة من الجهاز'),
+-            subtitle: const Text('OCR محلي للصورة؛ PDF مؤجل لمسار مستقل'),
++            subtitle: const Text('OCR محلي ثم ترجمة إلى لغة جهازك'),
+             trailing: const Icon(Icons.chevron_left),
+             onTap: _isScanning ? null : () => _scanImage(ImageSource.gallery),
+           ),
+@@ -1084,10 +1070,10 @@ class _DocumentsPanelState extends State<_DocumentsPanel> {
+         Card(
+           child: ListTile(
+             leading: const Icon(Icons.picture_as_pdf_outlined, color: RoyalColors.gold),
+-            title: const Text('اختيار مستند PDF'),
+-            subtitle: Text(_selectedPdf == null ? 'اختيار محلي أولاً؛ الترجمة متعددة الصفحات لم تُفعّل بعد' : 'المستند المختار: ${_selectedPdf!.name}'),
++            title: const Text('اختيار PDF أو ملف نصي محلي'),
++            subtitle: Text(_selectedDocumentName == null ? 'PDF نصي أو TXT: استخراج محلي ثم ترجمة إلى لغة جهازك' : 'المستند المختار: $_selectedDocumentName'),
+             trailing: const Icon(Icons.chevron_left),
+-            onTap: _isScanning || _isTranslating ? null : _pickPdf,
++            onTap: _isScanning || _isTranslating ? null : _pickLocalDocument,
+           ),
+         ),
+         if (_selectedFileName != null)
+@@ -1129,7 +1115,7 @@ class _DocumentsPanelState extends State<_DocumentsPanel> {
+               child: Column(
+                 crossAxisAlignment: CrossAxisAlignment.stretch,
+                 children: [
+-                  Text('الترجمة إلى: ${TranslationLanguageCatalog.labels[_targetLanguage] ?? _targetLanguage}', style: const TextStyle(color: RoyalColors.gold)),
++                  Text('الترجمة إلى لغة جهازك: ${TranslationLanguageCatalog.labels[context.read<LanguagePreferences>().deviceLanguageCode] ?? context.read<LanguagePreferences>().deviceLanguageCode}', style: const TextStyle(color: RoyalColors.gold)),
+                   const SizedBox(height: 8),
+                   SelectableText(_translatedText!, style: const TextStyle(height: 1.6)),
+                 ],
+@@ -1225,13 +1211,6 @@ class _StoriesPanelState extends State<_StoriesPanel> {
+     final languageCode = context.read<LanguagePreferences>().storyLanguageCode;
+     final voices = await _speechService.voicesForLanguage(languageCode);
+     if (!mounted) return;
+-    if (voices.isEmpty) {
+-      setState(() {
+-        _notice = _speechService.message ??
+-            'لا توجد أصوات نظام متاحة للغة القصة على هذا الجهاز.';
+-      });
+-      return;
+-    }
+     await showModalBottomSheet<void>(
+       context: context,
+       backgroundColor: const Color(0xFF0D1623),
+@@ -1250,10 +1229,49 @@ class _StoriesPanelState extends State<_StoriesPanel> {
+             child: ListView(
+               shrinkWrap: true,
+               children: [
++                const ListTile(
++                  title: Text('ملفات الأداء المحلية'),
++                  subtitle: Text(
++                    'تضبط سرعة وطبقة صوت Android؛ لا تمثل أصواتاً بشرية ثابتة ولا ترفع نصاً أو تسجيلاً.',
++                  ),
++                ),
++                ...SystemVoiceProfile.values.map(
++                  (profile) => ListTile(
++                    leading: Icon(
++                      profile == SystemVoiceProfile.saif
++                          ? Icons.record_voice_over_outlined
++                          : Icons.volume_up_outlined,
++                      color: profile == _speechService.selectedProfile
++                          ? RoyalColors.gold
++                          : RoyalColors.cyan,
++                    ),
++                    title: Text(profile.label),
++                    subtitle: Text('${profile.styleDescription} • صوت Android المحلي'),
++                    trailing: Icon(
++                      profile == _speechService.selectedProfile
++                          ? Icons.check_circle
++                          : Icons.tune_outlined,
++                      color: profile == _speechService.selectedProfile
++                          ? RoyalColors.gold
++                          : RoyalColors.muted,
++                    ),
++                    onTap: () async {
++                      await _speechService.selectProfile(profile);
++                      if (sheetContext.mounted) Navigator.pop(sheetContext);
++                    },
++                  ),
++                ),
++                const Divider(),
+                 const ListTile(
+                   title: Text('أصوات النظام المتاحة'),
+-                  subtitle: Text('تظهر أصوات جهازك فقط؛ لا يُرفع النص أو يُنسخ صوتك.'),
++                  subtitle: Text('يمكنك اختيار صوت Android المثبت المتوافق مع لغة القصة.'),
+                 ),
++                if (voices.isEmpty)
++                  const ListTile(
++                    leading: Icon(Icons.volume_off_outlined),
++                    title: Text('لا يوجد صوت نظام متاح لهذه اللغة'),
++                    subtitle: Text('ثبت صوتاً مناسباً من إعدادات Android، ثم أعد المحاولة.'),
++                  ),
+                 ListTile(
+                   title: const Text('صوت النظام الافتراضي'),
+                   trailing: Icon(
+diff --git a/lib/features/home/dashboard_screen.dart b/lib/features/home/dashboard_screen.dart
+index 24d62e6..aa92ea8 100644
+--- a/lib/features/home/dashboard_screen.dart
++++ b/lib/features/home/dashboard_screen.dart
+@@ -13,7 +13,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
+   static const _features = <_FeatureSpec>[
+     _FeatureSpec(FeatureKind.translation, 'ترجمة نصية', 'ترجمة محلية + مايك', Icons.translate, Colors.blueAccent),
+     _FeatureSpec(FeatureKind.dialogue, 'حوار مترجم', 'محرران + مايك الجهاز', Icons.forum, Colors.cyanAccent),
+-    _FeatureSpec(FeatureKind.documents, 'مستندات وعدسة', 'OCR صور + PDF قيد الإعداد', Icons.document_scanner, Colors.tealAccent),
++    _FeatureSpec(FeatureKind.documents, 'مستندات وعدسة', 'OCR صور + PDF وTXT محلي', Icons.document_scanner, Colors.tealAccent),
+     _FeatureSpec(FeatureKind.stories, 'قصص وإلهام', 'قصص وإلهام محلي', Icons.auto_stories, Colors.orangeAccent),
+     _FeatureSpec(FeatureKind.games, 'ألعاب وتفكير', 'شطرنج قانوني + روبيك قريباً', Icons.sports_esports, Colors.purpleAccent),
+     _FeatureSpec(FeatureKind.settings, 'الإعدادات', 'خصوصية وحزم وPRO', Icons.settings, Colors.blueGrey),
+diff --git a/pubspec.yaml b/pubspec.yaml
+index 88d0645..50aa5dd 100644
+--- a/pubspec.yaml
++++ b/pubspec.yaml
+@@ -23,6 +23,7 @@ dependencies:
+   chess: ^0.8.1
+   flutter_tts: ^4.2.5
+   speech_to_text: ^7.4.0
++  read_pdf_text: ^0.3.1
+ 
+ dev_dependencies:
+   flutter_test:
+diff --git a/test/dashboard_test.dart b/test/dashboard_test.dart
+index 48cdd35..9450d58 100644
+--- a/test/dashboard_test.dart
++++ b/test/dashboard_test.dart
+@@ -14,6 +14,8 @@ void main() {
+ 
+     await tester.scrollUntilVisible(find.text('مستندات وعدسة'), 300);
+     expect(find.text('مستندات وعدسة'), findsOneWidget);
++    expect(find.text('OCR صور + PDF وTXT محلي'), findsOneWidget);
++    expect(find.text('OCR صور + PDF قيد الإعداد'), findsNothing);
+     expect(find.text('قصص وإلهام'), findsOneWidget);
+ 
+     await tester.scrollUntilVisible(find.text('ألعاب وتفكير'), 300);
+diff --git a/test/local_document_text_service_test.dart b/test/local_document_text_service_test.dart
+new file mode 100644
+index 0000000..a7125a4
+--- /dev/null
++++ b/test/local_document_text_service_test.dart
+@@ -0,0 +1,41 @@
++import 'dart:io';
++
++import 'package:flutter_test/flutter_test.dart';
++import 'package:mirror_scorpion_v4/core/documents/local_document_text_service.dart';
++
++void main() {
++  test('classifies the supported local document kinds', () {
++    expect(
++      LocalDocumentTextService.kindForName('chapter.PDF'),
++      LocalDocumentKind.pdf,
++    );
++    expect(
++      LocalDocumentTextService.kindForName('notes.txt'),
++      LocalDocumentKind.plainText,
++    );
++    expect(
++      LocalDocumentTextService.kindForName('report.docx'),
++      LocalDocumentKind.unsupported,
++    );
++  });
++
++  test('keeps the device language as the only document translation target', () {
++    expect(DocumentTranslationPolicy.targetForDevice('TR'), 'tr');
++    expect(DocumentTranslationPolicy.targetForDevice(' ar '), 'ar');
++  });
++
++  test('reads a UTF-8 local text file without uploading it', () async {
++    final directory = await Directory.systemTemp.createTemp('mirror-document-');
++    addTearDown(() => directory.delete(recursive: true));
++    final file = File('${directory.path}/sample.txt');
++    await file.writeAsString('Hello document');
++
++    final result = await const LocalDocumentTextService().extract(
++      path: file.path,
++      fileName: 'sample.txt',
++    );
++
++    expect(result.isSuccess, isTrue);
++    expect(result.text, 'Hello document');
++  });
++}
+diff --git a/test/system_tts_voice_test.dart b/test/system_tts_voice_test.dart
+index b6488ad..c198836 100644
+--- a/test/system_tts_voice_test.dart
++++ b/test/system_tts_voice_test.dart
+@@ -23,4 +23,27 @@ void main() {
+       throwsFormatException,
+     );
+   });
++
++  test('defines the four named local voice performance profiles', () {
++    expect(SystemVoiceProfile.values, hasLength(4));
++    expect(
++      SystemVoiceProfile.values.map((profile) => profile.label),
++      <String>['سلمى', 'سيف', 'سما', 'ساره'],
++    );
++    expect(SystemVoiceProfile.salma.styleDescription, contains('هادئ'));
++    expect(SystemVoiceProfile.saif.styleDescription, contains('جاد'));
++    expect(SystemVoiceProfile.sama.styleDescription, contains('نشط'));
++    expect(SystemVoiceProfile.sara.styleDescription, contains('مبهج'));
++  });
++
++  test('local performance profiles keep distinct rate and pitch settings', () {
++    final profiles = SystemVoiceProfile.values;
++    final rates = profiles.map((profile) => profile.speechRate).toSet();
++    final pitches = profiles.map((profile) => profile.pitch).toSet();
++
++    expect(rates, hasLength(4));
++    expect(pitches, hasLength(4));
++    expect(SystemVoiceProfile.saif.pitch, lessThan(1));
++    expect(SystemVoiceProfile.sama.speechRate, greaterThan(0.5));
++  });
+ }
+-- 
+2.43.0
+

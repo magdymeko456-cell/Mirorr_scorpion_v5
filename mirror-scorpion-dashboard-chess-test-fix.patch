@@ -1,0 +1,38 @@
+From 40846f554848e7b8e292d14ba5df0e9038910bcb Mon Sep 17 00:00:00 2001
+From: magdymeko456-cell
+ <2.88837127e+08+magdymeko456-cell@users.noreply.github.com>
+Date: Wed, 26 Aug 2026 20:46:16 +0000
+Subject: [PATCH] test(dashboard): expect direct chess card
+
+---
+ test/dashboard_test.dart | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/test/dashboard_test.dart b/test/dashboard_test.dart
+index 9450d58..9586ed5 100644
+--- a/test/dashboard_test.dart
++++ b/test/dashboard_test.dart
+@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
+ import 'package:mirror_scorpion_v4/app/mirror_scorpion_app.dart';
+ 
+ void main() {
+-  testWidgets('renders the truthful hero status and six-card grid', (tester) async {
++  testWidgets('renders the truthful hero status and the six-card grid', (tester) async {
+     await tester.pumpWidget(const MirrorScorpionApp());
+ 
+     expect(find.text('ميرور سكربيون'), findsOneWidget);
+@@ -18,8 +18,9 @@ void main() {
+     expect(find.text('OCR صور + PDF قيد الإعداد'), findsNothing);
+     expect(find.text('قصص وإلهام'), findsOneWidget);
+ 
+-    await tester.scrollUntilVisible(find.text('ألعاب وتفكير'), 300);
+-    expect(find.text('ألعاب وتفكير'), findsOneWidget);
++    await tester.scrollUntilVisible(find.text('الشطرنج'), 300);
++    expect(find.text('الشطرنج'), findsOneWidget);
++    expect(find.text('لعب محلي أو ضد الكمبيوتر'), findsOneWidget);
+     expect(find.text('ألعاب 3D'), findsNothing);
+     expect(find.text('تفعيل الفقاعة العائمة'), findsNothing);
+     await tester.scrollUntilVisible(find.text('الإعدادات'), 300);
+-- 
+2.43.0
+

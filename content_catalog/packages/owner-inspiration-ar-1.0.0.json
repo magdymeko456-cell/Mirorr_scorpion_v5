@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "packageId": "owner-inspiration-ar",
+  "version": "1.0.0",
+  "title": "تأملات ورسائل إنسانية",
+  "kind": "inspiration",
+  "language": "ar",
+  "ownerProvided": true,
+  "sourceCitation": {
+    "name": "محتوى قدمه مالك التطبيق",
+    "reference": "owner-submission-2026-08-24"
+  },
+  "license": {
+    "usage": "owner-provided-content",
+    "rightsHolder": "Tamer Eldosoky"
+  },
+  "createdAt": "2026-08-24T00:00:00Z",
+  "stories": [
+    {
+      "id": "being-human",
+      "title": "أن تكون إنساناً",
+      "category": "owner_provided_inspiration",
+      "language": "ar",
+      "summary": "رسالة عن احتواء الكسر والكمال، والحزن والفرح، والرجاء في الفرج.",
+      "body": "أن تكون إنساناً يعني أن تحمل كسرك وكمالك معاً، وأن تسمح للحزن أن يجلس بجوار الفرح، وأن تدرك أن ضعفك لا ينفي قوتك. فإذا أراد الله لك الفرج خضعت جميع المستحيلات.",
+      "source": "محتوى قدمه مالك التطبيق",
+      "citation": "نص مقدم من Tamer Eldosoky",
+      "rights": "owner-provided-content"
+    },
+    {
+      "id": "dignity",
+      "title": "عزة النفس",
+      "category": "owner_provided_inspiration",
+      "language": "ar",
+      "summary": "رسالة عن ترك ما يؤذي النفس بهدوء ومن دون خصومة.",
+      "body": "وعندما عزّت علي نفسي، هجرت من كان لي أغلى من نفسي؛ فعزيز النفس لا يعادي، بل يترك الجمل بما حمل.",
+      "source": "محتوى قدمه مالك التطبيق",
+      "citation": "نص مقدم من Tamer Eldosoky",
+      "rights": "owner-provided-content"
+    },
+    {
+      "id": "support-and-betrayal",
+      "title": "أثر السند والخذلان",
+      "category": "owner_provided_inspiration",
+      "language": "ar",
+      "summary": "كلمات عن الأثر الطويل للسند الصادق والخذلان المفاجئ.",
+      "body": "شيئان يتركان أثراً لا تمحوه السنين: سندٌ صادق انتشلك في عزّ انهيارك، وخذلانٌ مفاجئ أسقطك في عزّ ضعفك.",
+      "source": "محتوى قدمه مالك التطبيق",
+      "citation": "نص مقدم من Tamer Eldosoky",
+      "rights": "owner-provided-content"
+    },
+    {
+      "id": "elegance",
+      "title": "الأناقة",
+      "category": "owner_provided_inspiration",
+      "language": "ar",
+      "summary": "رسالة قصيرة عن الأثر الهادئ في الذاكرة.",
+      "body": "الأناقة ليست في أن تلفت الأنظار، بل في أن تبقى عالقاً في الذاكرة.",
+      "source": "محتوى قدمه مالك التطبيق",
+      "citation": "نص مقدم من Tamer Eldosoky",
+      "rights": "owner-provided-content"
+    },
+    {
+      "id": "eyes-of-love",
+      "title": "كلّ يراك بعين طبعه",
+      "category": "owner_provided_inspiration",
+      "language": "ar",
+      "summary": "تأمل في اختلاف نظرة الناس للإنسان بحسب محبتهم وموقعه في قلوبهم.",
+      "body": "كلّ يراك بعين طبعه، وبقدر محبتك في قلبه. ستجد في حياتك من يراك أطيب الناس، وستجد من يراك أسوأهم. ستقابل أشخاصاً ينسون خمسين موقفاً جميلاً منك لأنك قصّرت مرة، وستجد أشخاصاً يبحثون لك عن أعذار ويظهرون لك كم أنت جميل. ستقابل أشخاصاً لا يكفّون عن انتقادك، وآخرين لا يكفيهم كل الكلام الجميل في وصفك. ستقابل أشخاصاً يكرهونك بلا سبب، وأشخاصاً يخترعون أسباباً تحبّبهم فيك. وفي النهاية أنت نفس الشخص، ولكن كل عين تراك على قدر محبتها لك، وكلّ يراك من الزاوية التي تقف فيها من قلبه.",
+      "source": "محتوى قدمه مالك التطبيق",
+      "citation": "نص مقدم من Tamer Eldosoky",
+      "rights": "owner-provided-content"
+    },
+    {
+      "id": "loyalty",
+      "title": "الوفاء الحقيقي",
+      "category": "owner_provided_inspiration",
+      "language": "ar",
+      "summary": "تأمل في أنواع الرفقة ومعنى البقاء في كل الظروف.",
+      "body": "في حياتك ستصادف ثلاثة أنواع من الناس: ناس معك لأنهم لم يجدوا غيرك، وناس معك إلى أن يجدوا غيرك، وناس معك لأنهم لا يريدون غيرك. والوفاء الحقيقي أن يبقى معك أحدهم في كل الظروف لا حسب الظروف. فإذا وجدت هذا النوع من الناس فلا تفرّط فيه أبداً.",
+      "source": "محتوى قدمه مالك التطبيق",
+      "citation": "نص مقدم من Tamer Eldosoky",
+      "rights": "owner-provided-content"
+    }
+  ]
+}

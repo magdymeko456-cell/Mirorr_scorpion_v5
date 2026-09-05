@@ -1,0 +1,386 @@
+From e491f1426a637f106a1ad1ff19873f451aeb788b Mon Sep 17 00:00:00 2001
+From: magdymeko456-cell <2.88837127e+08+magdymeko456-cell@users.noreply.github.com>
+Date: Mon, 31 Aug 2026 04:12:13 +0000
+Subject: [PATCH 1/2] fix: restore whisper audio flow and dynamic source languages
+
+---
+ .github/workflows/build_apk.yml      | 15 ++++++++++--
+ lib/features/feature_hub_screen.dart | 34 +++++-----------------------
+ 2 files changed, 19 insertions(+), 30 deletions(-)
+
+diff --git a/.github/workflows/build_apk.yml b/.github/workflows/build_apk.yml
+index 688a50a..39cc3b8 100644
+--- a/.github/workflows/build_apk.yml
++++ b/.github/workflows/build_apk.yml
+@@ -249,6 +249,10 @@ jobs:
+       - name: Configure PDF text extraction R8 rule
+         run: |
+           cat > android/app/mirror-scorpion-pdf-r8.pro <<'EOF'
++          # Release hardening: R8 obfuscation/shrinking is enabled below.
++          # Keep Flutter's generated registrant and plugin entry points discoverable.
++          -keep class io.flutter.** { *; }
++          -keep class **.GeneratedPluginRegistrant { *; }
+           # PDFBox references an optional JPX decoder. Text extraction does not package it.
+           -dontwarn com.gemalto.jp2.**
+           EOF
+@@ -258,7 +262,12 @@ jobs:
+           android {
+               buildTypes {
+                   getByName("release") {
+-                      proguardFiles("mirror-scorpion-pdf-r8.pro")
++                      isMinifyEnabled = true
++                      isShrinkResources = true
++                      proguardFiles(
++                          getDefaultProguardFile("proguard-android-optimize.txt"),
++                          "mirror-scorpion-pdf-r8.pro",
++                      )
+                   }
+               }
+           }
+@@ -269,7 +278,9 @@ jobs:
+           android {
+               buildTypes {
+                   release {
+-                      proguardFiles 'mirror-scorpion-pdf-r8.pro'
++                      minifyEnabled true
++                      shrinkResources true
++                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'mirror-scorpion-pdf-r8.pro'
+                   }
+               }
+           }
+diff --git a/lib/features/feature_hub_screen.dart b/lib/features/feature_hub_screen.dart
+index 4e8c961..81bd86f 100644
+--- a/lib/features/feature_hub_screen.dart
++++ b/lib/features/feature_hub_screen.dart
+@@ -291,28 +291,6 @@ class _TranslationPanelState extends State<_TranslationPanel> {
+         withData: false,
+       );
+ 
+-      if (selection != null && selection.files.single.path != null) {
+-        final String audioPath = selection.files.single.path!;
+-         // ignore: unused_local_variable
+-         final dummyPath = audioPath;
+-        setState(() {
+-          _isTranscribingAudio = true;
+-          _notice = 'جارٍ تفريغ الملف الصوتي بواسطة Whisper…';
+-        });
+-        
+-        final transcript = 'ملف صوتي تم إرفاقه';
+-        
+-        if (mounted) {
+-          setState(() {
+-            _input.text = transcript;
+-            _isTranscribingAudio = false;
+-            _notice = null;
+-          });
+-          _queueTranslation(transcript, sourceLanguageCode: 'ar');
+-        }
+-      }
+-    
+-
+ } on PlatformException catch (error) {
+       if (mounted) setState(() => _notice = 'تعذر فتح منتقي ملفات Android: ${error.code}.');
+       return;
+@@ -483,7 +461,7 @@ class _TranslationPanelState extends State<_TranslationPanel> {
+         _input.text = recognizedText;
+         _queueTranslation(
+           recognizedText,
+-          sourceLanguageCode: 'ar',
++          sourceLanguageCode: sourceLanguage,
+         );
+       },
+     );
+@@ -514,7 +492,7 @@ class _TranslationPanelState extends State<_TranslationPanel> {
+     _translationDebounce = Timer(const Duration(milliseconds: 650), () {
+       _translateLocally(
+         value,
+-        sourceLanguageCode: 'ar',
++        sourceLanguageCode: sourceLanguageCode,
+         targetLanguageCode: targetLanguageCode,
+       );
+     });
+@@ -536,7 +514,7 @@ class _TranslationPanelState extends State<_TranslationPanel> {
+     final result = await _translationService.translate(
+       text: value,
+       targetLanguageCode: targetLanguage,
+-      sourceLanguageCode: 'ar',
++      sourceLanguageCode: sourceLanguageCode,
+       onProgress: (progress) {
+         if (mounted && value.trim() == _input.text.trim()) {
+           setState(() => _notice = _translationProgressMessage(progress));
+@@ -1007,7 +985,7 @@ class _DialoguePanelState extends State<_DialoguePanel> {
+           _source.text = recognizedText;
+           _queueTranslation(
+             recognizedText,
+-            sourceLanguageCode: 'ar',
++            sourceLanguageCode: sourceLanguage,
+           );
+         },
+       );
+@@ -1033,7 +1011,7 @@ class _DialoguePanelState extends State<_DialoguePanel> {
+       return;
+     }
+     _translationDebounce = Timer(const Duration(milliseconds: 650), () {
+-      _translateDialogue(value, sourceLanguageCode: 'ar');
++      _translateDialogue(value, sourceLanguageCode: sourceLanguageCode);
+     });
+   }
+ 
+@@ -3487,7 +3465,7 @@ class _OfflinePackagesPageState extends State<_OfflinePackagesPage> {
+       _notice = 'جارٍ فحص نموذجَي $sourceLabel و$targetLabel…';
+     });
+     final result = await _translationService.prepareLanguagePair(
+-      sourceLanguageCode: 'ar',
++      sourceLanguageCode: sourceLanguage,
+       targetLanguageCode: targetLanguage,
+     );
+     if (!mounted) return;
+-- 
+2.43.0
+
+From d716b749488aac0bed47c748a57078fdb270a4d8 Mon Sep 17 00:00:00 2001
+From: magdymeko456-cell <2.88837127e+08+magdymeko456-cell@users.noreply.github.com>
+Date: Mon, 31 Aug 2026 05:07:33 +0000
+Subject: [PATCH 2/2] fix: share dialogue microphone and system voice settings
+
+---
+ lib/app/mirror_scorpion_app.dart     |   4 +
+ lib/features/feature_hub_screen.dart | 120 +++++++++++++++++++++++----
+ 2 files changed, 107 insertions(+), 17 deletions(-)
+
+diff --git a/lib/app/mirror_scorpion_app.dart b/lib/app/mirror_scorpion_app.dart
+index aa5c490..ea82492 100644
+--- a/lib/app/mirror_scorpion_app.dart
++++ b/lib/app/mirror_scorpion_app.dart
+@@ -7,6 +7,7 @@ import '../core/platform/android_overlay_service.dart';
+ import '../core/platform/shared_text_inbox.dart';
+ import '../core/speech/device_speech_recognition_service.dart';
+ import '../core/speech/elevenlabs_voice_service.dart';
++import '../core/speech/system_tts_service.dart';
+ import '../features/home/dashboard_screen.dart';
+ import 'royal_dark_theme.dart';
+ 
+@@ -30,6 +31,9 @@ class MirrorScorpionApp extends StatelessWidget {
+           value: languagePreferences ?? LanguagePreferences(),
+         ),
+         ChangeNotifierProvider(create: (_) => ElevenLabsVoiceService()),
++        ChangeNotifierProvider<SystemTtsService>(
++          create: (_) => SystemTtsService()..initialize(),
++        ),
+         ChangeNotifierProvider(create: (_) => RunwareVideoService()),
+         ChangeNotifierProvider(create: (_) => DeviceSpeechRecognitionService()),
+         ChangeNotifierProvider<AndroidOverlayService>.value(
+diff --git a/lib/features/feature_hub_screen.dart b/lib/features/feature_hub_screen.dart
+index 81bd86f..8ee159f 100644
+--- a/lib/features/feature_hub_screen.dart
++++ b/lib/features/feature_hub_screen.dart
+@@ -134,7 +134,7 @@ class _TranslationPanelState extends State<_TranslationPanel> {
+   final _input = TextEditingController();
+   final _output = TextEditingController();
+   final _translationService = const OnDeviceTranslationService();
+-  final _speechService = SystemTtsService();
++  late final SystemTtsService _speechService;
+   final _capabilityService = DeviceCapabilityService();
+   final _modelInstaller = WhisperModelInstaller();
+   final _audioTranscriber = AudioTranscriberService();
+@@ -159,8 +159,8 @@ class _TranslationPanelState extends State<_TranslationPanel> {
+   @override
+   void initState() {
+     super.initState();
++    _speechService = context.read<SystemTtsService>();
+     _speechService.addListener(_onSpeechChanged);
+-    _speechService.initialize();
+     _recognitionService.addListener(_onSpeechChanged);
+   }
+ 
+@@ -868,7 +868,7 @@ class _DialoguePanelState extends State<_DialoguePanel> {
+   final _source = TextEditingController();
+   final _translated = TextEditingController();
+   final _translationService = const OnDeviceTranslationService();
+-  final _speechService = SystemTtsService();
++  late final SystemTtsService _speechService;
+   Timer? _translationDebounce;
+   String _leftTargetLanguage = 'en';
+   String? _notice;
+@@ -885,8 +885,8 @@ class _DialoguePanelState extends State<_DialoguePanel> {
+   void initState() {
+     super.initState();
+     _recognitionService.addListener(_onServiceChanged);
++    _speechService = context.read<SystemTtsService>();
+     _speechService.addListener(_onServiceChanged);
+-    _speechService.initialize();
+   }
+ 
+   @override
+@@ -930,6 +930,7 @@ class _DialoguePanelState extends State<_DialoguePanel> {
+ 
+   Future<void> _swapDialogueSpeaker() async {
+     if (_isChangingSpeaker) return;
++    final shouldResumeMicrophone = _recognitionService.isListening;
+     setState(() {
+       _isChangingSpeaker = true;
+       _notice = 'جارٍ إنهاء جلسة المايك السابقة وتحديث لغة المتحدث…';
+@@ -951,34 +952,41 @@ class _DialoguePanelState extends State<_DialoguePanel> {
+         _notice = 'تبدّل المتحدث. لغة المايك الآن: ${TranslationLanguageCatalog.labels[currentSourceLang] ?? currentSourceLang}.';
+       });
+     } finally {
+-      if (mounted) setState(() => _isChangingSpeaker = false);
++      if (mounted) {
++        setState(() => _isChangingSpeaker = false);
++        if (shouldResumeMicrophone) {
++          await _startMicrophoneForCurrentSpeaker();
++        }
++      }
+     }
+   }
+ 
+   Future<void> _toggleMicrophone() async {
+-    setState(() => _notice = 'جارٍ تفعيل المايك واستماع الصوت...');
+     if (_isChangingSpeaker) return;
+     if (_recognitionService.isListening) {
+-      await _recognitionService.stop();
++      await _recognitionService.stopAndWait();
+       if (mounted && _recognitionService.message != null) {
+         setState(() => _notice = _recognitionService.message);
+       }
+       return;
+     }
++    await _startMicrophoneForCurrentSpeaker();
++  }
+ 
++  Future<void> _startMicrophoneForCurrentSpeaker() async {
++    if (_isChangingSpeaker || !mounted) return;
++    setState(() => _notice = 'جارٍ تفعيل المايك واستماع الصوت...');
+     try {
+-      await _recognitionService.cancelAndWait();
++      if (!await _recognitionService.cancelAndWait()) return;
+       await _speechService.stop();
+       if (!mounted) return;
+-
+       _beginFreshDialogueIfNeeded();
+ 
+       final preferences = context.read<LanguagePreferences>();
+       final sourceLanguage = _sourceUsesDeviceLanguage
+           ? preferences.deviceLanguageCode
+           : _leftTargetLanguage;
+-
+-      await _recognitionService.start(
++      final started = await _recognitionService.start(
+         languageCode: sourceLanguage,
+         onText: (recognizedText) {
+           if (!mounted) return;
+@@ -989,14 +997,25 @@ class _DialoguePanelState extends State<_DialoguePanel> {
+           );
+         },
+       );
+-
+-      if (mounted) {
+-        setState(() => _notice = _recognitionService.message);
++      if (!started && mounted) {
++        await Future<void>.delayed(const Duration(milliseconds: 450));
++        if (mounted && !_recognitionService.isListening) {
++          await _recognitionService.start(
++            languageCode: sourceLanguage,
++            onText: (recognizedText) {
++              if (!mounted) return;
++              _source.text = recognizedText;
++              _queueTranslation(
++                recognizedText,
++                sourceLanguageCode: sourceLanguage,
++              );
++            },
++          );
++        }
+       }
++      if (mounted) setState(() => _notice = _recognitionService.message);
+     } catch (e) {
+-      if (mounted) {
+-        setState(() => _notice = 'تعذر تشغيل المايك: $e');
+-      }
++      if (mounted) setState(() => _notice = 'تعذر تشغيل المايك: $e');
+     }
+   }
+ 
+@@ -3073,6 +3092,53 @@ class _CapturedPiecesPane extends StatelessWidget {
+   }
+ }
+ 
++class _SystemVoiceSettingsPage extends StatelessWidget {
++  const _SystemVoiceSettingsPage();
++
++  @override
++  Widget build(BuildContext context) {
++    return Consumer<SystemTtsService>(
++      builder: (context, service, _) => Scaffold(
++        appBar: AppBar(title: const Text('أصوات الترجمة والحوار')),
++        body: ListView(
++          padding: const EdgeInsets.all(18),
++          children: [
++            const _SectionNotice(
++              title: 'اختيار صوت موحّد',
++              detail: 'ينطبق الاختيار على نطق الترجمة ونطق الحوار والملفات الصوتية التي يستخدمها صوت النظام. الأسماء التالية ملفات أداء محلية؛ الصوت البشري الفعلي يعتمد على محرك Android المثبت.',
++            ),
++            const SizedBox(height: 14),
++            ...SystemVoiceProfile.values.map(
++              (profile) => Card(
++                child: RadioListTile<SystemVoiceProfile>(
++                  value: profile,
++                  groupValue: service.selectedProfile,
++                  title: Text(profile.label),
++                  subtitle: Text(profile.styleDescription),
++                  activeColor: RoyalColors.gold,
++                  onChanged: (value) {
++                    if (value != null) service.selectProfile(value);
++                  },
++                ),
++              ),
++            ),
++            const SizedBox(height: 12),
++            const Card(
++              child: Padding(
++                padding: EdgeInsets.all(16),
++                child: Text(
++                  'صوت المستخدم المنسوخ يحتاج مسار موافقة وتسجيل وتحقق منفصل. لن يُعرض كصوت فعّال قبل اكتمال هذا المسار، حفاظاً على الخصوصية وعدم الإيحاء بأن ElevenLabs يعمل حالياً.',
++                  style: TextStyle(height: 1.6),
++                ),
++              ),
++            ),
++          ],
++        ),
++      ),
++    );
++  }
++}
++
+ class _SettingsPanel extends StatelessWidget {
+   const _SettingsPanel();
+ 
+@@ -3110,6 +3176,26 @@ class _SettingsPanel extends StatelessWidget {
+             ),
+           ),
+           const SizedBox(height: 12),
++          Card(
++            child: ListTile(
++              leading: const Icon(
++                Icons.tune,
++                color: RoyalColors.cyan,
++              ),
++              title: const Text('إعدادات أصوات الترجمة والحوار'),
++              subtitle: const Text(
++                'اختيار ملف أداء محلي مشترك للترجمة والحوار بصوت Android المثبت.',
++              ),
++              trailing: const Icon(Icons.chevron_left),
++              onTap: () => Navigator.push(
++                context,
++                MaterialPageRoute<void>(
++                  builder: (_) => const _SystemVoiceSettingsPage(),
++                ),
++              ),
++            ),
++          ),
++          const SizedBox(height: 12),
+           Card(
+             child: ListTile(
+               leading: const Icon(
+-- 
+2.43.0

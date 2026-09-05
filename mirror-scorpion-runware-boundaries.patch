@@ -1,0 +1,951 @@
+From 3c3b430eed57a039643f1cbd5700ac8775d6db85 Mon Sep 17 00:00:00 2001
+From: magdymeko456-cell
+ <2.88837127e+08+magdymeko456-cell@users.noreply.github.com>
+Date: Wed, 26 Aug 2026 03:41:20 +0000
+Subject: [PATCH] feat(video): replace Fal scaffold with Runware boundaries
+
+---
+ .github/workflows/build_apk.yml               |  6 +-
+ ...re-video-activation-contract-2026-08-26.md | 51 ++++++++++
+ ...cription-boundaries-contract-2026-08-25.md | 16 ++++
+ ...pi-subscription-budget-study-2026-08-25.md | 40 ++++++++
+ functions/index.js                            | 12 +--
+ functions/package.json                        |  2 +-
+ functions/src/fal_video_gateway.js            | 56 -----------
+ functions/src/runware_video_gateway.js        | 70 ++++++++++++++
+ functions/test/entrypoint.test.js             |  2 +-
+ functions/test/fal_video_gateway.test.js      | 48 ----------
+ functions/test/runware_video_gateway.test.js  | 62 ++++++++++++
+ lib/app/mirror_scorpion_app.dart              |  4 +-
+ lib/core/media/fal_video_service.dart         | 54 -----------
+ lib/core/media/runware_video_service.dart     | 64 +++++++++++++
+ lib/features/feature_hub_screen.dart          | 35 +++----
+ .../subscription_boundaries_card.dart         | 94 +++++++++++++++++++
+ test/fal_video_service_test.dart              | 31 ------
+ test/runware_video_service_test.dart          | 34 +++++++
+ todo.md                                       |  5 +
+ 19 files changed, 468 insertions(+), 218 deletions(-)
+ create mode 100644 docs/runware-video-activation-contract-2026-08-26.md
+ create mode 100644 docs/subscription-boundaries-contract-2026-08-25.md
+ create mode 100644 docs/video-api-subscription-budget-study-2026-08-25.md
+ delete mode 100644 functions/src/fal_video_gateway.js
+ create mode 100644 functions/src/runware_video_gateway.js
+ delete mode 100644 functions/test/fal_video_gateway.test.js
+ create mode 100644 functions/test/runware_video_gateway.test.js
+ delete mode 100644 lib/core/media/fal_video_service.dart
+ create mode 100644 lib/core/media/runware_video_service.dart
+ create mode 100644 lib/features/subscription_boundaries_card.dart
+ delete mode 100644 test/fal_video_service_test.dart
+ create mode 100644 test/runware_video_service_test.dart
+
+diff --git a/.github/workflows/build_apk.yml b/.github/workflows/build_apk.yml
+index aeecfbf..6eb4021 100644
+--- a/.github/workflows/build_apk.yml
++++ b/.github/workflows/build_apk.yml
+@@ -29,10 +29,10 @@ jobs:
+             echo "ElevenLabs credentials or direct provider calls must not be present in Flutter code."
+             exit 1
+           fi
+-      - name: Verify Fal secret stays outside the APK
++      - name: Verify Runware secret stays outside the APK
+         run: |
+-          if grep -R -nE 'FAL_API_KEY|queue\.fal\.run|api\.fal\.ai|fal\.run' lib test; then
+-            echo "Fal credentials or direct provider calls must not be present in Flutter code."
++          if grep -R -nE 'RUNWARE_API_KEY|api\.runware\.ai|runware\.ai/v1|videoInference' lib test; then
++            echo "Runware credentials or direct provider calls must not be present in Flutter code."
+             exit 1
+           fi
+       - uses: subosito/flutter-action@v2
+diff --git a/docs/runware-video-activation-contract-2026-08-26.md b/docs/runware-video-activation-contract-2026-08-26.md
+new file mode 100644
+index 0000000..8d84ce3
+--- /dev/null
++++ b/docs/runware-video-activation-contract-2026-08-26.md
+@@ -0,0 +1,51 @@
++# عقد تفعيل فيديو Runware
++
++**تاريخ العقد:** 26 أغسطس 2026
++**الحالة:** تصميم غير نشط؛ لا مفتاح، لا رصيد، لا حساب إنتاجي، ولا طلب شبكي من التطبيق.
++
++## الهدف
++
++يعتمد Mirror Scorpion على **Runware** كمزود فيديو مرشح لتطبيق منشور. لا يتصل Flutter بـRunware ولا يحتوي APK على مفتاح. لا يبدأ خادم Firebase أي طلب إلا بعد تحقق المصادقة والموافقة والحد المالي. [1] [2]
++
++| الحقل | قاعدة التفعيل المستقبلية |
++|---|---|
++| نوع المهمة | `videoInference` فقط. [1] |
++| المعرّف | ينشئه الخادم UUID v4؛ لا يثق بمعرّف من التطبيق. |
++| التسليم | `deliveryMethod: async` مع polling أو webhook للنتيجة. [2] |
++| النموذج | يختاره الخادم من قائمة معتمدة بعد مراجعة السعر والرخصة. |
++| التكلفة | يطلب الخادم `includeCost: true` ويسجل التكلفة الفعلية؛ لا يعرض التطبيق سعراً ثابتاً. [1] |
++| الناتج | MP4 فقط في التجربة الأولى؛ رابط مؤقت ثم تخزين معتمد أو حذف. |
++| البيانات | نص القصة المختار فقط؛ لا صور ولا أصوات ولا وجوه ولا بيانات شخصية في المرحلة الأولى. |
++
++## الحالات والإلغاء الصادق
++
++تسجل الوظيفة الحالات `draft` و`awaitingConsent` و`rejected` و`queued` و`processing` و`completed` و`failed` و`cancelRequested` و`discardOnArrival` و`deleted`.
++
++> لا تتعهد الواجهة بإلغاء حوسبة Runware بعد إرسال المهمة؛ توثق المراجع المراجعة التسليم غير المتزامن وpolling وwebhook، لا نقطة إلغاء عامة. لذلك يلغي التطبيق قبل الإرسال، أو يضع `discardOnArrival` بعد الإرسال فلا يعرض الناتج ويزيل مرجعه فور وصوله. [2]
++
++## الخصوصية والاحتفاظ
++
++تذكر وثائق Runware أن مخرجات الروابط تبقى 7 أيام افتراضياً ويمكن ضبط `ttl` في الطلب. ستختبر قيمة TTL قصيرة قبل أي تشغيل عام، ولا يحفظ ملف دائماً إلا بعد اعتماد تخزين مستقل. [1]
++
++يعرض التطبيق قبل الإرسال نص القصة المحدد واسم Runware وحقيقة أن الفيديو مولّد آلياً وصيغة الموافقة وعدم ضمان إلغاء الحوسبة بعد البدء. لا يرسل شيئاً عند غياب الإيصال أو إذا كانت الحصة اليومية أو الشهرية صفراً.
++
++## الحدود الحالية
++
++| البند | الحالة الحالية |
++|---|---|
++| اشتراك API | لا يوجد؛ Runware PAYG بلا اشتراك أو حد أدنى. [3] |
++| ميزانية المالك | 0 حتى اعتماد صريح. |
++| حد المستخدم اليومي | 0 حتى اعتماد صريح. |
++| فيديو غير محدود | غير متاح؛ كل فيديو له تكلفة وفق النموذج والمدة والدقة. [3] |
++| التجديد التلقائي | غير مفعّل. |
++| المفتاح | غير موجود في APK أو المستودع. |
++
++## مسار التفعيل اللاحق
++
++يحدد المالك السقف الشهري والحصة اليومية والمدة والدقة والمنطقة والاحتفاظ، ثم يعتمد نموذجاً وسعراً، ويضع `RUNWARE_API_KEY` كسراً خادمياً فقط. بعد نشر Firebase بموافقة مستقلة، ينفذ اختبار مالك واحد بموافقة وسجل تكلفة، ثم يختبر الحذف والفشل والحدود على Android قبل الإتاحة العامة.
++
++## المراجع
++
++[1]: https://runware.ai/docs/platform/introduction "Runware platform introduction — tasks, cost, TTL and output retention"
++[2]: https://runware.ai/video-generation-api "Runware video generation API — async delivery, polling and webhooks"
++[3]: https://runware.ai/pricing "Runware pricing — pay as you go"
+diff --git a/docs/subscription-boundaries-contract-2026-08-25.md b/docs/subscription-boundaries-contract-2026-08-25.md
+new file mode 100644
+index 0000000..93cafe0
+--- /dev/null
++++ b/docs/subscription-boundaries-contract-2026-08-25.md
+@@ -0,0 +1,16 @@
++# عقد حدود الاشتراك والخدمات
++
++**الحالة:** واجهة توضيحية فقط؛ لا يوجد شراء أو تجديد تلقائي أو سعر معتمد داخل التطبيق.
++
++تشرح بطاقة الإعدادات الحدود الفعلية بدلاً من تسويق خدمة غير مفعّلة. لا تكتب كلمة «غير محدود» للفيديو، ولا تعرض سعراً سنوياً أو زر شراء ما لم يوجد عقد موثق وتمويل وسياسة متجر واضحة.
++
++| القسم | ما يظهر للمستخدم | الحد الحقيقي |
++|---|---|---|
++| الأساسي المحلي | المحتوى المرخص وأصوات Android والترجمة على الجهاز حيث تتاح النماذج. | لا يعتمد على API فيديو أو رصيد سحابي. |
++| PRO الموقّع | التحقق من رمز تفعيل موقع. | لا يشتري ولا يفتح خدمة فيديو تلقائياً. |
++| فيديو Runware | «غير مفعّل — 0 مقطع يومياً». | لا مفتاح ولا رصيد ولا إرسال بيانات قبل قرار المالك. |
++| استوديو الصوت | «غير مفعّل». | نسخ الصوت وتصدير MP3 يحتاجان موافقة ومزوداً وميزانية منفصلين. |
++
++> لا تساوي نسخة PRO اشتراكاً سحابياً. ويتطلب كل مزود سحابي موافقة منفصلة وسجلاً للحصة والتكلفة والاحتفاظ والحذف.
++
++يظل زر التفعيل الموقّع خاصاً بالرمز المحلي/الخادمي. ولا يظهر دفع فعلي أو تجديد أو حد فيديو موجب إلا بعد اعتماد المالك للسقف وسياسة الخصوصية والاحتفاظ.
+diff --git a/docs/video-api-subscription-budget-study-2026-08-25.md b/docs/video-api-subscription-budget-study-2026-08-25.md
+new file mode 100644
+index 0000000..ce1baba
+--- /dev/null
++++ b/docs/video-api-subscription-budget-study-2026-08-25.md
+@@ -0,0 +1,40 @@
++# دراسة ميزانية API الفيديو وخطة الاشتراك
++
++**تاريخ الدراسة:** 25 أغسطس 2026
++**السقف الذي طُرح للنقاش:** لا يزيد عن **20 دولاراً سنوياً** مع فيديو غير محدود لتطبيق منشور.
++
++## النتيجة التنفيذية
++
++لم أجد خطة موثقة تجمع بين API صالح لتطبيق منشور، وسقف أقل من 20 دولاراً سنوياً، وفيديو غير محدود فعلاً. الفيديو التوليدي يحاسب بالرصيد أو الطلب أو الحوسبة؛ واستخدام كلمة «غير محدود» في منتج استهلاكي لا يثبت حق API أو إعادة البيع أو تكلفة صفرية لكل المستخدمين. [1] [2] [3] [4]
++
++> لا يجوز عرض «فيديو غير محدود» في Mirror Scorpion ما لم ينص عقد API صراحةً على ذلك ويغطي التطبيق المنشور. لا تثبت المصادر المراجعة هذا الشرط ضمن السقف المقترح.
++
++| المزود | نموذج التكلفة المنشور | هل يحقق 20$/سنة وغير محدود؟ | القرار |
++|---|---|---:|---|
++| **Runware** | PAYG بلا اشتراك أو حد أدنى؛ الفيديو بحسب الاستخدام. [1] [2] | لا | المزود المختار مبدئياً، خلف Firebase فقط وبحد صفر حتى اعتماد الميزانية. |
++| Fal | تسعير بحسب مخرج/مدة النموذج. [3] | لا | مسار مستبدل؛ لا يستخدم في الواجهة أو البوابة. |
++| Pika API Club | عضوية شهرية ثم استهلاك PAYG. [4] | لا | غير مناسب للسقف. |
++| Runway API | أرصدة لكل توليد. [5] | لا | غير مناسب لاشتراك غير محدود منخفض التكلفة. |
++
++## قرار المنتج الحالي
++
++Runware هو **المزود المختار مبدئياً** لأنه يوفر مسار API بالفوترة حسب الاستخدام، وليس لأنه يحقق سقفاً ثابتاً أو فيديو غير محدود. لا شراء ولا رصيد ولا حساب إنتاجي ولا مفتاح ولا نشر Firebase في هذه المرحلة.
++
++| الحقل في الإعدادات | القيمة الحالية الصادقة |
++|---|---|
++| حالة الفيديو السحابي | غير مفعّل. |
++| المزود المرشح | Runware، خلف خادم Firebase وليس داخل APK. |
++| حد الفيديو | 0 مقطع حتى اعتماد الخطة والسقف. |
++| التجديد | لا يوجد؛ لا تجديد تلقائي. |
++| نسخ صوت المستخدم | غير مفعّل حتى موافقة وميزانية منفصلتين. |
++| طريق الترقية | بعد اعتماد مزود وخطة وخصوصية وامتثال متجر ودفع. |
++
++لا يبدأ التشغيل إلا بعد أن يحدد المالك عدداً صريحاً للسقف الشهري/السنوي والحصة اليومية والمدة والدقة والمنطقة ومدة الاحتفاظ. قبل ذلك، يبقى اختبار الجاهزية محلياً ولا يرسل نصاً أو صورة أو صوتاً.
++
++## المراجع
++
++[1]: https://runware.ai/pricing "Runware pricing — pay as you go"
++[2]: https://runware.ai/video-generation-api "Runware video generation API"
++[3]: https://fal.ai/pricing "Fal pricing"
++[4]: https://pika.art/api "Pika API Club"
++[5]: https://docs.dev.runwayml.com/guides/pricing/ "Runway API pricing"
+diff --git a/functions/index.js b/functions/index.js
+index 4ba55d0..a1b042e 100644
+--- a/functions/index.js
++++ b/functions/index.js
+@@ -4,7 +4,7 @@ const { initializeApp } = require("firebase-admin/app");
+ 
+ const { buildHealthResponse } = require("./src/health");
+ const { buildElevenLabsGatewayStatus } = require("./src/elevenlabs_gateway");
+-const { buildFalVideoGatewayStatus } = require("./src/fal_video_gateway");
++const { buildRunwareVideoGatewayStatus } = require("./src/runware_video_gateway");
+ 
+ // تعتمد Cloud Functions على هوية بيئة التشغيل الافتراضية.
+ // لا تُضف serviceAccountKey.json أو أي مفتاح خاص إلى المشروع.
+@@ -41,17 +41,17 @@ exports.elevenLabsGatewayStatus = onCall({ region: "us-central1" }, (request) =>
+   return response;
+ });
+ 
+-// لا ينفذ هذا المسار أي طلب فيديو. لا يُفعل Fal إلا بعد سقف مالي صريح
++// لا ينفذ هذا المسار أي طلب فيديو. لا يُفعل Runware إلا بعد سقف مالي صريح
+ // ومفتاح مخزن في الخادم وموافقة مرئية قابلة للتدقيق لكل طلب.
+-exports.falVideoGatewayStatus = onCall({ region: "us-central1" }, (request) => {
+-  const response = buildFalVideoGatewayStatus({
++exports.runwareVideoGatewayStatus = onCall({ region: "us-central1" }, (request) => {
++  const response = buildRunwareVideoGatewayStatus({
+     authenticated: request.auth != null,
+-    hasApiKey: Boolean(process.env.FAL_API_KEY),
++    hasApiKey: Boolean(process.env.RUNWARE_API_KEY),
+     monthlyCapUsd: 0,
+     dailyJobLimit: 0,
+   });
+ 
+-  logger.info("Mirror Scorpion Fal video gateway status checked", {
++  logger.info("Mirror Scorpion Runware video gateway status checked", {
+     authenticated: response.authenticated,
+     enabled: response.enabled,
+   });
+diff --git a/functions/package.json b/functions/package.json
+index cdf0769..a34e058 100644
+--- a/functions/package.json
++++ b/functions/package.json
+@@ -8,7 +8,7 @@
+     "node": "22"
+   },
+   "scripts": {
+-    "check": "node --check index.js && node --check src/health.js && node --check src/elevenlabs_gateway.js && node --check src/fal_video_gateway.js",
++    "check": "node --check index.js && node --check src/health.js && node --check src/elevenlabs_gateway.js && node --check src/runware_video_gateway.js",
+     "test": "node --test test/*.test.js",
+     "verify": "npm run check && npm run test"
+   },
+diff --git a/functions/src/fal_video_gateway.js b/functions/src/fal_video_gateway.js
+deleted file mode 100644
+index 1554256..0000000
+--- a/functions/src/fal_video_gateway.js
++++ /dev/null
+@@ -1,56 +0,0 @@
+-const falVideoGatewayMode = 'disabled-by-default';
+-const falVideoModel = 'fal-ai/wan-25-preview/text-to-video';
+-const falVideoDurationSeconds = 5;
+-const falVideoResolution = '480p';
+-
+-function buildFalVideoGatewayStatus({
+-  authenticated = false,
+-  hasApiKey = false,
+-  monthlyCapUsd = 0,
+-  dailyJobLimit = 0,
+-} = {}) {
+-  return {
+-    provider: 'Fal',
+-    gatewayMode: falVideoGatewayMode,
+-    model: falVideoModel,
+-    enabled: false,
+-    externalCallsAllowed: false,
+-    authenticated,
+-    hasApiKey,
+-    monthlyCapUsd,
+-    dailyJobLimit,
+-    message:
+-      'Fal video gateway is intentionally disabled. No story, image, audio, or video is sent to Fal.',
+-  };
+-}
+-
+-function validateFutureFalVideoRequest({
+-  gatewayEnabled = false,
+-  hasApiKey = false,
+-  userId,
+-  consentReceiptId,
+-  quotaRemaining = 0,
+-  durationSeconds = falVideoDurationSeconds,
+-  resolution = falVideoResolution,
+-} = {}) {
+-  if (!gatewayEnabled) return { allowed: false, code: 'GATEWAY_DISABLED' };
+-  if (!hasApiKey) return { allowed: false, code: 'SERVER_SECRET_MISSING' };
+-  if (typeof userId !== 'string' || userId.length === 0) {
+-    return { allowed: false, code: 'AUTH_REQUIRED' };
+-  }
+-  if (!consentReceiptId) return { allowed: false, code: 'CONSENT_REQUIRED' };
+-  if (quotaRemaining <= 0) return { allowed: false, code: 'QUOTA_EXHAUSTED' };
+-  if (durationSeconds !== falVideoDurationSeconds || resolution !== falVideoResolution) {
+-    return { allowed: false, code: 'TRIAL_SCOPE_EXCEEDED' };
+-  }
+-  return { allowed: true, code: 'APPROVED_FOR_PROVIDER_CALL' };
+-}
+-
+-module.exports = {
+-  buildFalVideoGatewayStatus,
+-  falVideoDurationSeconds,
+-  falVideoGatewayMode,
+-  falVideoModel,
+-  falVideoResolution,
+-  validateFutureFalVideoRequest,
+-};
+diff --git a/functions/src/runware_video_gateway.js b/functions/src/runware_video_gateway.js
+new file mode 100644
+index 0000000..d08891c
+--- /dev/null
++++ b/functions/src/runware_video_gateway.js
+@@ -0,0 +1,70 @@
++const runwareVideoGatewayMode = 'disabled-by-owner-policy';
++const runwareTaskType = 'videoInference';
++const runwareDeliveryMethod = 'async';
++const runwareOutputFormat = 'MP4';
++
++function buildRunwareVideoGatewayStatus({
++  authenticated = false,
++  hasApiKey = false,
++  monthlyCapUsd = 0,
++  dailyJobLimit = 0,
++} = {}) {
++  return {
++    provider: 'Runware',
++    gatewayMode: runwareVideoGatewayMode,
++    taskType: runwareTaskType,
++    deliveryMethod: runwareDeliveryMethod,
++    outputFormat: runwareOutputFormat,
++    model: null,
++    enabled: false,
++    externalCallsAllowed: false,
++    authenticated,
++    hasApiKey,
++    monthlyCapUsd,
++    dailyJobLimit,
++    retentionPolicy: 'UNDECIDED',
++    cancellationPolicy: 'NO_PROVIDER_CANCELLATION_CLAIM',
++    message:
++      'Runware video gateway is intentionally disabled. No story, image, audio, or video is sent to Runware.',
++  };
++}
++
++function validateFutureRunwareVideoRequest({
++  gatewayEnabled = false,
++  hasApiKey = false,
++  userId,
++  consentReceiptId,
++  quotaRemaining = 0,
++  taskType = runwareTaskType,
++  deliveryMethod = runwareDeliveryMethod,
++  outputFormat = runwareOutputFormat,
++  inputKind = 'text-only',
++} = {}) {
++  if (!gatewayEnabled) return { allowed: false, code: 'GATEWAY_DISABLED' };
++  if (!hasApiKey) return { allowed: false, code: 'SERVER_SECRET_MISSING' };
++  if (typeof userId !== 'string' || userId.trim().isEmpty) {
++    return { allowed: false, code: 'AUTH_REQUIRED' };
++  }
++  if (typeof consentReceiptId !== 'string' || consentReceiptId.trim().isEmpty) {
++    return { allowed: false, code: 'CONSENT_REQUIRED' };
++  }
++  if (!Number.isInteger(quotaRemaining) || quotaRemaining <= 0) {
++    return { allowed: false, code: 'QUOTA_EXHAUSTED' };
++  }
++  if (taskType !== runwareTaskType || deliveryMethod !== runwareDeliveryMethod) {
++    return { allowed: false, code: 'ASYNC_TASK_CONTRACT_REQUIRED' };
++  }
++  if (outputFormat !== runwareOutputFormat || inputKind !== 'text-only') {
++    return { allowed: false, code: 'POLICY_SCOPE_EXCEEDED' };
++  }
++  return { allowed: true, code: 'APPROVED_FOR_SERVER_QUEUING_ONLY' };
++}
++
++module.exports = {
++  buildRunwareVideoGatewayStatus,
++  runwareDeliveryMethod,
++  runwareOutputFormat,
++  runwareTaskType,
++  runwareVideoGatewayMode,
++  validateFutureRunwareVideoRequest,
++};
+diff --git a/functions/test/entrypoint.test.js b/functions/test/entrypoint.test.js
+index b89446a..05583a6 100644
+--- a/functions/test/entrypoint.test.js
++++ b/functions/test/entrypoint.test.js
+@@ -6,5 +6,5 @@ test("Functions entrypoint loads safe callables without a service-account file",
+ 
+   assert.equal(typeof functions.healthCheck, "function");
+   assert.equal(typeof functions.elevenLabsGatewayStatus, "function");
+-  assert.equal(typeof functions.falVideoGatewayStatus, "function");
++  assert.equal(typeof functions.runwareVideoGatewayStatus, "function");
+ });
+diff --git a/functions/test/fal_video_gateway.test.js b/functions/test/fal_video_gateway.test.js
+deleted file mode 100644
+index 52a5fdd..0000000
+--- a/functions/test/fal_video_gateway.test.js
++++ /dev/null
+@@ -1,48 +0,0 @@
+-const assert = require('node:assert/strict');
+-const test = require('node:test');
+-
+-const {
+-  buildFalVideoGatewayStatus,
+-  falVideoGatewayMode,
+-  validateFutureFalVideoRequest,
+-} = require('../src/fal_video_gateway');
+-
+-test('Fal gateway stays disabled even if a future secret and quota exist', () => {
+-  const status = buildFalVideoGatewayStatus({
+-    authenticated: true,
+-    hasApiKey: true,
+-    monthlyCapUsd: 25,
+-    dailyJobLimit: 2,
+-  });
+-
+-  assert.equal(status.gatewayMode, falVideoGatewayMode);
+-  assert.equal(status.enabled, false);
+-  assert.equal(status.externalCallsAllowed, false);
+-  assert.match(status.message, /No story, image, audio, or video is sent/);
+-});
+-
+-test('Fal rejects a future request before any provider condition when disabled', () => {
+-  const result = validateFutureFalVideoRequest({
+-    gatewayEnabled: false,
+-    hasApiKey: true,
+-    userId: 'owner-1',
+-    consentReceiptId: 'consent-1',
+-    quotaRemaining: 1,
+-  });
+-
+-  assert.deepEqual(result, { allowed: false, code: 'GATEWAY_DISABLED' });
+-});
+-
+-test('Fal future request is constrained to the reviewed trial format', () => {
+-  const result = validateFutureFalVideoRequest({
+-    gatewayEnabled: true,
+-    hasApiKey: true,
+-    userId: 'owner-1',
+-    consentReceiptId: 'consent-1',
+-    quotaRemaining: 1,
+-    durationSeconds: 10,
+-    resolution: '720p',
+-  });
+-
+-  assert.deepEqual(result, { allowed: false, code: 'TRIAL_SCOPE_EXCEEDED' });
+-});
+diff --git a/functions/test/runware_video_gateway.test.js b/functions/test/runware_video_gateway.test.js
+new file mode 100644
+index 0000000..24dec29
+--- /dev/null
++++ b/functions/test/runware_video_gateway.test.js
+@@ -0,0 +1,62 @@
++const assert = require('node:assert/strict');
++const test = require('node:test');
++
++const {
++  buildRunwareVideoGatewayStatus,
++  runwareDeliveryMethod,
++  runwareOutputFormat,
++  runwareTaskType,
++  runwareVideoGatewayMode,
++  validateFutureRunwareVideoRequest,
++} = require('../src/runware_video_gateway');
++
++test('Runware gateway remains disabled even if a future secret and quota are present', () => {
++  const status = buildRunwareVideoGatewayStatus({
++    authenticated: true,
++    hasApiKey: true,
++    monthlyCapUsd: 25,
++    dailyJobLimit: 2,
++  });
++
++  assert.equal(status.provider, 'Runware');
++  assert.equal(status.gatewayMode, runwareVideoGatewayMode);
++  assert.equal(status.taskType, runwareTaskType);
++  assert.equal(status.deliveryMethod, runwareDeliveryMethod);
++  assert.equal(status.outputFormat, runwareOutputFormat);
++  assert.equal(status.enabled, false);
++  assert.equal(status.externalCallsAllowed, false);
++  assert.match(status.message, /No story, image, audio, or video is sent/);
++});
++
++test('Runware rejects a request before every provider-side condition while disabled', () => {
++  const result = validateFutureRunwareVideoRequest({
++    gatewayEnabled: false,
++    hasApiKey: true,
++    userId: 'owner-1',
++    consentReceiptId: 'consent-1',
++    quotaRemaining: 1,
++  });
++
++  assert.deepEqual(result, { allowed: false, code: 'GATEWAY_DISABLED' });
++});
++
++test('Runware future task requires explicit consent, a positive quota, async delivery, MP4, and text-only input', () => {
++  const noConsent = validateFutureRunwareVideoRequest({
++    gatewayEnabled: true,
++    hasApiKey: true,
++    userId: 'owner-1',
++    quotaRemaining: 1,
++  });
++  assert.deepEqual(noConsent, { allowed: false, code: 'CONSENT_REQUIRED' });
++
++  const wrongScope = validateFutureRunwareVideoRequest({
++    gatewayEnabled: true,
++    hasApiKey: true,
++    userId: 'owner-1',
++    consentReceiptId: 'consent-1',
++    quotaRemaining: 1,
++    deliveryMethod: 'sync',
++    inputKind: 'image',
++  });
++  assert.deepEqual(wrongScope, { allowed: false, code: 'ASYNC_TASK_CONTRACT_REQUIRED' });
++});
+diff --git a/lib/app/mirror_scorpion_app.dart b/lib/app/mirror_scorpion_app.dart
+index 6a389d4..b26f19a 100644
+--- a/lib/app/mirror_scorpion_app.dart
++++ b/lib/app/mirror_scorpion_app.dart
+@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
+ import 'package:provider/provider.dart';
+ 
+ import '../core/localization/language_preferences.dart';
+-import '../core/media/fal_video_service.dart';
++import '../core/media/runware_video_service.dart';
+ import '../core/speech/elevenlabs_voice_service.dart';
+ import '../features/home/dashboard_screen.dart';
+ import 'royal_dark_theme.dart';
+@@ -20,7 +20,7 @@ class MirrorScorpionApp extends StatelessWidget {
+           value: languagePreferences ?? LanguagePreferences(),
+         ),
+         ChangeNotifierProvider(create: (_) => ElevenLabsVoiceService()),
+-        ChangeNotifierProvider(create: (_) => FalVideoService()),
++        ChangeNotifierProvider(create: (_) => RunwareVideoService()),
+       ],
+       child: Builder(
+         builder: (context) {
+diff --git a/lib/core/media/fal_video_service.dart b/lib/core/media/fal_video_service.dart
+deleted file mode 100644
+index 0df9e08..0000000
+--- a/lib/core/media/fal_video_service.dart
++++ /dev/null
+@@ -1,54 +0,0 @@
+-import 'package:flutter/foundation.dart';
+-
+-class FalVideoPreflight {
+-  const FalVideoPreflight({
+-    required this.allowed,
+-    required this.code,
+-    required this.message,
+-  });
+-
+-  final bool allowed;
+-  final String code;
+-  final String message;
+-}
+-
+-/// واجهة Fal في التطبيق لا تتصل بالشبكة.
+-/// يبقى طلب الفيديو في الخادم فقط بعد اعتماد حد مالي ومفتاح وموافقة.
+-class FalVideoService extends ChangeNotifier {
+-  static const providerName = 'Fal';
+-  static const modelId = 'fal-ai/wan-25-preview/text-to-video';
+-  static const maxDurationSeconds = 5;
+-  static const resolution = '480p';
+-
+-  bool get enabled => false;
+-  bool get externalCallsAllowed => false;
+-
+-  String get statusMessage =>
+-      'Fal مُعد كتجربة فيديو قصيرة ($maxDurationSeconds ثوانٍ، $resolution) '
+-      'لكنه مغلق الآن: لا مفتاح، لا حصة مالية، ولا تُرسل قصة أو صورة خارج الجهاز.';
+-
+-  FalVideoPreflight prepareStoryVideo({
+-    required String draft,
+-    required bool hasExplicitConsent,
+-  }) {
+-    if (draft.trim().isEmpty) {
+-      return const FalVideoPreflight(
+-        allowed: false,
+-        code: 'STORY_REQUIRED',
+-        message: 'اكتب مسودة القصة أولاً قبل طلب فيديو.',
+-      );
+-    }
+-    if (!hasExplicitConsent) {
+-      return const FalVideoPreflight(
+-        allowed: false,
+-        code: 'CONSENT_REQUIRED',
+-        message: 'أكّد موافقتك الصريحة على إرسال النص المختار قبل أي خدمة فيديو مستقبلية.',
+-      );
+-    }
+-    return FalVideoPreflight(
+-      allowed: false,
+-      code: 'GATEWAY_DISABLED',
+-      message: '$statusMessage لا يمكن إنشاء فيديو أو احتساب تكلفة في هذا الإصدار.',
+-    );
+-  }
+-}
+diff --git a/lib/core/media/runware_video_service.dart b/lib/core/media/runware_video_service.dart
+new file mode 100644
+index 0000000..8e1d3ca
+--- /dev/null
++++ b/lib/core/media/runware_video_service.dart
+@@ -0,0 +1,64 @@
++import 'package:flutter/foundation.dart';
++
++class RunwareVideoPreflight {
++  const RunwareVideoPreflight({
++    required this.allowed,
++    required this.code,
++    required this.message,
++  });
++
++  final bool allowed;
++  final String code;
++  final String message;
++}
++
++/// حالة خطة الخدمات السحابية المعروضة للمستخدم.
++/// لا تمثل اشتراكاً مشتَرى أو خدمة إنتاجية مفعّلة.
++abstract final class SubscriptionBoundaries {
++  static const localPlan = 'الأساسي المحلي';
++  static const signedProPlan = 'PRO الموقّع';
++  static const cloudVideoPlan = 'فيديو Runware السحابي';
++  static const audioStudioPlan = 'استوديو الصوت';
++  static const cloudVideoLimit = '0 مقطع يومياً حتى يعتمد المالك خطة ومفتاحاً وحداً مالياً.';
++}
++
++/// واجهة Runware في التطبيق لا تتصل بالشبكة ولا تحتوي مفتاحاً.
++/// يتصل الخادم فقط بعد اعتماد سقف الإنفاق والموافقة والمفتاح الخادمي.
++class RunwareVideoService extends ChangeNotifier {
++  static const providerName = 'Runware';
++  static const deliveryMethod = 'async';
++  static const outputFormat = 'MP4';
++  static const maxTrialDurationSeconds = 5;
++
++  bool get enabled => false;
++  bool get externalCallsAllowed => false;
++
++  String get statusMessage =>
++      'Runware مختار كمزود فيديو مستقبلي، لكنه مغلق الآن: لا رصيد، '
++      'لا مفتاح، لا حصة، ولا تُرسل قصة أو صورة خارج الجهاز.';
++
++  RunwareVideoPreflight prepareStoryVideo({
++    required String draft,
++    required bool hasExplicitConsent,
++  }) {
++    if (draft.trim().isEmpty) {
++      return const RunwareVideoPreflight(
++        allowed: false,
++        code: 'STORY_REQUIRED',
++        message: 'اكتب مسودة القصة أولاً قبل طلب فيديو.',
++      );
++    }
++    if (!hasExplicitConsent) {
++      return const RunwareVideoPreflight(
++        allowed: false,
++        code: 'CONSENT_REQUIRED',
++        message: 'أكّد موافقتك الصريحة على إرسال النص المختار إلى Runware مستقبلاً قبل أي خدمة فيديو.',
++      );
++    }
++    return RunwareVideoPreflight(
++      allowed: false,
++      code: 'GATEWAY_DISABLED',
++      message: '$statusMessage ${SubscriptionBoundaries.cloudVideoLimit}',
++    );
++  }
++}
+diff --git a/lib/features/feature_hub_screen.dart b/lib/features/feature_hub_screen.dart
+index 121318b..e10a046 100644
+--- a/lib/features/feature_hub_screen.dart
++++ b/lib/features/feature_hub_screen.dart
+@@ -14,13 +14,14 @@ import '../core/content/github_content_catalog_service.dart';
+ import '../core/games/chess_game_controller.dart';
+ import '../core/inspiration/inspiration_safety.dart';
+ import '../core/documents/local_document_text_service.dart';
+-import '../core/media/fal_video_service.dart';
++import '../core/media/runware_video_service.dart';
+ import '../core/mlkit/on_device_ocr_service.dart';
+ import '../core/mlkit/on_device_translation_service.dart';
+ import '../core/pro/premium_verification_service.dart';
+ import '../core/speech/device_speech_recognition_service.dart';
+ import '../core/speech/elevenlabs_voice_service.dart';
+ import '../core/speech/system_tts_service.dart';
++import 'subscription_boundaries_card.dart';
+ 
+ enum FeatureKind { translation, dialogue, documents, stories, games, settings }
+ 
+@@ -1144,7 +1145,7 @@ class _StoriesPanelState extends State<_StoriesPanel> {
+   late Future<List<OfflinePackageRecord>> _packagesFuture;
+   String? _notice;
+   bool _consentToAi = false;
+-  bool _consentToFalVideo = false;
++  bool _consentToRunwareVideo = false;
+   bool _threeHourReminder = false;
+ 
+   @override
+@@ -1357,15 +1358,15 @@ class _StoriesPanelState extends State<_StoriesPanel> {
+     setState(() => _notice = result.message);
+   }
+ 
+-  void _prepareFalVideo() {
++  void _prepareRunwareVideo() {
+     final safety = InspirationSafety.assessStoryDraft(_storyDraftController.text);
+-    if (safety.level != InspirationSafetyLevel.safe) {
++    if (!safety.allowedForDraft) {
+       setState(() => _notice = safety.message);
+       return;
+     }
+-    final preflight = context.read<FalVideoService>().prepareStoryVideo(
++    final preflight = context.read<RunwareVideoService>().prepareStoryVideo(
+           draft: _storyDraftController.text,
+-          hasExplicitConsent: _consentToFalVideo,
++          hasExplicitConsent: _consentToRunwareVideo,
+         );
+     setState(() => _notice = preflight.message);
+   }
+@@ -1441,7 +1442,7 @@ class _StoriesPanelState extends State<_StoriesPanel> {
+               children: [
+                 const Text('قصة المستخدم إلى فيديو', style: TextStyle(color: RoyalColors.teal, fontWeight: FontWeight.bold)),
+                 const SizedBox(height: 8),
+-                const Text('تفحص المسودة محلياً أولاً. Fal مُعد لتجربة فيديو نصي قصيرة، لكنه لا ينشئ فيديو ولا يرسل نصاً قبل اعتماد المفتاح والحصة المالية والخادم.'),
++                const Text('تفحص المسودة محلياً أولاً. Runware مختار لمسار فيديو سحابي مستقبلي، لكنه لا ينشئ فيديو ولا يرسل نصاً قبل اعتماد الرصيد والحصة والمفتاح الخادمي.'),
+                 const SizedBox(height: 10),
+                 TextField(
+                   controller: _storyDraftController,
+@@ -1456,26 +1457,26 @@ class _StoriesPanelState extends State<_StoriesPanel> {
+                   label: const Text('فحص مسودة القصة'),
+                 ),
+                 CheckboxListTile(
+-                  value: _consentToFalVideo,
++                  value: _consentToRunwareVideo,
+                   contentPadding: EdgeInsets.zero,
+-                  title: const Text('أوافق على إرسال مسودة القصة المختارة فقط إلى Fal مستقبلاً بعد تفعيل الخدمة.'),
++                  title: const Text('أوافق على إرسال مسودة القصة المختارة فقط إلى Runware مستقبلاً بعد تفعيل الخدمة.'),
+                   subtitle: const Text('لا يشمل ذلك صوراً أو أصواتاً أو قصصاً أخرى، ولا يرسل شيئاً الآن.'),
+-                  onChanged: (value) => setState(() => _consentToFalVideo = value ?? false),
++                  onChanged: (value) => setState(() => _consentToRunwareVideo = value ?? false),
+                 ),
+-                Consumer<FalVideoService>(
+-                  builder: (context, falVideo, _) => Column(
++                Consumer<RunwareVideoService>(
++                  builder: (context, runwareVideo, _) => Column(
+                     crossAxisAlignment: CrossAxisAlignment.stretch,
+                     children: [
+                       ListTile(
+                         contentPadding: EdgeInsets.zero,
+                         leading: const Icon(Icons.lock_outline, color: RoyalColors.gold),
+-                        title: const Text('Fal: فيديو قصير تجريبي — مغلق'),
+-                        subtitle: Text(falVideo.statusMessage),
++                        title: const Text('Runware: فيديو سحابي — مغلق'),
++                        subtitle: Text(runwareVideo.statusMessage),
+                       ),
+                       FilledButton.icon(
+-                        onPressed: _prepareFalVideo,
++                        onPressed: _prepareRunwareVideo,
+                         icon: const Icon(Icons.video_settings_outlined),
+-                        label: const Text('تحقق من جاهزية Fal'),
++                        label: const Text('تحقق من جاهزية Runware'),
+                       ),
+                     ],
+                   ),
+@@ -1873,6 +1874,8 @@ class _SettingsPanel extends StatelessWidget {
+         children: [
+           const _SectionNotice(title: 'PRO بتوقيع خادمي', detail: 'لا يصدر التطبيق كود تفعيل ولا يحمل مفتاحاً خاصاً. يعرض معرّف تثبيت محلياً ويرسل الباتش الموقّع إلى الخادم عند ربط API.'),
+           const SizedBox(height: 16),
++          const SubscriptionBoundariesCard(),
++          const SizedBox(height: 12),
+           Card(
+             child: ListTile(
+               title: const Text('معرّف التثبيت'),
+diff --git a/lib/features/subscription_boundaries_card.dart b/lib/features/subscription_boundaries_card.dart
+new file mode 100644
+index 0000000..2eb361a
+--- /dev/null
++++ b/lib/features/subscription_boundaries_card.dart
+@@ -0,0 +1,94 @@
++import 'package:flutter/material.dart';
++
++import '../app/royal_dark_theme.dart';
++import '../core/media/runware_video_service.dart';
++
++class SubscriptionBoundariesCard extends StatelessWidget {
++  const SubscriptionBoundariesCard({super.key});
++
++  @override
++  Widget build(BuildContext context) {
++    return Card(
++      child: Padding(
++        padding: const EdgeInsets.all(16),
++        child: Column(
++          crossAxisAlignment: CrossAxisAlignment.start,
++          children: const [
++            Row(
++              children: [
++                Icon(Icons.receipt_long_outlined, color: RoyalColors.gold),
++                SizedBox(width: 10),
++                Text('حدود الخطة والخدمات', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
++              ],
++            ),
++            SizedBox(height: 12),
++            _SubscriptionBoundaryRow(
++              title: SubscriptionBoundaries.localPlan,
++              detail: 'متاح: قصص البداية المرخصة وأصوات Android والترجمة المحلية حيث تتوفر النماذج.',
++              icon: Icons.phone_android_outlined,
++              color: RoyalColors.cyan,
++            ),
++            _SubscriptionBoundaryRow(
++              title: SubscriptionBoundaries.signedProPlan,
++              detail: 'يتطلب رمز تفعيل موقعاً؛ لا يشتري أو يفتح خدمة فيديو تلقائياً.',
++              icon: Icons.verified_user_outlined,
++              color: RoyalColors.gold,
++            ),
++            _SubscriptionBoundaryRow(
++              title: SubscriptionBoundaries.cloudVideoPlan,
++              detail: 'غير مفعّل — ${SubscriptionBoundaries.cloudVideoLimit}',
++              icon: Icons.lock_outline,
++              color: RoyalColors.muted,
++            ),
++            _SubscriptionBoundaryRow(
++              title: SubscriptionBoundaries.audioStudioPlan,
++              detail: 'غير مفعّل: نسخ الصوت وتصدير MP3 يحتاجان موافقة ومزوداً ممولاً.',
++              icon: Icons.graphic_eq_outlined,
++              color: RoyalColors.muted,
++            ),
++            SizedBox(height: 8),
++            Text('لا يوجد تجديد تلقائي أو دفع أو مفتاح داخل التطبيق حالياً.', style: TextStyle(color: RoyalColors.muted, height: 1.45)),
++          ],
++        ),
++      ),
++    );
++  }
++}
++
++class _SubscriptionBoundaryRow extends StatelessWidget {
++  const _SubscriptionBoundaryRow({
++    required this.title,
++    required this.detail,
++    required this.icon,
++    required this.color,
++  });
++
++  final String title;
++  final String detail;
++  final IconData icon;
++  final Color color;
++
++  @override
++  Widget build(BuildContext context) {
++    return Padding(
++      padding: const EdgeInsets.only(bottom: 10),
++      child: Row(
++        crossAxisAlignment: CrossAxisAlignment.start,
++        children: [
++          Icon(icon, color: color, size: 22),
++          const SizedBox(width: 10),
++          Expanded(
++            child: Column(
++              crossAxisAlignment: CrossAxisAlignment.start,
++              children: [
++                Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
++                const SizedBox(height: 2),
++                Text(detail, style: const TextStyle(color: RoyalColors.muted, height: 1.4)),
++              ],
++            ),
++          ),
++        ],
++      ),
++    );
++  }
++}
+diff --git a/test/fal_video_service_test.dart b/test/fal_video_service_test.dart
+deleted file mode 100644
+index e643334..0000000
+--- a/test/fal_video_service_test.dart
++++ /dev/null
+@@ -1,31 +0,0 @@
+-import 'package:flutter_test/flutter_test.dart';
+-import 'package:mirror_scorpion_v4/core/media/fal_video_service.dart';
+-
+-void main() {
+-  test('Fal video gateway stays disabled in Flutter', () {
+-    final service = FalVideoService();
+-
+-    expect(service.enabled, isFalse);
+-    expect(service.externalCallsAllowed, isFalse);
+-    expect(service.modelId, 'fal-ai/wan-25-preview/text-to-video');
+-    expect(service.maxDurationSeconds, 5);
+-    expect(service.resolution, '480p');
+-  });
+-
+-  test('Fal video requires a draft and explicit consent before disabled state', () {
+-    final service = FalVideoService();
+-
+-    expect(
+-      service.prepareStoryVideo(draft: '', hasExplicitConsent: true).code,
+-      'STORY_REQUIRED',
+-    );
+-    expect(
+-      service.prepareStoryVideo(draft: 'قصة هادفة', hasExplicitConsent: false).code,
+-      'CONSENT_REQUIRED',
+-    );
+-    expect(
+-      service.prepareStoryVideo(draft: 'قصة هادفة', hasExplicitConsent: true).code,
+-      'GATEWAY_DISABLED',
+-    );
+-  });
+-}
+diff --git a/test/runware_video_service_test.dart b/test/runware_video_service_test.dart
+new file mode 100644
+index 0000000..88bf5a5
+--- /dev/null
++++ b/test/runware_video_service_test.dart
+@@ -0,0 +1,34 @@
++import 'package:flutter_test/flutter_test.dart';
++import 'package:mirror_scorpion_v4/core/media/runware_video_service.dart';
++
++void main() {
++  test('Runware video gateway stays disabled in Flutter', () {
++    final service = RunwareVideoService();
++
++    expect(service.enabled, isFalse);
++    expect(service.externalCallsAllowed, isFalse);
++    expect(RunwareVideoService.providerName, 'Runware');
++    expect(RunwareVideoService.deliveryMethod, 'async');
++    expect(RunwareVideoService.outputFormat, 'MP4');
++    expect(SubscriptionBoundaries.cloudVideoLimit, contains('0'));
++  });
++
++  test('Runware video requires a draft and explicit consent before disabled state', () {
++    final service = RunwareVideoService();
++
++    expect(
++      service.prepareStoryVideo(draft: '', hasExplicitConsent: true).code,
++      'STORY_REQUIRED',
++    );
++    expect(
++      service.prepareStoryVideo(draft: 'قصة هادفة', hasExplicitConsent: false).code,
++      'CONSENT_REQUIRED',
++    );
++    final blocked = service.prepareStoryVideo(
++      draft: 'قصة هادفة',
++      hasExplicitConsent: true,
++    );
++    expect(blocked.allowed, isFalse);
++    expect(blocked.code, 'GATEWAY_DISABLED');
++  });
++}
+diff --git a/todo.md b/todo.md
+index 4b5d544..da8d870 100644
+--- a/todo.md
++++ b/todo.md
+@@ -235,3 +235,8 @@
+ - [x] إضافة واجهة إعدادات صادقة لقراءة ElevenLabs ونسخ صوت المالك، مع رابط العقد وتعطيل الإرسال الخارجي.
+ - [x] إضافة هيكل Firebase Functions غير منشور يتحقق من السرّ والحصة والموافقة قبل استدعاء ElevenLabs.
+ - [x] إضافة اختبارات تمنع تشغيل مزود ElevenLabs أو ظهور مفتاحه في Flutter عند غياب تفعيل الخادم.
++- [x] استبدال مسار Fal النشط بالكامل بعقد Runware معطّل: Firebase فقط، مهمة async، MP4، موافقة، حصة صفرية، ولا اتصال من Flutter.
++- [x] إضافة بطاقة حدود خدمات صادقة في الإعدادات: الأساسي المحلي وPRO الموقّع وRunware بحد 0 واستوديو الصوت غير المفعّل، بلا دفع أو تجديد تلقائي.
++- [ ] تطبيق رقعة Runware في Termux ثم اجتياز GitHub Actions للتحليل والاختبارات وبناء APK.
++- [ ] قبول Android للحالة غير النشطة: بطاقة Runware وموافقتها وزر الجاهزية لا يرسلون محتوى ولا يظهر دفع.
++- [ ] اعتماد المالك لسقف شهري/سنوي وحصة يومية ومدة ودقة ومنطقة ومدة احتفاظ قبل إنشاء مفتاح أو رصيد أو نشر Firebase.
+-- 
+2.43.0
+

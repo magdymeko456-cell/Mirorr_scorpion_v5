@@ -1,0 +1,34 @@
+From 10b47a976fee9201986e43a6761d75e59d4e79e7 Mon Sep 17 00:00:00 2001
+From: magdymeko456-cell
+ <2.88837127e+08+magdymeko456-cell@users.noreply.github.com>
+Date: Wed, 26 Aug 2026 05:58:05 +0000
+Subject: [PATCH] fix(translation): avoid context across consent await
+
+---
+ lib/features/feature_hub_screen.dart | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/lib/features/feature_hub_screen.dart b/lib/features/feature_hub_screen.dart
+index 8b188a4..f7d5e20 100644
+--- a/lib/features/feature_hub_screen.dart
++++ b/lib/features/feature_hub_screen.dart
+@@ -164,6 +164,7 @@ class _TranslationPanelState extends State<_TranslationPanel> {
+   }
+ 
+   Future<bool> _requestSharedTextConsent() async {
++    final inbox = context.read<SharedTextInbox>();
+     final accepted = await showDialog<bool>(
+       context: context,
+       builder: (dialogContext) => AlertDialog(
+@@ -184,7 +185,7 @@ class _TranslationPanelState extends State<_TranslationPanel> {
+       ),
+     );
+     if (accepted == true) {
+-      await context.read<SharedTextInbox>().setTranslationConsent(true);
++      await inbox.setTranslationConsent(true);
+       return true;
+     }
+     return false;
+-- 
+2.43.0
+

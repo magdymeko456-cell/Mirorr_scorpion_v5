@@ -1,0 +1,653 @@
+From e99d01cc12d9fd9365ba267db064f75664038b8c Mon Sep 17 00:00:00 2001
+From: magdymeko456-cell
+ <2.88837127e+08+magdymeko456-cell@users.noreply.github.com>
+Date: Sun, 23 Aug 2026 22:45:33 +0000
+Subject: [PATCH] fix(translation): use device language for microphone
+
+---
+ docs/external-speech-recognition-notes.md     |  15 ++
+ .../v4-full-requirements-acceptance-matrix.md | 169 ++++++++++++++++++
+ .../localization/language_preferences.dart    |  29 ++-
+ lib/features/feature_hub_screen.dart          | 166 ++++++++---------
+ test/language_preferences_test.dart           |  17 +-
+ 5 files changed, 294 insertions(+), 102 deletions(-)
+ create mode 100644 docs/external-speech-recognition-notes.md
+ create mode 100644 docs/v4-full-requirements-acceptance-matrix.md
+
+diff --git a/docs/external-speech-recognition-notes.md b/docs/external-speech-recognition-notes.md
+new file mode 100644
+index 0000000..5696730
+--- /dev/null
++++ b/docs/external-speech-recognition-notes.md
+@@ -0,0 +1,15 @@
++# ملاحظات توثيقية خارجية: التعرف على الكلام ولغة الجهاز
++
++راجعت توثيق `speech_to_text 7.4.0` قبل تغيير قاعدة لغة الميكروفون.
++
++| النتيجة | الأثر في التطبيق |
++|---|---|
++| تستعمل الحزمة اللغة الافتراضية للجهاز عندما لا يمرر التطبيق `localeId` صالحاً. | لا يسمح التطبيق بالرجوع الصامت إلى لغة عربية أو أي لغة افتراضية عند عدم مطابقة لغة المصدر. |
++| توفر `SpeechToText.locales()` قائمة اللغات المثبتة في خدمة التعرف؛ ويقبل `listen` قيمة `localeId` من هذه القائمة. | يطابق التطبيق لغة الجهاز مع locale مثبت، ويعرض رسالة واضحة مع اللغات المتاحة إن لم يجد مطابقة. |
++| التعرف مخصص للعبارات القصيرة وليس استماعاً دائماً، وقد تفرض Android مهلة قصيرة. | لا تدعي واجهة المايك الاستماع الدائم أو تفريغ ملفات صوت طويلة. |
++| قد يعتمد التعرف في Android على خدمات النظام أو الشبكة. | رسالة الخصوصية توضّح أن التطبيق لا يسجل الصوت بنفسه ولا يحدد ما إذا كانت خدمة الجهاز محلية أو بعيدة. |
++
++## المصادر
++
++1. https://pub.dev/packages/speech_to_text/versions/7.4.0 — README للحزمة، قسم **Switching Recognition Language** وقيود Android.
++2. https://pub.dev/documentation/speech_to_text/7.4.0/speech_to_text/SpeechToText/listen.html — توقيع `listen` وسلوك `SpeechListenOptions.localeId`.
+diff --git a/docs/v4-full-requirements-acceptance-matrix.md b/docs/v4-full-requirements-acceptance-matrix.md
+new file mode 100644
+index 0000000..7a7841c
+--- /dev/null
++++ b/docs/v4-full-requirements-acceptance-matrix.md
+@@ -0,0 +1,169 @@
++# مصفوفة متطلبات وقبول Mirror Scorpion v4
++
++> **الغرض.** هذه الوثيقة هي مصدر العمل الحاكم لتجنب فقدان أي نقطة من الوصف. لا تعدّ الميزة مكتملة لأن لها واجهة فقط؛ بل يجب أن تجتاز معيار القبول المحدد على APK وجهاز Android عند الحاجة. راجعت هذه المصفوفة الوصف المرجعي، مواصفة الواجهة، سجل الاختبارات الفعلية، والتدقيق التقني الحالي. [1] [2] [3]
++
++## 1. قواعد التنفيذ والشفافية
++
++| القاعدة | القرار التنفيذي |
++|---|---|
++| المنصة | الفرع النشط Flutter/Android فقط. لا يُنشأ مشروع Expo أو تطبيق بديل. |
++| البناء | لا تنتقل أي دفعة إلى التالية قبل نجاح `flutter analyze` و`flutter test` وAPK في GitHub Actions. |
++| قبول الهاتف | ما يتطلب ميكروفوناً أو كاميرا أو Overlay أو جودة نص حقيقية لا يعتبر مقبولاً قبل اختبار Android. |
++| الصدق الوظيفي | تعرض الواجهة نجاحاً أو خطأً حقيقياً فقط؛ لا نستخدم نصوصاً مثل «ترجمة: النص» أو ملفاً صوتياً/فيديو وهمياً. |
++| الأمن | لا مفاتيح API أو مفاتيح RSA خاصة أو JSON لحساب خدمة داخل APK أو المستودع أو الرسائل. |
++| PRO | يبقى مفتوحاً كواجهة غير مُقيِّدة إلى أن تنجح الخدمة المعنية على Android، ثم يصبح القفل خادمياً فقط. |
++| الخصوصية | لا Accessibility ولا Notification Listener ولا قراءة تلقائية لرسائل WhatsApp أو البريد. كل نص للفقاعة يمر عبر مشاركة أو اختيار صريح من المستخدم. |
++
++## 2. مبدأ المساحة داخل الكروت
++
++المساحة داخل كروت العمل يجب أن تخدم النص أو الصورة أو اللعبة، لا الشرح الطويل. تبقى تسمية قصيرة وحالة تنفيذ أو خطأ قابلة للفهم داخل الكرت، بينما تنتقل الحدود التقنية والتفاصيل التعليمية إلى صفحة «حول التطبيق والمساعدة» ووثيقة الدعم.
++
++| الكرت | التعديل المطلوب في المساحة | معيار القبول المرئي |
++|---|---|---|
++| الترجمة النصية | إزالة فقرة الشرح الطويلة من أسفل المحررين، وتكبير كل محرر وإتاحة تمرير النص داخله. | يظهر نص متعدد الأسطر بوضوح مع الميكروفون والدبوس دون حجب آخر سطر. |
++| الحوار | تقليل الوصف العلوي إلى سطر واحد، وتكبير محرري المصدر والنتيجة. | يظل شريط التحكم مرئياً، ويظهر حوار طويل قابل للتحرير/النسخ. |
++| العدسة والمستندات | الاحتفاظ بحالة مسح قصيرة فقط، وتخصيص أغلب الارتفاع لمعاينة الأصل والنص/الترجمة. | لا تتزاحم أزرار الكاميرا والملف والنص المستخرج. |
++| القصص والإلهام | استبدال الشرح الثابت بعنوان وقسم/مصدر، وتخصيص المساحة للقارئ وقصة المستخدم. | عنوان القصة، المصدر، والنص المقروء أولى من الشرح. |
++| الألعاب | إخفاء الشرح الطويل خلف زر معلومات، وإعطاء اللوحة أكبر مساحة ممكنة. | تظهر رقعة الشطرنج وقطعها كاملة قابلة للمس على الهاتف. |
++| الإعدادات | استخدام عناوين أقسام قصيرة وصفحات فرعية للحزم والخصوصية وPRO. | لا تحجب النصوص القائمة أو أزرار التنزيل والتفعيل. |
++
++## 3. اللوحة الرئيسية والهوية البصرية
++
++| المتطلب | الحالة الحالية | معيار القبول المتبقي |
++|---|---|---|
++| هوية Royal Dark | منفذ | خلفية كحلية ملكية، سيان/ذهبي، وعقرب مع انعكاس دون تغيير ترتيب الشاشة المرجعية. |
++| شعار العقرب | منفذ مبدئياً | يظهر الأصل في شعار التطبيق والشاشة مع ملفات موارد سليمة في APK. |
++| شبكة الكروت الستة | منفذة | يبقى الترتيب: ترجمة، حوار، مستندات/عدسة، قصص/إلهام، ألعاب، إعدادات/PRO. |
++| اختصار الفقاعة | منفذ كواجهة وحدود | لا يقال إنها تترجم تطبيقات التواصل تلقائياً؛ تُظهر حالة الإذن/الخدمة الفعلية فقط. |
++| قابلية الاستخدام بيد واحدة | يحتاج مراجعة Android | أزرار الميكروفون، اللغة، والعودة قابلة للوصول في اتجاه RTL. |
++
++## 4. الكرت الأول: الترجمة النصية والصوت
++
++| المتطلب | التنفيذ/الحالة الصادقة | قبول APK المطلوب | الحد أو الخطوة التالية |
++|---|---|---|---|
++| لغة المصدر للمايك | قيد التصحيح | **لغة الجهاز ثابتة، بلا قائمة مصدر**؛ جهاز تركي يستمع بالتركية، وجهاز عربي بالعربية. | لا تتغير لغة المصدر من قائمة الترجمة. |
++| لغة الترجمة | منفذة مع حفظ اختيار الهدف | الهدف الافتراضي English عند أول تشغيل، ويستطيع المستخدم تغييره من قائمة واحدة. | قد يكون الزوج خارج نطاق ML Kit المحلي؛ تظهر رسالة حقيقية. |
++| منع التعريب المضلل | منفذ في انتظار APK/هاتف | لا تمرر «جود نايت» إلى مترجم الإنجليزية كناتج إنجليزي. | إن لم تثبّت لغة الجهاز في خدمة التعرف تظهر رسالة واضحة. |
++| تعرف الكلام | يستخدم خدمة الجهاز مع إذن ميكروفون | النص في المحرر العلوي قابل للتعديل قبل الترجمة. | خدمة الجهاز قد تستخدم مزوداً بعيداً؛ ليست استماعاً دائماً. |
++| الترجمة النصية | ML Kit محلي مع تنزيل نماذج وتقدم | زوج مدعوم يترجم بعد تنزيل أولي ثم أسرع لاحقاً. | ML Kit ليس قائمة 100 لغة كاملة ولا يضمن كل زوج مباشر. |
++| التحرير والترجمة الآلية | منفذ | تعديل النص العلوي يحدث الترجمة بعد تأخير قصير قابل للملاحظة. | لا ترجمة إذا كان النص فارغاً أو فشل النموذج. |
++| TTS | صوت النظام فقط | تشغيل/إيقاف النص الناتج بلغة الهدف المتاحة. | أصوات Seif/Salma/Sama/Sara ونسخ الصوت ليست مفعلة. |
++| اختيار ملف صوت | اختيار محلي فقط | يعرض اسم الملف ولا يدّعي تفريغه أو ترجمته. | يتطلب Google STT/Storage/Functions وفوترة وموافقة قبل التفعيل. |
++| نسخ ومشاركة | النسخ للنص متاح؛ مشاركة صوت مترجم ليست مكتملة | لا يظهر «مشاركة ملف صوت» كأنه موجود دون توليد صوت فعلي. | يحتاج TTS قابل للتصدير وتوقيع ملف حقيقي. |
++
++## 5. الكرت الثاني: الحوار المترجم
++
++| المتطلب | التنفيذ/الحالة الصادقة | معيار القبول |
++|---|---|---|
++| محرران كبيران | منفذ ويحتاج تكبير مساحة | العلوي للمصدر والسفلي للنتيجة، مع تمرير/نسخ واضحين. |
++| قاعدة الاتجاه | منفذة | العلوي هو المصدر في اليمين، والسفلي الهدف في اليسار؛ لا يبدل الترتيب. |
++| لغة المايك | قيد التعديل حسب القرار الجديد | لغة جهاز المستخدم ثابتة في المصدر ولا توجد قائمة مصدر أو تبديل مصادر. |
++| لغة الهدف | منفذة | قائمة هدف يسار فقط، تغير الترجمة وTTS. |
++| زر التبديل | يُزال/يُعطّل في هذا التدفق | لا يبدل لغة جهاز المايك مع الهدف؛ تغيير الهدف فقط هو المتاح. |
++| الميكروفون | منفذ على خدمة الجهاز | يلتقط المصدر ثم يمرره إلى الترجمة، مع رسالة صريحة عند غياب لغة الجهاز في خدمة التعرف. |
++| دبوس الصوت | اختيار محلي صادق | لا يدّعي تفريغ ملف قبل تشغيل خدمة الصوت الحية. |
++
++## 6. الكرت الثالث: المستندات والعدسة
++
++| المتطلب | الحالة الحالية | معيار القبول أو البوابة |
++|---|---|---|
++| كاميرا/معرض | OCR صورة محلي | صورة لاتينية تستخرج نصاً قابلاً للنسخ ثم تترجمه إلى الهدف المختار. |
++| لغة OCR | لاتينية فقط | لا يُدّعى دعم OCR عربي أو صيني/ياباني إلى أن يربط محرك مناسب ويختبر. |
++| اختيار لغة الهدف | منفذ | إعادة ترجمة النص المستخرج عند تغيير الهدف. |
++| PDF | اختيار ملف فقط | لا استخراج أو ترجمة PDF مصطنعة. |
++| ترجمة صفحة عائمة | غير منفذة | تحتاج PDF pipeline/صفحات/طبقة أصلية ومعيار خمس صفحات مجاني. |
++| ضغط مطول للأصل/علامة مائية/مشاركة | غير منفذ | يبدأ فقط بعد وجود إخراج صفحات حقيقي. |
++| مسار حقيقي للـPDF | موثق لا منفذ | يحتاج رفع اختياري، Storage، وظيفة معالجة، حذف، تكلفة وفوترة وموافقة. |
++
++## 7. الكرت الرابع: القصص والإلهام
++
++| المتطلب | الحالة الحالية | معيار القبول أو البوابة |
++|---|---|---|
++| حزم JSON محلية | منفذة مبدئياً | manifest وحزمة قصة أصلية وقارئ داخلي واستيراد اختياري آمن. |
++| بيانات دينية | لا تُنسخ بلا توثيق | لا يظهر محتوى ديني من v2 بمرجع مختصر أو غير كافٍ. |
++| التصنيفات | مخططة | القرآن، الأنبياء، النساء، الإنسان، الأقوام، الحيوان، وأسباب النزول بترتيب ومصدر واضح. |
++| حديث قدسي عشوائي | غير مكتمل | يحتاج نصاً موثقاً، ترخيصاً/مصدرًا، ومراجعة قبل إضافته. |
++| قارئ القصة وTTS | قارئ محلي وتطبيق TTS نظامي جزئي | قصة كاملة، مصدر/اقتباس، وإيقاف القراءة. |
++| تنزيل مكتبات أوفلاين | بنية تخزين موجودة | حزمة موقعة/مجزأة تتضمن id/version/hash/license/sourceCitation قبل تنزيلها. |
++| إلهام اختياري | واجهة وفحص محلي | لا مراقبة خفية ولا تشخيص؛ موافقة واضحة قبل أي خدمة مستقبلية. |
++| إشارات الأزمة | فحص أولي | رسالة دعم إنسانية وتوجيه لشخص موثوق والطوارئ المحلية، لا تشخيص أو علاج. |
++| قصص المستخدم | فحص مسودة أولي | رفض عنف/كراهية/تنمر/بذاءة/سخرية مفرطة/إيحاءات جنسية قبل أي تحويل فيديو. |
++| إشعار كل 3 ساعات | غير منفذ | OFF افتراضياً، ويحتاج local notifications أو خدمة خادمية وموافقة اختبار Android. |
++
++## 8. الفيديو والأصوات والذكاء الاصطناعي
++
++| المتطلب | الحالة الحالية | بوابة التنفيذ الصادقة |
++|---|---|---|
++| رسالة/سيناريو إلهام | لا LLM حي حالياً | يحدد المزود والنموذج والتكلفة والتخزين أولاً، ثم يبنى عقد Function آمن. |
++| فيديو قصة 10–15 دقيقة | غير منفذ | يتطلب مزود فيديو، طابور Jobs، تخزين، متابعة تقدم، مراجعة محتوى، حقوق، تكلفة وموافقة. |
++| فيديو بشخصيات متحركة متحدثة | غير منفذ | لا يحل محله slideshow أو نص مشاهد. يتطلب توليد فيديو/صوت فعلي ومراجعة الحقوق. |
++| أصوات مميزة | غير منفذة | أصوات النظام فقط الآن؛ توثق الهوية المطلوبة ولا تدّعي توفرها. |
++| نسخ صوت المستخدم | غير منفذ | موافقة صريحة، إثبات ملكية الصوت، مزود مختار، سياسة حذف، وتخزين آمن. |
++
++## 9. الكرت الخامس: الألعاب والتفكير
++
++| المتطلب | الحالة الحالية | معيار القبول أو البوابة |
++|---|---|---|
++| شطرنج قانوني | منفذ ومقبول على الهاتف | تظهر القطع، حركات قانونية، `e2→e4`، رد أسود، منع حركة الأبيض أثناء دور الخصم، PGN. |
++| ساعة شطرنج | منفذة | 1/3/5/10 دقائق، تناقص حسب الدور، إعادة مباراة. |
++| خصم حاسوبي | منفذ بسيط | خصم محلي بتقييم مادي، وليس محركاً احترافياً أو ادعاء مستوى Elo. |
++| شطرنج 3D حقيقي | غير منفذ | لا يبدأ قبل نموذج توافق Flutter/GPU مستقل؛ المحرك المقيم يحتاج Flutter أحدث من CI الحالي. |
++| روبيك 3D | غير منفذ | يتطلب مكعباً حقيقياً، تدوير وجوه، حالة قابلة للحل، حل تعليمي واختبار لمس Android. |
++| توافق الألعاب والفقاعة | غير محسوم | عزل dependencies، عدم ترقية Flutter/Gradle عشوائياً، APK منفصل لكل تجربة. |
++
++## 10. الكرت السادس: الإعدادات والخصوصية وPRO
++
++| المتطلب | الحالة الحالية | معيار القبول أو البوابة |
++|---|---|---|
++| لغة التطبيق | يبدأ من لغة الجهاز | لا يخلط لغة واجهة التطبيق بلغة مصدر المايك أو لغة الترجمة. |
++| حزم لغات أوفلاين | واجهة/تنزيل نماذج ML Kit جزئي | تقدم حقيقي، حالة محفوظة، وحزم منفصلة موثقة قبل ادعاء دعم كامل. |
++| حول التطبيق | منفذ جزئياً | وصف صادق للأوفلاين والقيود، وإهداء/نبذة مطور موثقة من المالك. |
++| الخصوصية والفقاعة | منفذ توثيقياً | يشرح صراحة عدم قراءة WhatsApp والبريد تلقائياً. |
++| PRO | واجهة فقط | لا قفل حتى نجاح الخدمات؛ لا دفع أو مزايا موعودة غير متاحة. |
++| توقيع PRO | اختبار RSA محلي/مستندات موجودة | تحقق خادمي، وقت خادم، installation ID، مفتاح عام فقط في التطبيق؛ لا مفتاح خاص. |
++| الدفع | غير منفذ | اختيار Google Play Billing أو RevenueCat، منتجات/سياسة/اختبارات متجر وموافقة قبل التنفيذ. |
++
++## 11. الفقاعة فوق التطبيقات
++
++| المتطلب | الحالة الحالية | معيار القبول أو البوابة |
++|---|---|---|
++| Overlay Android | مرحلة موثقة فقط في هذا الفرع Flutter | إذن `SYSTEM_ALERT_WINDOW` صريح وخدمة foreground وسحب/إغلاق. |
++| إدخال النص | Share/Process Text فقط | المستخدم يشارك أو يحدد نصاً؛ لا polling ولا التقاط تلقائي. |
++| الخصوصية | إلزامي | لا Accessibility ولا Notification Listener ولا قراءة رسائل التطبيقات. |
++| اختبار | غير مكتمل | APK Android حقيقي: منح/رفض الإذن، بدء/سحب/إغلاق، share intent، واستنزاف بطارية مقبول. |
++
++## 12. بوابات خارجية لا تُنفذ بصمت
++
++| المسار | قبل بدء التنفيذ يلزم |
++|---|---|
++| تفريغ ملفات الصوت أو PDF خادمياً | تأكيد فوترة Google، Storage، IAM، سياسة حذف ومدة حفظ، موافقة رفع المستخدم. |
++| LLM حي | اختيار نموذج ومزود وتكلفة وحدود بيانات وسجل حذف؛ لا يوضع المفتاح في APK. |
++| فيديو حقيقي | مزود مرخص، تسعير، طابور، تخزين، مراجعة، حقوق، سياسة محتوى وموافقة. |
++| نسخ صوت | موافقة وملكية وحذف ومزود مختار. |
++| دفع/PRO | المنتجات والمتجر/RevenueCat وسياسة استرداد واختبارات Sandbox؛ ثم قفل خادمي فقط. |
++| Firebase deploy | قرار نشر مستقل؛ لا يتم تلقائياً قبل متطلبات الفوترة والأذونات. |
++
++## 13. سجل قبول الدفعات الأخير
++
++| الالتزام | تشغيل GitHub Actions | النتيجة الواقعية |
++|---|---|---|
++| `635b1f0` | `32667680533` | نجح نموذج الشطرنج القانوني بعد إصلاح تحليل الثوابت. |
++| `5121a5d` | `32669142053` | نجحت واجهة اختيار لغة الكلام السابقة، لكن اختبار الهاتف كشف أنها ليست تجربة المصدر الصحيحة؛ استبدلت بقرار لغة الجهاز. |
++| `a3513a3` | `32669661604` | نجح إصلاح عرض القطع، وأكد اختبار Android أن الشطرنج يعمل جيداً. |
++| `cd426fe` | `32670744533` | نجح بناء حماية منع fallback الصامت للغة الجهاز؛ ما زال اختبار الهاتف مطلوباً قبل اعتمادها. |
++
++## 14. ترتيب التنفيذ القادم
++
++1. **لغة جهاز المايك:** إزالة قائمة المصدر وزر التبديل، وربط المصدر دائماً بـ`PlatformDispatcher.instance.locale` مع هدف English افتراضياً وقائمة هدف واحدة.
++2. **مساحة المحررات:** تقصير الشروحات داخل الكرت وتكبير المحررين، ثم APK واختبار نص طويل.
++3. **قبول Android للترجمة والحوار:** اختبار جهاز بلغته غير العربية أو تغيير لغة النظام وفق السيناريو الموثق، ثم تسجيل النتيجة.
++4. **فصل توافق الفقاعة/الألعاب:** توثيق نسخة Flutter/Gradle والحزم وقياس نموذج 3D منعزل قبل أي دمج.
++5. بعدها فقط تُنفذ الفجوات ذات العقود المستقلة: PDF/الصوت، حزم المحتوى الموثقة، الذكاء/الفيديو، ثم الدفع وPRO.
++
++## المراجع
++
++[1]: `docs/flutter-v4-ui-functional-spec.md` — مواصفة الواجهة والكروت الستة.
++[2]: `docs/v4-services-test-matrix.md` — عقود الخدمات وبوابات مزوديها.
++[3]: `docs/device-language-and-system-tts.md` — لغة الجهاز وTTS النظامي.
++[4]: `docs/google-audio-transcription-gate.md` — متطلبات تفريغ الصوت الخادمي.
++[5]: `docs/3d-game-engine-gate.md` — بوابة محرك الألعاب ثلاثي الأبعاد.
+diff --git a/lib/core/localization/language_preferences.dart b/lib/core/localization/language_preferences.dart
+index 160ee46..596e0a9 100644
+--- a/lib/core/localization/language_preferences.dart
++++ b/lib/core/localization/language_preferences.dart
+@@ -3,10 +3,10 @@ import 'dart:ui';
+ import 'package:flutter/foundation.dart';
+ import 'package:shared_preferences/shared_preferences.dart';
+ 
+-/// يحتفظ باللغة التي اختارها المستخدم في تدفقات الترجمة، ويستخدم لغة الجهاز
+-/// كبداية فقط عندما لا توجد تفضيلات محفوظة. لا يترجم نصوص الواجهة ذاتها.
++/// يحتفظ بلغة هدف الترجمة فقط. لغة مصدر الميكروفون هي لغة الجهاز دائماً،
++/// لذلك لا تحفظ كاختيار منفصل ولا تختلط بلغة واجهة التطبيق.
+ class LanguagePreferences extends ChangeNotifier {
+-  static const _sourceKey = 'mirror_scorpion_translation_source';
++  static const _legacySourceKey = 'mirror_scorpion_translation_source';
+   static const _targetKey = 'mirror_scorpion_translation_target';
+ 
+   LanguagePreferences({Locale? deviceLocale})
+@@ -14,27 +14,23 @@ class LanguagePreferences extends ChangeNotifier {
+ 
+   final Locale _deviceLocale;
+   late SharedPreferences _preferences;
+-  late String _sourceLanguage = deviceLanguageCode;
+-  late String _targetLanguage =
+-      deviceLanguageCode == 'ar' ? 'en' : 'ar';
++  late String _targetLanguage = 'en';
+ 
+   Locale get deviceLocale => _deviceLocale;
+   String get deviceLanguageCode => _deviceLocale.languageCode.toLowerCase();
+-  String get translationSourceLanguage => _sourceLanguage;
++  String get translationSourceLanguage => deviceLanguageCode;
+   String get translationTargetLanguage => _targetLanguage;
+   String get storyLanguageCode => deviceLanguageCode;
+ 
+   Future<void> initialize() async {
+     _preferences = await SharedPreferences.getInstance();
+-    final fallbackSource = deviceLanguageCode;
+-    _sourceLanguage = _preferences.getString(_sourceKey) ?? fallbackSource;
+-    _targetLanguage = _preferences.getString(_targetKey) ??
+-        (fallbackSource == 'ar' ? 'en' : 'ar');
++    await _preferences.remove(_legacySourceKey);
++    _targetLanguage = _preferences.getString(_targetKey) ?? 'en';
+   }
+ 
++  @Deprecated('لغة مصدر المايك هي لغة الجهاز دائماً.')
+   Future<void> setTranslationSourceLanguage(String code) async {
+-    _sourceLanguage = code.toLowerCase();
+-    await _preferences.setString(_sourceKey, _sourceLanguage);
++    await _preferences.remove(_legacySourceKey);
+     notifyListeners();
+   }
+ 
+@@ -44,12 +40,9 @@ class LanguagePreferences extends ChangeNotifier {
+     notifyListeners();
+   }
+ 
++  @Deprecated('لا يمكن تبديل لغة جهاز المايك مع لغة الترجمة.')
+   Future<void> swapTranslationLanguages() async {
+-    final oldSource = _sourceLanguage;
+-    _sourceLanguage = _targetLanguage;
+-    _targetLanguage = oldSource;
+-    await _preferences.setString(_sourceKey, _sourceLanguage);
+-    await _preferences.setString(_targetKey, _targetLanguage);
++    await _preferences.remove(_legacySourceKey);
+     notifyListeners();
+   }
+ }
+diff --git a/lib/features/feature_hub_screen.dart b/lib/features/feature_hub_screen.dart
+index 29c0cb2..1bbda45 100644
+--- a/lib/features/feature_hub_screen.dart
++++ b/lib/features/feature_hub_screen.dart
+@@ -99,7 +99,6 @@ class _TranslationPanelState extends State<_TranslationPanel> {
+   final _translationService = const OnDeviceTranslationService();
+   final _speechService = SystemTtsService();
+   final _recognitionService = DeviceSpeechRecognitionService();
+-  String _sourceLanguage = 'ar';
+   String _selectedLanguage = 'ar';
+   String? _notice;
+   bool _clearOnNextInput = false;
+@@ -119,11 +118,7 @@ class _TranslationPanelState extends State<_TranslationPanel> {
+     super.didChangeDependencies();
+     if (!_loadedLanguagePreference) {
+       final preferences = context.read<LanguagePreferences>();
+-      final savedSource = preferences.translationSourceLanguage;
+       final savedTarget = preferences.translationTargetLanguage;
+-      if (TranslationLanguageCatalog.labels.containsKey(savedSource)) {
+-        _sourceLanguage = savedSource;
+-      }
+       if (TranslationLanguageCatalog.labels.containsKey(savedTarget)) {
+         _selectedLanguage = savedTarget;
+       }
+@@ -131,15 +126,6 @@ class _TranslationPanelState extends State<_TranslationPanel> {
+     }
+   }
+ 
+-  Future<void> _selectSourceLanguage(String code) async {
+-    setState(() {
+-      _sourceLanguage = code;
+-      _notice = 'لغة الكلام المحددة: ${TranslationLanguageCatalog.labels[code] ?? code}. لن يبدأ الميكروفون بلغة بديلة إذا لم تكن هذه اللغة متاحة في خدمة التعرف بالجهاز.';
+-    });
+-    await context.read<LanguagePreferences>().setTranslationSourceLanguage(code);
+-    _queueTranslation(_input.text, sourceLanguageCode: code);
+-  }
+-
+   Future<void> _selectLanguage(String code) async {
+     setState(() => _selectedLanguage = code);
+     await context.read<LanguagePreferences>().setTranslationTargetLanguage(code);
+@@ -172,7 +158,7 @@ class _TranslationPanelState extends State<_TranslationPanel> {
+       }
+       return;
+     }
+-    final sourceLanguage = _sourceLanguage;
++    final sourceLanguage = context.read<LanguagePreferences>().deviceLanguageCode;
+     await _speechService.stop();
+     await _recognitionService.start(
+       languageCode: sourceLanguage,
+@@ -254,12 +240,6 @@ class _TranslationPanelState extends State<_TranslationPanel> {
+       },
+     );
+     if (!mounted || value.trim() != _input.text.trim()) return;
+-    if (result.sourceLanguage != null) {
+-      await context
+-          .read<LanguagePreferences>()
+-          .setTranslationSourceLanguage(result.sourceLanguage!);
+-    }
+-    if (!mounted || value.trim() != _input.text.trim()) return;
+     setState(() {
+       _isTranslating = false;
+       if (result.isSuccess) _output.text = result.text ?? '';
+@@ -275,14 +255,15 @@ class _TranslationPanelState extends State<_TranslationPanel> {
+     _speechService.stop();
+     _recognitionService.removeListener(_onSpeechChanged);
+     _recognitionService.dispose();
+-    _input.dispose();
+-    _output.dispose();
+-    super.dispose();
+-  }
++  _input.dispose();
++  _output.dispose();
++  super.dispose();
++}
+ 
+-  @override
+-  Widget build(BuildContext context) {
+-    return ListView(
++@override
++Widget build(BuildContext context) {
++    final deviceLanguage = context.watch<LanguagePreferences>().deviceLanguageCode;
++return ListView(
+       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+       children: [
+         const SizedBox(height: 4),
+@@ -310,16 +291,8 @@ class _TranslationPanelState extends State<_TranslationPanel> {
+         ),
+         const SizedBox(height: 12),
+         Row(
++          textDirection: TextDirection.ltr,
+           children: [
+-            Expanded(
+-              child: _TranslationLanguageMenu(
+-                value: _sourceLanguage,
+-                label: 'لغة الكلام',
+-                icon: Icons.mic,
+-                onChanged: _selectSourceLanguage,
+-              ),
+-            ),
+-            const SizedBox(width: 10),
+             Expanded(
+               child: _TranslationLanguageMenu(
+                 value: _selectedLanguage,
+@@ -328,6 +301,13 @@ class _TranslationPanelState extends State<_TranslationPanel> {
+                 onChanged: _selectLanguage,
+               ),
+             ),
++            const SizedBox(width: 10),
++            Expanded(
++              child: _DeviceSpeechLanguageLabel(
++                languageCode: deviceLanguage,
++                label: 'لغة المايك — من الجهاز',
++              ),
++            ),
+           ],
+         ),
+         const SizedBox(height: 15),
+@@ -339,7 +319,10 @@ class _TranslationPanelState extends State<_TranslationPanel> {
+           onTap: () {
+             if (_clearOnNextInput) _beginNewInput('جلسة ترجمة جديدة');
+           },
+-          onChanged: _queueTranslation,
++          onChanged: (value) => _queueTranslation(
++            value,
++            sourceLanguageCode: deviceLanguage,
++          ),
+           actions: [
+             _EditorAction(
+               icon: _recognitionService.isListening ? Icons.stop_circle_outlined : Icons.mic,
+@@ -387,7 +370,7 @@ class _TranslationPanelState extends State<_TranslationPanel> {
+           ],
+         ),
+         const SizedBox(height: 18),
+-        const _SectionNotice(title: 'ترجمة محلية صادقة', detail: 'اختر «لغة الكلام» قبل الضغط على الميكروفون، واختر «لغة الترجمة» للناتج. يبدأ الاختيار من لغة الجهاز فقط في أول تشغيل ثم يحفظ المصدر والهدف بشكل مستقل. تعرف الكلام يعتمد اللغة المختارة وخدمة التعرف المثبتة في الهاتف للجمل القصيرة، ثم تمرر النتيجة إلى ML Kit للترجمة المحلية. دبوس محرر المصدر مخصص لملفات الصوت، لكنه ينتظر خدمة تفريغ فعلية ولا ينتج ترجمة مصطنعة. صوت القراءة هو صوت النظام المتاح، وليس أحد الأصوات المميزة أو صوت المستخدم بعد.'),
++        const _SectionNotice(title: 'ترجمة محلية', detail: 'لغة المايك من جهازك؛ غيّر لغة الترجمة فقط.'),
+       ],
+     );
+   }
+@@ -445,6 +428,54 @@ class _TranslationLanguageMenu extends StatelessWidget {
+   }
+ }
+ 
++class _DeviceSpeechLanguageLabel extends StatelessWidget {
++  const _DeviceSpeechLanguageLabel({
++    required this.languageCode,
++    required this.label,
++  });
++
++  final String languageCode;
++  final String label;
++
++  @override
++  Widget build(BuildContext context) {
++    final languageLabel =
++        TranslationLanguageCatalog.labels[languageCode] ?? languageCode;
++    return Container(
++      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
++      decoration: BoxDecoration(
++        color: const Color(0xFF1B2838),
++        borderRadius: BorderRadius.circular(18),
++        border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.28)),
++      ),
++      child: Column(
++        crossAxisAlignment: CrossAxisAlignment.start,
++        children: [
++          Row(
++            children: [
++              const Icon(Icons.mic_none, size: 14, color: Colors.cyanAccent),
++              const SizedBox(width: 5),
++              Expanded(
++                child: Text(
++                  label,
++                  overflow: TextOverflow.ellipsis,
++                  style: const TextStyle(color: RoyalColors.muted, fontSize: 11),
++                ),
++              ),
++            ],
++          ),
++          const SizedBox(height: 5),
++          Text(
++            languageLabel,
++            overflow: TextOverflow.ellipsis,
++            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
++          ),
++        ],
++      ),
++    );
++  }
++}
++
+ class _TranslationEditor extends StatelessWidget {
+   const _TranslationEditor({
+     required this.controller,
+@@ -534,7 +565,6 @@ class _DialoguePanelState extends State<_DialoguePanel> {
+   final _recognitionService = DeviceSpeechRecognitionService();
+   final _speechService = SystemTtsService();
+   Timer? _translationDebounce;
+-  String _rightSourceLanguage = 'ar';
+   String _leftTargetLanguage = 'en';
+   String? _notice;
+   bool _isTranslating = false;
+@@ -553,7 +583,6 @@ class _DialoguePanelState extends State<_DialoguePanel> {
+     super.didChangeDependencies();
+     if (_loadedLanguagePreferences) return;
+     final preferences = context.read<LanguagePreferences>();
+-    _rightSourceLanguage = preferences.translationSourceLanguage;
+     _leftTargetLanguage = preferences.translationTargetLanguage;
+     _loadedLanguagePreferences = true;
+   }
+@@ -562,32 +591,13 @@ class _DialoguePanelState extends State<_DialoguePanel> {
+     if (mounted) setState(() {});
+   }
+ 
+-  Future<void> _selectRightSourceLanguage(String code) async {
+-    setState(() {
+-      _rightSourceLanguage = code;
+-      _notice = 'لغة الكلام المصدر المحددة: ${TranslationLanguageCatalog.labels[code] ?? code}. لن يبدأ الميكروفون بلغة بديلة إذا لم تكن هذه اللغة متاحة في خدمة التعرف بالجهاز.';
+-    });
+-    await context.read<LanguagePreferences>().setTranslationSourceLanguage(code);
+-    _queueTranslation(_source.text, sourceLanguageCode: code);
+-  }
+-
+   Future<void> _selectLeftTargetLanguage(String code) async {
+     setState(() => _leftTargetLanguage = code);
+     await context.read<LanguagePreferences>().setTranslationTargetLanguage(code);
+-    _queueTranslation(_source.text, sourceLanguageCode: _rightSourceLanguage);
+-  }
+-
+-  Future<void> _swapLanguages() async {
+-    await context.read<LanguagePreferences>().swapTranslationLanguages();
+-    if (!mounted) return;
+-    final preferences = context.read<LanguagePreferences>();
+-    setState(() {
+-      _rightSourceLanguage = preferences.translationSourceLanguage;
+-      _leftTargetLanguage = preferences.translationTargetLanguage;
+-      _source.clear();
+-      _translated.clear();
+-      _notice = 'تم تبديل اللغتين. يبقى المحرر العلوي دائماً تابعاً لزر اللغة في اليمين.';
+-    });
++    _queueTranslation(
++      _source.text,
++      sourceLanguageCode: context.read<LanguagePreferences>().deviceLanguageCode,
++    );
+   }
+ 
+   Future<void> _toggleMicrophone() async {
+@@ -599,7 +609,7 @@ class _DialoguePanelState extends State<_DialoguePanel> {
+       return;
+     }
+     await _speechService.stop();
+-    final sourceLanguage = _rightSourceLanguage;
++    final sourceLanguage = context.read<LanguagePreferences>().deviceLanguageCode;
+     await _recognitionService.start(
+       languageCode: sourceLanguage,
+       onText: (recognizedText) {
+@@ -644,7 +654,8 @@ class _DialoguePanelState extends State<_DialoguePanel> {
+     final result = await _translationService.translate(
+       text: value,
+       targetLanguageCode: targetLanguage,
+-      sourceLanguageCode: sourceLanguageCode ?? _rightSourceLanguage,
++      sourceLanguageCode:
++          sourceLanguageCode ?? context.read<LanguagePreferences>().deviceLanguageCode,
+       onProgress: (progress) {
+         if (mounted && value.trim() == _source.text.trim()) {
+           setState(() => _notice = _translationProgressMessage(progress));
+@@ -697,15 +708,16 @@ class _DialoguePanelState extends State<_DialoguePanel> {
+ 
+   @override
+   Widget build(BuildContext context) {
++    final deviceLanguage = context.watch<LanguagePreferences>().deviceLanguageCode;
+     return ListView(
+       padding: const EdgeInsets.all(18),
+       children: [
+-        const _SectionNotice(title: 'حوار ثنائي اللغة محلي', detail: 'اختر «لغة الكلام المصدر» في اليمين قبل الضغط على الميكروفون، واختر لغة الترجمة في اليسار. المحرر العلوي هو المصدر ويتبع زر اليمين دائماً، والمحرر السفلي هو الناتج ويتبع زر اليسار. يلتقط الميكروفون كلام الطرف العلوي فقط بإذن صريح ثم يترجمه ML Kit محلياً.'),
++        const _SectionNotice(title: 'حوار مترجم', detail: 'لغة المايك من جهازك؛ غيّر لغة الترجمة فقط.'),
+         const SizedBox(height: 16),
+         _DialogueEditor(
+           controller: _source,
+-          label: 'المحرر العلوي — المصدر (زر اليمين)',
+-          hint: 'اكتب أو اضغط الميكروفون ليسمع لغة المصدر…',
++          label: 'المحرر العلوي — لغة الجهاز',
++          hint: 'اكتب أو اضغط الميكروفون ليسمع لغة جهازك…',
+           actions: [
+             _EditorAction(
+               icon: Icons.attach_file,
+@@ -715,7 +727,7 @@ class _DialoguePanelState extends State<_DialoguePanel> {
+           ],
+           onChanged: (value) => _queueTranslation(
+             value,
+-            sourceLanguageCode: _rightSourceLanguage,
++            sourceLanguageCode: deviceLanguage,
+           ),
+         ),
+         const SizedBox(height: 12),
+@@ -736,11 +748,6 @@ class _DialoguePanelState extends State<_DialoguePanel> {
+                   onChanged: _selectLeftTargetLanguage,
+                 ),
+               ),
+-              IconButton(
+-                icon: const Icon(Icons.swap_horiz, color: RoyalColors.gold, size: 28),
+-                tooltip: 'تبديل لغة المصدر والهدف',
+-                onPressed: _swapLanguages,
+-              ),
+               GestureDetector(
+                 onTap: _toggleMicrophone,
+                 child: Container(
+@@ -761,10 +768,9 @@ class _DialoguePanelState extends State<_DialoguePanel> {
+               ),
+               const SizedBox(width: 8),
+               Expanded(
+-                child: _DialogueLanguageMenu(
+-                  value: _rightSourceLanguage,
+-                  label: 'لغة الكلام المصدر — يمين',
+-                  onChanged: _selectRightSourceLanguage,
++                child: _DeviceSpeechLanguageLabel(
++                  languageCode: deviceLanguage,
++                  label: 'لغة المايك — من الجهاز',
+                 ),
+               ),
+             ],
+@@ -773,7 +779,7 @@ class _DialoguePanelState extends State<_DialoguePanel> {
+         const SizedBox(height: 12),
+         _DialogueEditor(
+           controller: _translated,
+-          label: 'المحرر السفلي — ترجمة الهدف (زر اليسار)',
++          label: 'المحرر السفلي — ترجمة الهدف',
+           hint: 'ستظهر ترجمة الحوار المحلية هنا…',
+           readOnly: true,
+           actions: [
+diff --git a/test/language_preferences_test.dart b/test/language_preferences_test.dart
+index 3beb3b6..9c8e1ea 100644
+--- a/test/language_preferences_test.dart
++++ b/test/language_preferences_test.dart
+@@ -5,16 +5,15 @@ import 'package:mirror_scorpion_v4/core/localization/language_preferences.dart';
+ import 'package:shared_preferences/shared_preferences.dart';
+ 
+ void main() {
+-  test('uses device language first then persists source and target preferences', () async {
++  test('uses device language as a fixed microphone source and persists target only', () async {
+     SharedPreferences.setMockInitialValues(<String, Object>{});
+     final preferences = LanguagePreferences(deviceLocale: const Locale('en', 'US'));
+ 
+     await preferences.initialize();
+ 
+     expect(preferences.translationSourceLanguage, 'en');
+-    expect(preferences.translationTargetLanguage, 'ar');
++    expect(preferences.translationTargetLanguage, 'en');
+ 
+-    await preferences.setTranslationSourceLanguage('fr');
+     await preferences.setTranslationTargetLanguage('de');
+ 
+     SharedPreferences.setMockInitialValues(<String, Object>{
+@@ -24,7 +23,17 @@ void main() {
+     final restored = LanguagePreferences(deviceLocale: const Locale('ar', 'SA'));
+     await restored.initialize();
+ 
+-    expect(restored.translationSourceLanguage, 'fr');
++    expect(restored.translationSourceLanguage, 'ar');
+     expect(restored.translationTargetLanguage, 'de');
+   });
++
++  test('uses Turkish device language for microphone with English target by default', () async {
++    SharedPreferences.setMockInitialValues(<String, Object>{});
++    final preferences = LanguagePreferences(deviceLocale: const Locale('tr', 'TR'));
++
++    await preferences.initialize();
++
++    expect(preferences.translationSourceLanguage, 'tr');
++    expect(preferences.translationTargetLanguage, 'en');
++  });
+ }
+-- 
+2.43.0
+

@@ -1,0 +1,162 @@
+From 7fede1f3ca03cbd5190168208d469a12c04d6929 Mon Sep 17 00:00:00 2001
+From: magdymeko456-cell
+ <2.88837127e+08+magdymeko456-cell@users.noreply.github.com>
+Date: Mon, 24 Aug 2026 03:50:06 +0000
+Subject: [PATCH] feat(ui): expand translation and dialogue editors
+
+---
+ lib/features/feature_hub_screen.dart | 55 +++++++++-------------------
+ 1 file changed, 17 insertions(+), 38 deletions(-)
+
+diff --git a/lib/features/feature_hub_screen.dart b/lib/features/feature_hub_screen.dart
+index 115a8b7..c12f1f5 100644
+--- a/lib/features/feature_hub_screen.dart
++++ b/lib/features/feature_hub_screen.dart
+@@ -264,32 +264,8 @@ class _TranslationPanelState extends State<_TranslationPanel> {
+ Widget build(BuildContext context) {
+     final deviceLanguage = context.watch<LanguagePreferences>().deviceLanguageCode;
+ return ListView(
+-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
++      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+       children: [
+-        const SizedBox(height: 4),
+-        Center(
+-          child: Column(
+-            children: [
+-              Container(
+-                width: 70,
+-                height: 70,
+-                decoration: BoxDecoration(
+-                  shape: BoxShape.circle,
+-                  border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.5), width: 1.5),
+-                  image: const DecorationImage(image: AssetImage('assets/images/scorpion_bg.jpeg'), fit: BoxFit.cover),
+-                ),
+-              ),
+-              Container(
+-                width: 120,
+-                height: 1,
+-                decoration: BoxDecoration(
+-                  gradient: LinearGradient(colors: [Colors.transparent, Colors.cyanAccent.withValues(alpha: 0.4), Colors.transparent]),
+-                ),
+-              ),
+-            ],
+-          ),
+-        ),
+-        const SizedBox(height: 12),
+         Row(
+           textDirection: TextDirection.ltr,
+           children: [
+@@ -310,7 +286,7 @@ return ListView(
+             ),
+           ],
+         ),
+-        const SizedBox(height: 15),
++        const SizedBox(height: 10),
+         _TranslationEditor(
+           controller: _input,
+           hint: 'ابدأ بالكتابة أو اضغط المايك للتحدث...',
+@@ -354,7 +330,7 @@ return ListView(
+               ],
+             ),
+           ),
+-        const SizedBox(height: 14),
++        const SizedBox(height: 10),
+         _TranslationEditor(
+           controller: _output,
+           hint: 'ستظهر ترجمة ML Kit المحلية هنا بعد تنزيل النماذج.',
+@@ -369,8 +345,6 @@ return ListView(
+             }),
+           ],
+         ),
+-        const SizedBox(height: 18),
+-        const _SectionNotice(title: 'ترجمة محلية', detail: 'لغة المايك من جهازك؛ غيّر لغة الترجمة فقط.'),
+       ],
+     );
+   }
+@@ -498,7 +472,7 @@ class _TranslationEditor extends StatelessWidget {
+   @override
+   Widget build(BuildContext context) {
+     return Container(
+-      height: 180,
++      height: 250,
+       padding: const EdgeInsets.all(12),
+       decoration: BoxDecoration(
+         color: Colors.white.withValues(alpha: 0.03),
+@@ -510,12 +484,16 @@ class _TranslationEditor extends StatelessWidget {
+           TextField(
+             controller: controller,
+             readOnly: readOnly,
+-            maxLines: 5,
++            expands: true,
++            minLines: null,
++            maxLines: null,
++            textAlignVertical: TextAlignVertical.top,
+             style: const TextStyle(color: Colors.white, fontSize: 17),
+             decoration: InputDecoration(
+               hintText: hint,
+               hintStyle: const TextStyle(color: Colors.white30, fontSize: 15),
+               border: InputBorder.none,
++              contentPadding: const EdgeInsets.only(bottom: 56),
+             ),
+             onTap: onTap,
+             onChanged: onChanged,
+@@ -714,10 +692,8 @@ class _DialoguePanelState extends State<_DialoguePanel> {
+   Widget build(BuildContext context) {
+     final deviceLanguage = context.watch<LanguagePreferences>().deviceLanguageCode;
+     return ListView(
+-      padding: const EdgeInsets.all(18),
++      padding: const EdgeInsets.fromLTRB(18, 10, 18, 18),
+       children: [
+-        const _SectionNotice(title: 'حوار مترجم', detail: 'لغة المايك من جهازك؛ غيّر لغة الترجمة فقط.'),
+-        const SizedBox(height: 16),
+         _DialogueEditor(
+           controller: _source,
+           label: 'المحرر العلوي — لغة الجهاز',
+@@ -734,7 +710,7 @@ class _DialoguePanelState extends State<_DialoguePanel> {
+             sourceLanguageCode: deviceLanguage,
+           ),
+         ),
+-        const SizedBox(height: 12),
++        const SizedBox(height: 10),
+         Container(
+           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+           decoration: BoxDecoration(
+@@ -780,7 +756,7 @@ class _DialoguePanelState extends State<_DialoguePanel> {
+             ],
+           ),
+         ),
+-        const SizedBox(height: 12),
++        const SizedBox(height: 10),
+         _DialogueEditor(
+           controller: _translated,
+           label: 'المحرر السفلي — ترجمة الهدف',
+@@ -879,7 +855,7 @@ class _DialogueEditor extends StatelessWidget {
+   @override
+   Widget build(BuildContext context) {
+     return Container(
+-      height: 210,
++      height: 270,
+       padding: const EdgeInsets.all(14),
+       decoration: BoxDecoration(
+         color: Colors.white.withValues(alpha: 0.04),
+@@ -895,13 +871,16 @@ class _DialogueEditor extends StatelessWidget {
+             child: TextField(
+               controller: controller,
+               readOnly: readOnly,
+-              minLines: 5,
++              expands: true,
++              minLines: null,
+               maxLines: null,
++              textAlignVertical: TextAlignVertical.top,
+               style: const TextStyle(color: Colors.white, fontSize: 17),
+               decoration: InputDecoration(
+                 hintText: hint,
+                 hintStyle: const TextStyle(color: Colors.white30),
+                 border: InputBorder.none,
++                contentPadding: const EdgeInsets.only(bottom: 12),
+               ),
+               onChanged: onChanged,
+             ),
+-- 
+2.43.0
+

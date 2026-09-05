@@ -1,0 +1,50 @@
+From ad75512c7ec55a97595794c7d939d7659eb53400 Mon Sep 17 00:00:00 2001
+From: magdymeko456-cell
+ <2.88837127e+08+magdymeko456-cell@users.noreply.github.com>
+Date: Wed, 26 Aug 2026 06:16:28 +0000
+Subject: [PATCH] fix(ci): align shared text plugin JVM target
+
+---
+ .github/workflows/build_apk.yml | 13 +++++++++++++
+ todo.md                         |  1 +
+ 2 files changed, 14 insertions(+)
+
+diff --git a/.github/workflows/build_apk.yml b/.github/workflows/build_apk.yml
+index 431a4e6..6323fa7 100644
+--- a/.github/workflows/build_apk.yml
++++ b/.github/workflows/build_apk.yml
+@@ -190,6 +190,19 @@ jobs:
+           grep -q -- '-dontwarn com.gemalto.jp2.\*\*' android/app/mirror-scorpion-pdf-r8.pro
+       - name: Install dependencies
+         run: flutter pub get
++      - name: Align shared text plugin JVM target
++        run: |
++          PLUGIN_DIR=$(find "${PUB_CACHE:-$HOME/.pub-cache}/hosted/pub.dev" -maxdepth 1 -type d -name 'receive_sharing_intent-1.8.1' -print -quit)
++          test -n "$PLUGIN_DIR" || { echo "receive_sharing_intent 1.8.1 was not installed."; exit 1; }
++          PLUGIN_GRADLE="$PLUGIN_DIR/android/build.gradle"
++          test -f "$PLUGIN_GRADLE" || { echo "Expected Groovy Gradle file for receive_sharing_intent was not found."; exit 1; }
++          cat >> "$PLUGIN_GRADLE" <<'EOF'
++
++          // Keep the plugin Kotlin task aligned with its Java 11 compile task.
++          tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
++              kotlinOptions.jvmTarget = "11"
++          }
++          EOF
+       - name: Generate scorpion Android launcher icon
+         run: dart run flutter_launcher_icons
+       - name: Static analysis
+diff --git a/todo.md b/todo.md
+index 432a3f0..45b8dcf 100644
+--- a/todo.md
++++ b/todo.md
+@@ -253,6 +253,7 @@
+ - [x] تنفيذ زر «ترجم آخر نص نسخته» داخل التطبيق لقراءة معلنة واحدة للحافظة بعد ضغط المستخدم، مع عدم التخزين أو الإرسال أو المراقبة المستمرة.
+ - [x] إضافة حاجز CI يمنع Accessibility وNotification Listener ومستمع الحافظة المستمر في مسار النص المشارك.
+ - [ ] إضافة Android Process Text كاختصار اختياري لاحق بعد نجاح مسار Share وزر القراءة المعلن على APK.
++- [ ] معالجة تعارض JVM داخل `receive_sharing_intent 1.8.1` في CI عبر توحيد Kotlin مع Java 11 داخل الحزمة؛ لا ترقية لـAndroid API أو Gradle حتى ينجح APK.
+ - [x] تدقيق قيود حافظة Android وتوثيق المسارات الآمنة؛ لا مراقبة تلقائية للحافظة عبر التطبيقات، وبديل المستخدم هو Share أو Process Text أو زر قراءة معلن داخل التطبيق. راجع `docs/clipboard-overlay-privacy-contract-2026-08-26.md`.
+ - [x] اجتياز GitHub Actions لدفعة الفقاعة Android في التشغيل `32930658756`: التحليل والاختبارات وبناء APK ورفع الأثر نجحت في 26 أغسطس 2026؛ ما زال اختبار الإذن والفقاعة على الهاتف مطلوباً.
+ - [x] تصنيف الخدمات غير المفعلة وترتيب تفعيلها بحسب الخصوصية والتبعيات والاختبار؛ راجع `docs/disabled-services-activation-order-2026-08-26.md`.
+-- 
+2.43.0
+

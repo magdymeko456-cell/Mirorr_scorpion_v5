@@ -1,0 +1,846 @@
+From 356a0357c2b84c72616098c4de40a971af61ceb5 Mon Sep 17 00:00:00 2001
+From: magdymeko456-cell
+ <2.88837127e+08+magdymeko456-cell@users.noreply.github.com>
+Date: Tue, 25 Aug 2026 16:13:09 +0000
+Subject: [PATCH] feat(voice): scaffold safe ElevenLabs gateway
+
+---
+ .github/workflows/build_apk.yml               |   6 +
+ .gitignore                                    |   3 +
+ ...s-backend-and-usage-contract-2026-08-25.md |  86 +++++++++
+ ...onsent-and-deletion-contract-2026-08-25.md |  69 +++++++
+ ...ee-ai-media-tools-evaluation-2026-08-24.md |  74 ++++++++
+ functions/index.js                            |  18 ++
+ functions/package.json                        |   2 +-
+ functions/src/elevenlabs_gateway.js           |  51 +++++
+ functions/test/elevenlabs_gateway.test.js     |  46 +++++
+ functions/test/entrypoint.test.js             |   3 +-
+ lib/app/mirror_scorpion_app.dart              |  10 +-
+ lib/core/speech/elevenlabs_voice_service.dart |  56 ++++++
+ lib/features/feature_hub_screen.dart          | 179 ++++++++++++++++++
+ test/elevenlabs_voice_service_test.dart       |  36 ++++
+ todo.md                                       |  20 ++
+ 15 files changed, 655 insertions(+), 4 deletions(-)
+ create mode 100644 docs/elevenlabs-backend-and-usage-contract-2026-08-25.md
+ create mode 100644 docs/elevenlabs-voice-consent-and-deletion-contract-2026-08-25.md
+ create mode 100644 docs/free-ai-media-tools-evaluation-2026-08-24.md
+ create mode 100644 functions/src/elevenlabs_gateway.js
+ create mode 100644 functions/test/elevenlabs_gateway.test.js
+ create mode 100644 lib/core/speech/elevenlabs_voice_service.dart
+ create mode 100644 test/elevenlabs_voice_service_test.dart
+
+diff --git a/.github/workflows/build_apk.yml b/.github/workflows/build_apk.yml
+index a379990..bdc191e 100644
+--- a/.github/workflows/build_apk.yml
++++ b/.github/workflows/build_apk.yml
+@@ -23,6 +23,12 @@ jobs:
+         run: |
+           npm ci
+           npm run verify
++      - name: Verify ElevenLabs secret stays outside the APK
++        run: |
++          if grep -R -nE 'ELEVENLABS_API_KEY|xi-api-key|api\.elevenlabs\.io' lib test; then
++            echo "ElevenLabs credentials or direct provider calls must not be present in Flutter code."
++            exit 1
++          fi
+       - uses: subosito/flutter-action@v2
+         with:
+           flutter-version: "3.44.7"
+diff --git a/.gitignore b/.gitignore
+index bf849ad..ff96c5e 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -15,6 +15,9 @@
+ android/app/google-services.json
+ lib/firebase_options.dart
+ functions/.env
++functions/.env.*
++!functions/.env.example
++functions/elevenlabs.local.json
+ serviceAccountKey.json
+ private_key.pem
+ test_firebase.js
+diff --git a/docs/elevenlabs-backend-and-usage-contract-2026-08-25.md b/docs/elevenlabs-backend-and-usage-contract-2026-08-25.md
+new file mode 100644
+index 0000000..33bfdf3
+--- /dev/null
++++ b/docs/elevenlabs-backend-and-usage-contract-2026-08-25.md
+@@ -0,0 +1,86 @@
++# تصميم الخادم الوسيط وحدود الاستخدام لـElevenLabs
++
++> **الحالة:** تصميم تقني غير منشور. لا توجد دالة حية أو API key أو إعداد فوترة. هذا المستند يمنع المسار غير الآمن: `Flutter APK → ElevenLabs` مباشرة.
++
++## سبب وجود خادم وسيط
++
++لا يجوز وضع مفتاح ElevenLabs في تطبيق Android، لأنه سرّ يسمح باستخدام الرصيد ويجب ألا يظهر في كود العميل. توصي وثائق ElevenLabs بحساب خدمة للمسارات الإنتاجية، ومفتاح محدود النطاق والحصة، وفرض أذونات على مستوى المورد في خادم التطبيق نفسه. [1] [2] لذلك يتحقق الخادم من كل طلب ثم يتصل هو بالمزود، بدلاً من أن يتصل APK بالمزود مباشرة.
++
++```mermaid
++sequenceDiagram
++    participant A as تطبيق Mirror Scorpion
++    participant B as خادم التطبيق الوسيط
++    participant C as مخزن أسرار الخادم
++    participant D as ElevenLabs API
++
++    A->>B: طلب قراءة / عينة IVC + جلسة وموافقة
++    B->>B: تحقق هوية/موافقة/ملكية/حد حصة/سياسة محتوى
++    B->>C: يقرأ مفتاح خدمة محدود النطاق
++    B->>D: طلب موقّع بالمفتاح من الخادم فقط
++    D-->>B: صوت أو voice_id أو خطأ
++    B-->>A: تدفق صوت أو حالة غير حساسة
++    B->>B: سجل استخدام بلا صوت + تطهير الملف العابر
++```
++
++## بدائل الاستضافة التي ينبغي للمالك اختيار واحد منها
++
++| النهج | ما يقدمه للمستخدم | التكلفة والبنية | تعقيد الإعداد |
++|---|---|---|---|
++| **توسعة خادم Firebase الموجود** | التطبيق يتصل بدوال HTTPS ضمن مشروع `mirorr-d11b2`؛ تتولى الأسرار والحدود والحذف. مناسب لأن التطبيق يستعمل Firebase فعلاً. | تكلفة ElevenLabs مستقلة، وقد تتطلب الوظائف/التخزين/السجلات فوترة سحابية عند تجاوز الحصة أو لتفعيل الموارد المطلوبة. لا نفعّلها قبل اعتمادها. | متوسط؛ يوجد مشروع لكن النشر مؤجل عمداً. |
++| **خادم API مستقل صغير** | خدمة واحدة للصوت قابلة للنقل بين ElevenLabs ومزود آخر دون ربطها بخدمات التطبيق الأخرى. | تكلفة استضافة وخزن أسرار مستقلة إضافة إلى ElevenLabs؛ تحتاج مراقبة وتحديثات أمنية. | أعلى؛ يحتاج استضافة، اسم نطاق، سجل أعطال وحماية من إساءة الاستخدام. |
++| **أصوات Android المحلية فقط** | قراءة فورية حيث تتوفر أصوات الجهاز، بلا حساب خارجي أو إرسال نص. | لا فاتورة مزود ولا خادم. | منخفض؛ متاح الآن، لكنه لا يقدم نسخ صوت. |
++
++لا يبدأ التنفيذ قبل اختيار نهج واحد وسقف شهري وخطة ElevenLabs. هذه ليست ثلاثة إصدارات متنافسة للتطبيق؛ هي بدائل بنية لتقديم نفس الخدمة بأمان.
++
++## نموذج الصلاحيات والبيانات
++
++يستخدم الخادم معرّف تثبيت مستعاراً أو حساب المستخدم عند توفر تسجيل دخول، ولا يستمد هوية من اسم الصوت. كل صوت مخصص يرتبط بصاحبه من خلال جدول أذونات صريح. لا يملك المستخدم حق الوصول إلى صوت بمجرد تخمين `voice_id`.
++
++| سجل | حقول الحد الأدنى | الغرض |
++|---|---|---|
++| `voice_profiles` | `profileId`، `ownerId`، `provider`، `providerVoiceId`، `mode`، `status`، `createdAt`، `deletedAt` | فصل هوية التطبيق عن معرّف المزود والتحكم في الإزالة. |
++| `voice_consents` | `consentId`، `ownerId`، `consentVersion`، `purpose`، `audioSha256`، `acceptedAt`، `revokedAt` | إثبات أن المستخدم اختار المسار وقبل استخدام صوته؛ بلا حفظ الملف الصوتي. |
++| `usage_ledger` | `requestId`، `ownerId`، `operation`، `characters`، `estimatedCostBand`، `result`، `createdAt` | إنفاذ حصة يومية/شهرية ومراجعة الاستهلاك من دون نسخ نص أو صوت. |
++| `delete_requests` | `requestId`، `profileId`، `providerDeleteStatus`، `attempts`، `completedAt` | يجعل حذف IVC قابلاً للمتابعة ولا يدّعي النجاح قبل استجابة المزود. |
++
++توصي وثائق ElevenLabs بربط المستخدمين بالأصوات في سجل موارد وأذونات على مستوى المورد، وهو أساس هذا النموذج. [2]
++
++## واجهات HTTP المقترحة
++
++تظل أسماء المسارات وأشكال الاستجابة داخلية إلى أن يعتمد المالك الاستضافة، لكن العقد التالي يحدد الحدود الوظيفية اللازمة للاختبار.
++
++| الواجهة | المدخلات المقبولة | التحقق قبل الاتصال الخارجي | الناتج |
++|---|---|---|---|
++| `POST /v1/voice/tts` | نص مختار، `profileId` اختياري، لغة، معرف طلب | الحجم، سياسة محتوى، ملكية الصوت إن وجد، المتبقي من الحصة، حد المعدل. | صوت متدفق أو رمز خطأ مفهوم. |
++| `POST /v1/voice/ivc/consents` | إصدار الموافقة، الغرض، تأكيد العمر والحق | لا يقبل `true` صامتاً؛ يصدر `consentId` قصير العمر. | حالة الموافقة فقط. |
++| `POST /v1/voice/ivc` | `consentId` صالح وعينة صوت أحادية المتحدث | صيغة/حجم/مدة، SHA-256، تطابق صاحب الموافقة، منع تكرار الطلب وحد الحصة. | `profileId` وحالة `creating`؛ لا يعيد عينة الصوت. |
++| `GET /v1/voice/profiles` | جلسة المالك | يعيد أصوات المالك وحده وحالاتها. | قائمة مصغرة لا تشمل العينات. |
++| `DELETE /v1/voice/profiles/{profileId}` | جلسة المالك، تأكيد حذف | يتحقق من المالك ثم يوقف الاستعمال ويبدأ حذف ElevenLabs. | `deleting` ثم `deleted` أو `failed`. |
++| `GET /v1/voice/usage` | جلسة المالك | يحد من الاستعلام إلى المالك. | المتبقي والحالة دون أسرار أو فاتورة مفصلة. |
++
++لا يسمح الخادم بطلب PVC من التطبيق. لأن PVC يتطلب تحقق المالك ولا يمكن حذف PVC غير الموثّق مباشرة وفق وثائق ElevenLabs، يبقى هذا المسار خارج المنتج المحمول. [3] [4]
++
++## حدود الاستخدام المقترحة
++
++تضبط القيم النهائية بعد اختيار الخطة؛ إلى ذلك الحين هذه حواجز وليست وعود تسعير:
++
++| الحاجز | قاعدة التطبيق | أثرها |
++|---|---|---|
++| سقف شهري عام | رقم يختاره المالك ويوقف كل الطلبات بعده. | يمنع زيادة غير متوقعة من الاستخدام. |
++| حصة لكل تثبيت/حساب | رصيد يومي ومعدل طلبات أقصى، منفصل للقراءة ولإنشاء IVC. | يمنع استنزاف الرصيد أو إساءة الاستخدام. |
++| حد طول النص | حد محافظ يتفق مع حد النموذج، مع تقسيم مُراقَب للنصوص الطويلة. | يجعل الكلفة متوقعة ويمنع إدخال كتب كاملة دفعة واحدة. |
++| أصوات مخصصة | المالك فقط، ولا يسمح بالمشاركة العامة أو التصدير أو الـVoice Library. | يقلل الانتحال وانتشار الصوت. |
++| إساءة/فشل | خطأ موحد، تجميد محدود، ومسار دعم؛ لا يعاد إرسال عينة تلقائياً. | يحمي الخصوصية والرصيد. |
++
++ينشأ مفتاح خدمة منفصل لبيئة الاختبار والإنتاج، ويقيد بالمنافذ اللازمة وحصة ائتمانية وعنوان IP إذا كان الخادم يملك عنواناً ثابتاً. مفتاح المستخدم قصير العمر مناسب للتطوير فقط، ولا يوضع في CI أو التطبيق. [1] [2]
++
++## اختبارات القبول قبل النشر
++
++لا تعتمد ميزة الصوت السحابي إلا إذا نجحت الاختبارات التالية في CI وAPK حقيقي: رفض النص بلا موافقة/جلسة، رفض `profileId` لمستخدم آخر، وقف الطلب عند الحصة، إنشاء IVC فقط بعد `consentId` صحيح، حذف محلي وخارجي قابل للتحقق، فشل صادق عند انقطاع الشبكة، وعدم ظهور مفتاح ElevenLabs في APK أو Git أو logs. وبعد ذلك يختبر المالك اختيار الصوت، القراءة، الإيقاف، والحذف على جهاز Android.
++
++## المراجع
++
++[1]: https://elevenlabs.io/docs/overview/administration/workspaces/api-keys "ElevenLabs API Keys"
++[2]: https://elevenlabs.io/docs/eleven-api/guides/how-to/best-practices/security "ElevenLabs Secure by Design"
++[3]: https://elevenlabs.io/docs/eleven-creative/voices/voice-cloning "ElevenLabs Voice Cloning overview"
++[4]: https://help.elevenlabs.io/hc/en-us/articles/26943561261073-How-do-I-delete-voices-from-My-Voices "ElevenLabs Help: deleting voices"
+diff --git a/docs/elevenlabs-voice-consent-and-deletion-contract-2026-08-25.md b/docs/elevenlabs-voice-consent-and-deletion-contract-2026-08-25.md
+new file mode 100644
+index 0000000..73f5bac
+--- /dev/null
++++ b/docs/elevenlabs-voice-consent-and-deletion-contract-2026-08-25.md
+@@ -0,0 +1,69 @@
++# عقد الموافقة والخصوصية والحذف لمسار ElevenLabs الصوتي
++
++> **الحالة:** مواصفة منتج قبل التنفيذ وليست استشارة قانونية. لا يسمح هذا العقد بإنشاء حساب ElevenLabs أو رفع صوت أو تشغيل API. ويجب مراجعته مع الشروط واللوائح السارية في بلد الإطلاق قبل تفعيله.
++
++## الغرض والنطاق
++
++يدعم Mirror Scorpion مسارين منفصلين تماماً. المسار الأول هو **قراءة نص يختاره المستخدم** بصوت ElevenLabs أو بصوت النظام المحلي. المسار الثاني هو **Instant Voice Cloning لصوت المستخدم نفسه**. لا تستخدم الميزة الميكروفون في الخلفية، ولا تقرأ رسائل أو مكالمات أو محتوى تطبيقات أخرى، ولا تنشئ صوتاً من ملف لم يختره المستخدم يدوياً.
++
++> لا تعني الموافقة على القراءة السحابية الموافقة على نسخ الصوت. لا يظهر زر رفع عينة النسخ ولا يصبح قابلاً للضغط إلا بعد موافقة مستقلة على جميع البنود أدناه.
++
++## قواعد الأهلية والملكية
++
++| القاعدة | التطبيق الإلزامي |
++|---|---|
++| العمر | لا يفتح مسار ElevenLabs لمن هم دون 18 عاماً؛ تنص شروط ElevenLabs على عدم جواز استخدام خدماته لمن هو دون سن الرشد، وبحد أدنى 18 عاماً. [1] |
++| ملكية الصوت | IVC لصوت المستخدم فقط، أو لصوت يثبت المستخدم أنه يملك الحق والتفويض الصريح لاستخدامه. لا يقبل التطبيق أصوات مشاهير أو أقارب أو زملاء أو تسجيلات من الإنترنت. [2] |
++| PVC | لا يعرض داخل التطبيق. ElevenLabs يقصر Professional Voice Cloning على صوت المالك نفسه حتى مع وجود موافقة شخص آخر، ويتطلب تحققاً من الصوت. [3] |
++| الغرض | القراءة والترجمة والقصص داخل Mirror Scorpion فقط. يُمنع استخدام الصوت للانتحال أو الاحتيال أو إجراء المكالمات أو نسبة كلام لم يقله صاحب الصوت أو إخفاء كونه صوتاً اصطناعياً. [4] |
++| المحتوى | يمنع المحتوى غير القانوني أو المسيء أو المضلل أو الذي يقدم تشخيصاً/علاجاً نفسياً أو طبياً فردياً بلا مختص. [4] |
++
++## نص الموافقة الذي يظهر قبل رفع العينة
++
++يظهر النص التالي كاملاً في شاشة مستقلة، ولا يكون مربع الموافقة محدداً مسبقاً:
++
++> **أقرّ أن عمري 18 عاماً أو أكثر، وأن هذه عيّنة من صوتي أنا أو أن لدي حقاً وتفويضاً صريحاً وقابلاً للإثبات لاستخدامها لنسخ صوت عبر ElevenLabs. أفهم أن التسجيل الصوتي وبيانات الصوت قد تعد بيانات شخصية أو حساسة، وأنها سترسل إلى ElevenLabs لإنشاء صوت اصطناعي. أفهم أن هذا الصوت قد يخطئ ولا يمثلني في أي قرار أو مكالمة أو إثبات هوية. لن أستخدمه لانتحال أي شخص أو خداعه. قرأت سياسة الاحتفاظ والحذف أدناه، وأوافق على إرسال هذه العينة للغرض المحدد فقط.**
++
++لا يكفي إثبات الموافقة الذاتي لتنفيذ PVC. وهو أيضاً لا يحول دون إجراء تحقق أو مراجعة بواسطة ElevenLabs، كما أن مسار IVC لدى المزود يطلب تأكيد الحق والموافقة عند إنشاء الصوت. [2] [3]
++
++## بيانات كل خطوة ومدة الاحتفاظ
++
++| الموضع | البيانات | القاعدة المقترحة في التطبيق | ما لا يمكن أن نعد به |
++|---|---|---|---|
++| هاتف المستخدم قبل الإرسال | تسجيل قصير اختاره أو سجله المستخدم | يبقى محلياً حتى الإلغاء أو الإرسال الناجح، ثم يحذف تلقائياً من مساحة التطبيق خلال 24 ساعة كحد أقصى. | لا يحذف نسخة احتفظ بها المستخدم بنفسه خارج مساحة التطبيق. |
++| الخادم الوسيط | ملف رفع عابر، معرف طلب، بصمة integrity، وموافقة مسجلة | لا يسجل الصوت في التحليلات؛ يبثه إلى المزود ثم يحذفه فور نجاح/فشل النقل. يحتفظ بسجل موافقة غير صوتي للحد الأدنى اللازم للتدقيق. | لا يمنع سجلات الأمان اللازمة لدى مزود الاستضافة أو ما يفرضه القانون. |
++| ElevenLabs — IVC | العينة ونموذج الصوت ومعلومات الحساب | يُشرح للمستخدم أن ZRM لا يغطي IVC؛ إنشاء الصوت يتطلب احتفاظ المزود بالعينة/النموذج. [5] | لا نسمّيه «صفر احتفاظ» أو «حذف فوري». |
++| ElevenLabs — TTS العادي | النص المختار والصوت الناتج | يرسل فقط بعد ضغط المستخدم زر القراءة. بالنسبة إلى ZRM، لا يفعّل `enable_logging=false` إلا إذا كان الحساب مؤهلاً لـEnterprise ZRM؛ لا نزعم توافره في الخطة العادية. [5] | لا يعني إيقاف logging حذف كل البيانات أو إلغاء سياسة الحساب. |
++| مخرجات التطبيق | ملف صوت تشغيل مؤقت | لا تحفظ في المعرض أو التخزين العام تلقائياً؛ تحذف من cache عند إغلاق الجلسة أو بعد 24 ساعة. | لا يمكن حذف ملف اختار المستخدم تصديره أو مشاركته. |
++
++## الحذف والإلغاء
++
++يمكن للمستخدم إلغاء الرفع قبل إرساله، أو طلب حذف الصوت المستنسخ لاحقاً. عند طلب حذف IVC، ينفذ الخادم بالترتيب: إيقاف أي طلبات TTS قيد التنفيذ، حذف المخرجات المؤقتة، إبطال ربط المستخدم بـ`voice_id`، ثم استدعاء حذف الصوت لدى ElevenLabs وتسجيل نتيجة `ok` من دون حفظ الصوت نفسه. واجهة ElevenLabs API تدعم حذف الصوت بالمعرّف، وحذف الصوت في لوحة التحكم لا يمكن التراجع عنه. [6] [7]
++
++لا يُعرض PVC في التطبيق بسبب استثناء مهم: لا يمكن حذف PVC غير موثّق ذاتياً من واجهة المستخدم وفق وثائق ElevenLabs، وقد يتطلب التواصل مع الدعم. لذلك يمنع التطبيق بدء PVC أو تدريبه أو التحقق منه. [3] [7]
++
++## واجهة موافقة قابلة للتدقيق
++
++لا تجمع الواجهة توقيعاً مخفياً أو موافقة عامة. يسجل الخادم، بعد الضغط الصريح، البيانات التالية فقط: `consentVersion`، و`purpose`، و`acceptedAt`، و`accountId` المستعار، و`voiceId` بعد النجاح، وبصمة الملف SHA-256، وحالة الحذف. لا يخزن النص الصوتي أو التسجيل ضمن سجل الموافقة.
++
++| الحالة | الزر المتاح | النتيجة الظاهرة |
++|---|---|---|
++| لم يوافق بعد | «أقرأ بسيستم الجهاز» و«اعرف كيف تعمل النسخة الصوتية» | لا رفع ولا طلب شبكة. |
++| وافق ثم ألغى | «إلغاء» | حذف الملف المحلي/العابر وإظهار «لم يُنشأ صوت». |
++| IVC ناجح | «استخدم صوتي» و«احذف صوتي المستنسخ» | توضيح أن الصوت اصطناعي، مع عداد حصة الاستخدام. |
++| الحذف ناجح | لا يظهر الصوت في قائمة الاختيار | «تم إرسال حذف الصوت إلى المزود وتطهير نسخ التطبيق المؤقتة». |
++| فشل الحذف | «أعد المحاولة» و«اتصل بالدعم» | لا يدّعي التطبيق نجاح الحذف؛ يعرض رقم الطلب فقط. |
++
++## ما يحتاج اعتماد المالك قبل التنفيذ
++
++لا يبدأ أي كود اتصال خارجي قبل اختيار **خطة ElevenLabs المدفوعة**، وتحديد سقف شهري لا يسمح للخادم بتجاوزه، وقبول شروط ElevenLabs وخصوصيتها، وتحديد بلد/منطقة الإطلاق، واعتماد هذا النص. الخطة المجانية غير مناسبة لاستخدام تطبيق تجاري وفق شروط ElevenLabs. [1] [4]
++
++## المراجع
++
++[1]: https://elevenlabs.io/terms-of-use "ElevenLabs Terms of Service — age, commercial use, content, retention"
++[2]: https://elevenlabs.io/docs/eleven-creative/voices/voice-cloning/instant-voice-cloning "ElevenLabs Instant Voice Cloning"
++[3]: https://elevenlabs.io/docs/eleven-creative/voices/voice-cloning "ElevenLabs Voice Cloning overview"
++[4]: https://elevenlabs.io/use-policy "ElevenLabs Prohibited Use Policy"
++[5]: https://elevenlabs.io/docs/eleven-api/resources/zero-retention-mode "ElevenLabs Zero Retention Mode"
++[6]: https://elevenlabs.io/docs/api-reference/voices/delete "ElevenLabs Delete Voice API"
++[7]: https://help.elevenlabs.io/hc/en-us/articles/26943561261073-How-do-I-delete-voices-from-My-Voices "ElevenLabs Help: deleting voices"
+diff --git a/docs/free-ai-media-tools-evaluation-2026-08-24.md b/docs/free-ai-media-tools-evaluation-2026-08-24.md
+new file mode 100644
+index 0000000..f08fb0d
+--- /dev/null
++++ b/docs/free-ai-media-tools-evaluation-2026-08-24.md
+@@ -0,0 +1,74 @@
++# تقييم أدوات نسخ الصوت وتوليد الفيديو: المجاني والحصة التجريبية والتكلفة
++
++> **الحالة:** بحث قرار قبل التنفيذ. لا يوجد مفتاح أو مزود أو عينة صوت مستخدم في التطبيق. «الترخيص المفتوح» لا يعني حوسبة مجانية، و«الحصة المجانية» لا تعني غياب الفوترة أو صلاحية الاستخدام التجاري.
++
++## الخلاصة التنفيذية
++
++لا يوجد، ضمن الخيارات التي تم التحقق منها، مزود سحابي لنسخ الصوت أو الفيديو يعمل **مجّاناً بالكامل وبلا قيود** بمجرد وضع مفتاح Google. خدمات Google تميز بين TTS العادي وبين Instant Custom Voice؛ الأخير بلا حصة مجانية في جدول التسعير ويتطلب فوترة، كما أن Custom Voice التقليدي لا يستقبل عملاء جدداً. [1] [2] أما Veo السحابي فله قيود منطقة ولغة وإتاحة، ولا يعرض مسار pay-as-you-go في وثيقة Veo 3.1 نفسها. [3]
++
++## نسخ الصوت
++
++| الخيار | وضع المجانية/الترخيص | القيود المهمة | قرار النموذج التجريبي |
++|---|---|---|---|
++| **أصوات Android المحلية** | بلا خدمة خارجية أو مفتاح؛ أصوات الجهاز المتاحة فقط. | ليست نسخ صوت. الجودة واللغات تتغير بحسب جهاز المستخدم. | **مفعّل الآن** للقراءة الصوتية فقط. |
++| **Google Instant Custom Voice** | لا توجد حصة مجانية؛ السعر المنشور 60 دولاراً لكل مليون حرف توليد. تتطلب خدمة TTS فوترة مفعّلة. [1] | رفع عينة صوت إلى Google؛ لا يصلح لمفتاح داخل APK. | غير مناسب كـ«مجاني بالكامل». |
++| **Google Custom Voice التقليدي** | خدمة تدريب صوت من تسجيلات studio-quality. [2] | لا تستقبل عملاء جدداً؛ غير مسار فوري للمستخدم. | مستبعد. |
++| **ElevenLabs** | الخطة المجانية تتيح TTS، بينما Instant Voice Cloning يبدأ في Starter المدفوع (6 دولار/شهر في الجدول الحالي)، والترخيص التجاري غير موجود في الخطة المجانية. [4] | مفتاح API وحساب خارجي؛ لا يضع المفتاح في التطبيق. | يصلح للمستقبل المدفوع، لا للنموذج المجاني. |
++| **Azure Custom Voice** | وصول محدود يتطلب طلب أهلية؛ يحتاج بيان موافقة صوتي، و300 utterances على الأقل للنموذج الاحترافي. [5] | مشروع وتدريب ونقطة نهاية وفوترة؛ ليس خدمة مفتاح مجانية بسيطة. | مستبعد من MVP. |
++| **OpenVoice V2 محلي** | مستودع V1/V2 تحت MIT ومعلن للاستخدام التجاري. [6] | البرنامج مفتوح، لكن يلزم خادم GPU وتشغيل وصيانة وحماية API؛ لا يعمل داخل APK أو GitHub Actions. اللغات الأصلية المعلنة لا تذكر العربية. | مرشح بحثي ذاتي الاستضافة فقط بعد توفير GPU ثابت وموافقة خصوصية. |
++
++## توليد الفيديو
++
++| الخيار | وضع المجانية/الترخيص | القيود المهمة | قرار النموذج التجريبي |
++|---|---|---|---|
++| **Google Veo 3.1** | وثيقة Google تشير إلى fixed quota، ولا تذكر pay-as-you-go؛ ويُرجع التسعير إلى صفحة منفصلة. [3] | منطقة `us-central1`، prompts إنجليزية، 4/6/8 ثوان، وتوجد شروط Preview لبعض المسارات. ليس «مفتاحاً مجانياً». | لا يدمج قبل اعتماد حساب وفوترة وحدود تكلفة. |
++| **Gemini Developer API video** | بعض نماذج الفيديو مذكورة على مستوى Paid فقط؛ الحصة المجانية لبعض نماذج Gemini الأخرى قد تستخدم المحتوى لتحسين المنتجات. [7] | لا تعالج قصص المستخدم أو نصوصه الحساسة في مستوى يستخدم المحتوى للتحسين. | غير معتمد حالياً. |
++| **Wan2.1 محلي** | الكود تحت Apache-2.0. [8] | نموذج T2V-1.3B يحتاج 8.19GB VRAM؛ المثال المنشور يولد 5 ثوان 480p على RTX 4090 في قرابة 4 دقائق. يحتاج خادم GPU دائم، لا هاتف Android ولا GitHub Actions. | أفضل خيار مفتوح **بعد** توفير GPU ثابت، لكنه ليس حوسبة مجانية. |
++| **Stable Video Diffusion 1.1** | Community License مجانية ضمن حدود معينة ولدى إيراد سنوي أقل من مليون دولار، مع تسجيل للاستخدام التجاري. [9] | يتطلب قبول الرخصة ومشاركة بيانات اتصال؛ فيديو قصير جداً، Image-to-Video، ولا يضمن وجوهاً/نصاً مقروءاً. | بديل بحثي ثانوي، لا يدمج قبل قبول الرخصة وتوفير GPU. |
++
++## ما يمكن تفعيله بلا تكلفة خارجية الآن
++
++يبقى المسار الوحيد الجاهز هو القراءة بأصوات Android المحلية واختيار الصوت المثبت على الجهاز. أما نسخ الصوت وفيديو القصص فيظلان غير مفعّلين في الواجهة حتى يختار المالك نموذجاً من مسارين: خادم GPU ذاتي الاستضافة مع أدوات مفتوحة، أو مزود سحابي مدفوع مع خادم وسيط وموافقة المستخدم.
++
++## قرار ElevenLabs للصوت — تحديث 2026-08-25
++
++اختيار **ElevenLabs** مناسب لمسار الصوت السحابي، لكنه ليس ترخيصاً تلقائياً لتفعيل كل وظائف الصوت. يجب فصل الاستخدام إلى منتجين مختلفين: القراءة السحابية للنصوص، ثم نسخ صوت المالك. قراءة النص تستفيد من نماذج TTS العادية؛ أما نسخ الصوت فيستخدم IVC أو PVC وله مدخلات صوتية حساسة وقيود اشتراك وموافقة مستقلة. [4] [10] [11]
++
++| مرحلة التفعيل | المنتج الموصى به | أقل خطة منشورة مناسبة | ما يعالجه | ما لا يعنيه |
++|---|---|---|---|---|
++| القراءة الاختيارية للنصوص والقصص | Flash / Turbo للسياقات القصيرة أو v2 Multilingual للنصوص الأطول | خطة مدفوعة للاستخدام التجاري؛ لا تستخدم الخطة المجانية في تطبيق تجاري. [12] | نص القصة → ملف أو تدفق صوتي. | ليس نسخاً لصوت المستخدم. |
++| نموذج نسخ أولي لصوت المستخدم | Instant Voice Cloning | Starter أو أعلى حسب صفحة التسعير الحالية. [4] | نحو 1–2 دقيقة من تسجيل واضح ومتسق، مع تأكيد حق النسخ والموافقة. [10] | لا يضمن تطابقاً احترافياً، ولا يسمح بتجاوز الحقوق أو الإيحاء بأن الصوت بشري حي. |
++| نسخة عالية الدقة لصوت المالك | Professional Voice Cloning | Creator أو أعلى؛ لا تتوافر slots في Free وStarter. [11] | 30–180 دقيقة من عينات جيدة، والتحقق من المالك، والتدريب الذي يستغرق عادة 3–6 ساعات أو أكثر. [11] | لا يمكن إنشاء PVC لصوت شخص آخر حتى مع موافقته؛ ينشئ المالك صوته في حسابه ثم يشاركه وفق آليات المزود. [10] |
++
++تكلفة التشغيل المعلنة حالياً تبدأ من 0.05 دولار لكل ألف حرف لـFlash/Turbo و0.10 دولار لكل ألف حرف لـv3 أو v2 Multilingual؛ صفحة API تشير أيضاً إلى أن الاستخدام التجاري يتطلب مستخدماً مدفوعاً وفق الشروط. هذه أرقام مرجعية لا سقف للفاتورة، ولذلك لا نفعّل pay-as-you-go أو التعبئة المتكررة تلقائياً. [12] [13]
++
++### حدود الخصوصية غير القابلة للتفاوض
++
++يجب أن تعرض واجهة التطبيق قبل الرفع أن التسجيل الصوتي وبيانات الصوت قد تعد بيانات شخصية/حساسة، وأن ElevenLabs قد يعالجها لإنشاء نموذج صوت. الشروط غير المؤسسية تمنح المزود ترخيصاً واسعاً دائماً وغير قابل للسحب للمحتوى والنموذج لتحسين الخدمات، مع وجود خيار إيقاف استخدام المحتوى للتدريب من إعدادات الحساب للمستقبل فقط. لذلك لا يكفي زر «أوافق» عام أو وعد بحذف لا يملكه التطبيق. [13]
++
++وضع **Zero Retention** متاح لعملاء Enterprise محددين وطلبات API فقط، ولا يغطي عينات Instant أو Professional Voice Cloning لأن إنشاء الصوت يتطلب الاحتفاظ بالعينة/النموذج. لهذا لا يجوز تسويق مسار النسخ بأنه «بلا احتفاظ بالبيانات». أما TTS العادي فيمكن أن يطلب `enable_logging=false` بعد حصول الحساب المؤهل على ZRM، لكن هذا أيضاً لا يحل محل عقد الخصوصية أو حذف التطبيق لنسخه المحلية. [14]
++
++### قرار تنفيذ متدرج
++
++لا ننفذ نسخ الصوت بعد هذه المراجعة. البداية الصحيحة، بعد موافقة المالك على خطة مدفوعة وحد أقصى شهري، هي **TTS سحابي اختياري بلا تسجيل صوت** مع زر إيقاف وأصوات النظام المحلية كبديل. ثم تأتي مرحلة IVC لصوت المالك فقط بعد إقرار نص موافقة منفصل وخادم وسيط وخطة حذف. ولا نضيف Professional Voice Cloning إلى تدفق المستخدمين داخل التطبيق: يتطلب التحقق ويقيد ElevenLabs إنشاؤه بالمالك نفسه.
++
++## بنية مستقبلية قابلة للاستبدال
++
++لا يوضع مفتاح مزود في Flutter APK. تكون البنية: تطبيق Android ← واجهة موافقة صريحة ← خادم وسيط يطبق حدود الحصة ← موفر/خادم GPU ← مساحة ملفات مؤقتة ← حذف قابل للتحقق. يتطلب كل طلب نسخ صوت تأكيد الملكية أو التفويض، وكل طلب فيديو تحديد حق استخدام القصة، وموافقة منفصلة لإرسال المحتوى، ومهلة حذف، وزر إلغاء.
++
++## المراجع
++
++[1]: https://cloud.google.com/text-to-speech/pricing "Google Cloud Text-to-Speech pricing"
++[2]: https://docs.cloud.google.com/text-to-speech/custom-voice "Google Cloud Custom Voice overview"
++[3]: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/veo/3-1-generate "Google Veo 3.1 documentation"
++[4]: https://elevenlabs.io/pricing "ElevenLabs pricing"
++[5]: https://learn.microsoft.com/en-us/azure/ai-services/speech-service/custom-neural-voice "Azure Custom Voice overview"
++[6]: https://github.com/myshell-ai/OpenVoice "OpenVoice repository and MIT licence"
++[7]: https://ai.google.dev/gemini-api/docs/pricing "Gemini Developer API pricing"
++[8]: https://github.com/Wan-Video/Wan2.1 "Wan2.1 repository"
++[9]: https://huggingface.co/stabilityai/stable-video-diffusion-img2vid-xt-1-1 "Stable Video Diffusion 1.1 model card and licence"
++[10]: https://elevenlabs.io/docs/eleven-creative/voices/voice-cloning "ElevenLabs Voice Cloning overview"
++[11]: https://elevenlabs.io/docs/eleven-api/guides/how-to/voices/professional-voice-cloning "ElevenLabs Professional Voice Cloning API guide"
++[12]: https://elevenlabs.io/pricing/api "ElevenLabs API pricing"
++[13]: https://elevenlabs.io/terms-of-use "ElevenLabs Terms of Service"
++[14]: https://elevenlabs.io/docs/eleven-api/resources/zero-retention-mode "ElevenLabs Zero Retention Mode"
+diff --git a/functions/index.js b/functions/index.js
+index 6dd6522..b220014 100644
+--- a/functions/index.js
++++ b/functions/index.js
+@@ -3,6 +3,7 @@ const { logger } = require("firebase-functions");
+ const { initializeApp } = require("firebase-admin/app");
+ 
+ const { buildHealthResponse } = require("./src/health");
++const { buildElevenLabsGatewayStatus } = require("./src/elevenlabs_gateway");
+ 
+ // تعتمد Cloud Functions على هوية بيئة التشغيل الافتراضية.
+ // لا تُضف serviceAccountKey.json أو أي مفتاح خاص إلى المشروع.
+@@ -21,3 +22,20 @@ exports.healthCheck = onCall({ region: "us-central1" }, (request) => {
+ 
+   return response;
+ });
++
++// لا ينفذ هذا المسار أي طلب إلى ElevenLabs. يثبت فقط أن وضع البوابة
++// يبقى مغلقاً إلى أن يعتمد المالك الميزانية والخادم ومفتاح الخدمة.
++exports.elevenLabsGatewayStatus = onCall({ region: "us-central1" }, (request) => {
++  const response = buildElevenLabsGatewayStatus({
++    authenticated: request.auth != null,
++    hasApiKey: Boolean(process.env.ELEVENLABS_API_KEY),
++    budgetApproved: false,
++  });
++
++  logger.info("Mirror Scorpion ElevenLabs gateway status checked", {
++    authenticated: response.authenticated,
++    enabled: response.enabled,
++  });
++
++  return response;
++});
+diff --git a/functions/package.json b/functions/package.json
+index 901b776..c7ba2ef 100644
+--- a/functions/package.json
++++ b/functions/package.json
+@@ -8,7 +8,7 @@
+     "node": "22"
+   },
+   "scripts": {
+-    "check": "node --check index.js && node --check src/health.js",
++    "check": "node --check index.js && node --check src/health.js && node --check src/elevenlabs_gateway.js",
+     "test": "node --test test/*.test.js",
+     "verify": "npm run check && npm run test"
+   },
+diff --git a/functions/src/elevenlabs_gateway.js b/functions/src/elevenlabs_gateway.js
+new file mode 100644
+index 0000000..548e9c1
+--- /dev/null
++++ b/functions/src/elevenlabs_gateway.js
+@@ -0,0 +1,51 @@
++const gatewayMode = "disabled_pending_owner_budget";
++
++function buildElevenLabsGatewayStatus({
++  hasApiKey = false,
++  budgetApproved = false,
++  authenticated = false,
++} = {}) {
++  return {
++    provider: "ElevenLabs",
++    gatewayMode,
++    enabled: false,
++    externalCallsAllowed: false,
++    authenticated,
++    hasApiKey,
++    budgetApproved,
++    message:
++      "ElevenLabs gateway is intentionally disabled. No text or audio is sent to the provider.",
++  };
++}
++
++function validateFutureElevenLabsRequest({
++  gatewayEnabled = false,
++  hasApiKey = false,
++  userId,
++  operation,
++  consentId,
++  quotaRemaining = 0,
++} = {}) {
++  if (!gatewayEnabled) {
++    return { allowed: false, code: "GATEWAY_DISABLED" };
++  }
++  if (!hasApiKey) {
++    return { allowed: false, code: "SERVER_SECRET_MISSING" };
++  }
++  if (typeof userId !== "string" || userId.length === 0) {
++    return { allowed: false, code: "AUTH_REQUIRED" };
++  }
++  if (quotaRemaining <= 0) {
++    return { allowed: false, code: "QUOTA_EXHAUSTED" };
++  }
++  if (operation === "instant_voice_clone" && !consentId) {
++    return { allowed: false, code: "CONSENT_REQUIRED" };
++  }
++  return { allowed: true, code: "APPROVED_FOR_PROVIDER_CALL" };
++}
++
++module.exports = {
++  buildElevenLabsGatewayStatus,
++  gatewayMode,
++  validateFutureElevenLabsRequest,
++};
+diff --git a/functions/test/elevenlabs_gateway.test.js b/functions/test/elevenlabs_gateway.test.js
+new file mode 100644
+index 0000000..4498714
+--- /dev/null
++++ b/functions/test/elevenlabs_gateway.test.js
+@@ -0,0 +1,46 @@
++const test = require("node:test");
++const assert = require("node:assert/strict");
++
++const {
++  buildElevenLabsGatewayStatus,
++  gatewayMode,
++  validateFutureElevenLabsRequest,
++} = require("../src/elevenlabs_gateway");
++
++test("gateway stays disabled even if a future secret and budget flag exist", () => {
++  const status = buildElevenLabsGatewayStatus({
++    authenticated: true,
++    hasApiKey: true,
++    budgetApproved: true,
++  });
++
++  assert.equal(status.gatewayMode, gatewayMode);
++  assert.equal(status.enabled, false);
++  assert.equal(status.externalCallsAllowed, false);
++  assert.match(status.message, /No text or audio is sent/);
++});
++
++test("future provider calls require an enabled gateway before any other condition", () => {
++  const validation = validateFutureElevenLabsRequest({
++    gatewayEnabled: false,
++    hasApiKey: true,
++    userId: "owner-1",
++    operation: "instant_voice_clone",
++    consentId: "consent-1",
++    quotaRemaining: 1,
++  });
++
++  assert.deepEqual(validation, { allowed: false, code: "GATEWAY_DISABLED" });
++});
++
++test("future voice cloning requires a consent receipt after safe activation", () => {
++  const validation = validateFutureElevenLabsRequest({
++    gatewayEnabled: true,
++    hasApiKey: true,
++    userId: "owner-1",
++    operation: "instant_voice_clone",
++    quotaRemaining: 1,
++  });
++
++  assert.deepEqual(validation, { allowed: false, code: "CONSENT_REQUIRED" });
++});
+diff --git a/functions/test/entrypoint.test.js b/functions/test/entrypoint.test.js
+index 6401749..7e50b08 100644
+--- a/functions/test/entrypoint.test.js
++++ b/functions/test/entrypoint.test.js
+@@ -1,8 +1,9 @@
+ const test = require("node:test");
+ const assert = require("node:assert/strict");
+ 
+-test("Functions entrypoint loads healthCheck without a service-account file", () => {
++test("Functions entrypoint loads safe callables without a service-account file", () => {
+   const functions = require("../index");
+ 
+   assert.equal(typeof functions.healthCheck, "function");
++  assert.equal(typeof functions.elevenLabsGatewayStatus, "function");
+ });
+diff --git a/lib/app/mirror_scorpion_app.dart b/lib/app/mirror_scorpion_app.dart
+index 53161aa..5ac84e2 100644
+--- a/lib/app/mirror_scorpion_app.dart
++++ b/lib/app/mirror_scorpion_app.dart
+@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
+ import 'package:provider/provider.dart';
+ 
+ import '../core/localization/language_preferences.dart';
++import '../core/speech/elevenlabs_voice_service.dart';
+ import '../features/home/dashboard_screen.dart';
+ import 'royal_dark_theme.dart';
+ 
+@@ -12,8 +13,13 @@ class MirrorScorpionApp extends StatelessWidget {
+ 
+   @override
+   Widget build(BuildContext context) {
+-    return ChangeNotifierProvider<LanguagePreferences>.value(
+-      value: languagePreferences ?? LanguagePreferences(),
++    return MultiProvider(
++      providers: [
++        ChangeNotifierProvider<LanguagePreferences>.value(
++          value: languagePreferences ?? LanguagePreferences(),
++        ),
++        ChangeNotifierProvider(create: (_) => ElevenLabsVoiceService()),
++      ],
+       child: Builder(
+         builder: (context) {
+           final preferences = context.watch<LanguagePreferences>();
+diff --git a/lib/core/speech/elevenlabs_voice_service.dart b/lib/core/speech/elevenlabs_voice_service.dart
+new file mode 100644
+index 0000000..15394bb
+--- /dev/null
++++ b/lib/core/speech/elevenlabs_voice_service.dart
+@@ -0,0 +1,56 @@
++import 'package:flutter/foundation.dart';
++
++/// حالة تكامل ElevenLabs من وجهة نظر التطبيق.
++///
++/// لا تحتوي هذه الطبقة على مفتاح API أو عنوان مزود ولا تنفذ طلبات شبكة.
++/// لا يتغير [isGatewayEnabled] إلا بعد نشر خادم وسيط مستقل واعتماد حد تكلفة.
++enum ElevenLabsGatewayState { disabledPendingServerApproval }
++
++class ElevenLabsVoiceAttempt {
++  const ElevenLabsVoiceAttempt({
++    required this.allowed,
++    required this.message,
++  });
++
++  final bool allowed;
++  final String message;
++}
++
++class ElevenLabsVoiceService extends ChangeNotifier {
++  static const consentDocumentPath =
++      'docs/elevenlabs-voice-consent-and-deletion-contract-2026-08-25.md';
++
++  ElevenLabsGatewayState get state =>
++      ElevenLabsGatewayState.disabledPendingServerApproval;
++
++  bool get isGatewayEnabled => false;
++
++  String get statusMessage =>
++      'ElevenLabs غير مفعّل حالياً: لا يُرسل التطبيق نصاً أو تسجيلاً صوتياً، '
++      'ولا يحتوي APK على مفتاح خدمة.';
++
++  Future<ElevenLabsVoiceAttempt> requestCloudReading({
++    required String text,
++    required String languageCode,
++  }) async {
++    if (text.trim().isEmpty) {
++      return const ElevenLabsVoiceAttempt(
++        allowed: false,
++        message: 'لا يوجد نص لإرساله إلى القراءة السحابية.',
++      );
++    }
++    return const ElevenLabsVoiceAttempt(
++      allowed: false,
++      message: 'القراءة السحابية غير مفعّلة بعد. استخدم صوت النظام؛ لم يُرسل '
++          'النص إلى ElevenLabs.',
++    );
++  }
++
++  Future<ElevenLabsVoiceAttempt> requestInstantVoiceClone() async {
++    return const ElevenLabsVoiceAttempt(
++      allowed: false,
++      message: 'نسخ الصوت غير متاح بعد. لن يُرفع أي تسجيل قبل نشر الخادم، '
++          'اعتماد حد الاستخدام، وموافقة صريحة لصوت المالك فقط.',
++    );
++  }
++}
+diff --git a/lib/features/feature_hub_screen.dart b/lib/features/feature_hub_screen.dart
+index 7a45ecc..3dcc86a 100644
+--- a/lib/features/feature_hub_screen.dart
++++ b/lib/features/feature_hub_screen.dart
+@@ -17,6 +17,7 @@ import '../core/mlkit/on_device_ocr_service.dart';
+ import '../core/mlkit/on_device_translation_service.dart';
+ import '../core/pro/premium_verification_service.dart';
+ import '../core/speech/device_speech_recognition_service.dart';
++import '../core/speech/elevenlabs_voice_service.dart';
+ import '../core/speech/system_tts_service.dart';
+ 
+ enum FeatureKind { translation, dialogue, documents, stories, games, settings }
+@@ -1838,6 +1839,26 @@ class _SettingsPanel extends StatelessWidget {
+             ),
+           ),
+           const SizedBox(height: 12),
++          Card(
++            child: ListTile(
++              leading: const Icon(
++                Icons.record_voice_over_outlined,
++                color: RoyalColors.gold,
++              ),
++              title: const Text('ElevenLabs — القراءة ونسخ صوت المالك'),
++              subtitle: const Text(
++                'الربط السحابي غير مفعّل؛ أصوات النظام المحلية هي المسار العامل الآن.',
++              ),
++              trailing: const Icon(Icons.chevron_left),
++              onTap: () => Navigator.push(
++                context,
++                MaterialPageRoute<void>(
++                  builder: (_) => const _ElevenLabsVoicePage(),
++                ),
++              ),
++            ),
++          ),
++          const SizedBox(height: 12),
+           Card(
+             child: ListTile(
+               leading: const Icon(Icons.download_outlined, color: RoyalColors.cyan),
+@@ -1891,6 +1912,164 @@ class _SettingsPanel extends StatelessWidget {
+   }
+ }
+ 
++class _ElevenLabsVoicePage extends StatelessWidget {
++  const _ElevenLabsVoicePage();
++
++  void _showConsentSummary(BuildContext context) {
++    showModalBottomSheet<void>(
++      context: context,
++      backgroundColor: const Color(0xFF0D1623),
++      builder: (sheetContext) => Directionality(
++        textDirection: TextDirection.rtl,
++        child: SafeArea(
++          child: Padding(
++            padding: const EdgeInsets.all(20),
++            child: SingleChildScrollView(
++              child: Column(
++                crossAxisAlignment: CrossAxisAlignment.stretch,
++                children: [
++                  const Text(
++                    'ملخص الموافقة قبل نسخ الصوت',
++                    style: TextStyle(
++                      color: RoyalColors.gold,
++                      fontSize: 19,
++                      fontWeight: FontWeight.w800,
++                    ),
++                  ),
++                  const SizedBox(height: 12),
++                  const Text(
++                    'لن تكون ميزة النسخ متاحة إلا لمن عمره 18 عاماً أو أكثر، '
++                    'ولصوت المالك أو صاحب تفويض صريح فقط. لا يقرأ التطبيق '
++                    'رسائلك أو مكالماتك، ولا يرفع تسجيلاً تلقائياً. عند التفعيل '
++                    'سيظهر عقد موافقة مستقل وخيار حذف واضح قبل إرسال عينة.',
++                    style: TextStyle(height: 1.7),
++                  ),
++                  const SizedBox(height: 12),
++                  Text(
++                    'المرجع داخل المشروع: ${ElevenLabsVoiceService.consentDocumentPath}',
++                    style: const TextStyle(
++                      color: RoyalColors.muted,
++                      height: 1.5,
++                    ),
++                  ),
++                  const SizedBox(height: 16),
++                  FilledButton(
++                    onPressed: () => Navigator.pop(sheetContext),
++                    child: const Text('فهمت'),
++                  ),
++                ],
++              ),
++            ),
++          ),
++        ),
++      ),
++    );
++  }
++
++  @override
++  Widget build(BuildContext context) {
++    final service = context.watch<ElevenLabsVoiceService>();
++    return Directionality(
++      textDirection: TextDirection.rtl,
++      child: Scaffold(
++        appBar: AppBar(title: const Text('إعداد ElevenLabs')),
++        body: ListView(
++          padding: const EdgeInsets.all(18),
++          children: [
++            const _SectionNotice(
++              title: 'حالة صوت صادقة',
++              detail:
++                  'تعمل القراءة الحالية بصوت النظام المثبت على جهازك. لا يعمل ElevenLabs في هذه النسخة بعد، ولا يرسل التطبيق نصاً أو عينة أو مفتاحاً إلى أي مزود.',
++            ),
++            const SizedBox(height: 14),
++            Card(
++              child: ListTile(
++                leading: const Icon(
++                  Icons.phonelink_lock_outlined,
++                  color: RoyalColors.cyan,
++                ),
++                title: const Text('حالة الخادم الوسيط'),
++                subtitle: Text(service.statusMessage),
++                trailing: const Icon(
++                  Icons.cloud_off_outlined,
++                  color: RoyalColors.muted,
++                ),
++              ),
++            ),
++            const SizedBox(height: 12),
++            Card(
++              child: Padding(
++                padding: const EdgeInsets.all(14),
++                child: Column(
++                  crossAxisAlignment: CrossAxisAlignment.stretch,
++                  children: [
++                    const Text(
++                      'قراءة سحابية اختيارية',
++                      style: TextStyle(fontWeight: FontWeight.w800),
++                    ),
++                    const SizedBox(height: 6),
++                    const Text(
++                      'ستُستخدم لاحقاً لقراءة نص تختاره فقط. لا تعد بديلاً عن أصوات النظام ولا تعمل قبل اعتماد الخطة والخادم وحد الاستخدام.',
++                      style: TextStyle(
++                        color: RoyalColors.muted,
++                        height: 1.5,
++                      ),
++                    ),
++                    const SizedBox(height: 10),
++                    FilledButton.icon(
++                      onPressed: null,
++                      icon: Icon(Icons.cloud_off_outlined),
++                      label: Text('الخادم غير مفعّل'),
++                    ),
++                  ],
++                ),
++              ),
++            ),
++            const SizedBox(height: 12),
++            Card(
++              child: Padding(
++                padding: const EdgeInsets.all(14),
++                child: Column(
++                  crossAxisAlignment: CrossAxisAlignment.stretch,
++                  children: [
++                    const Text(
++                      'نسخ صوت المالك',
++                      style: TextStyle(
++                        color: RoyalColors.gold,
++                        fontWeight: FontWeight.w800,
++                      ),
++                    ),
++                    const SizedBox(height: 6),
++                    const Text(
++                      'مغلق الآن. عند إطلاقه سيطلب موافقة منفصلة، تأكيد العمر وملكية الصوت، ثم يسمح بعينة يختارها المستخدم يدوياً. لا يدعم نسخ أصوات الغير أو تشغيل التسجيل في الخلفية.',
++                      style: TextStyle(
++                        color: RoyalColors.muted,
++                        height: 1.5,
++                      ),
++                    ),
++                    const SizedBox(height: 10),
++                    OutlinedButton.icon(
++                      onPressed: () => _showConsentSummary(context),
++                      icon: const Icon(Icons.privacy_tip_outlined),
++                      label: const Text('اطلع على ملخص الموافقة والحذف'),
++                    ),
++                    const SizedBox(height: 8),
++                    FilledButton.icon(
++                      onPressed: null,
++                      icon: Icon(Icons.lock_outline),
++                      label: Text('لا يمكن رفع عينة الآن'),
++                    ),
++                  ],
++                ),
++              ),
++            ),
++          ],
++        ),
++      ),
++    );
++  }
++}
++
+ class _OfflinePackagesPage extends StatefulWidget {
+   const _OfflinePackagesPage();
+ 
+diff --git a/test/elevenlabs_voice_service_test.dart b/test/elevenlabs_voice_service_test.dart
+new file mode 100644
+index 0000000..d76aae7
+--- /dev/null
++++ b/test/elevenlabs_voice_service_test.dart
+@@ -0,0 +1,36 @@
++import 'package:flutter_test/flutter_test.dart';
++import 'package:mirror_scorpion_v4/core/speech/elevenlabs_voice_service.dart';
++
++void main() {
++  test('ElevenLabs service stays disabled without any client-side configuration', () async {
++    final service = ElevenLabsVoiceService();
++
++    expect(service.isGatewayEnabled, isFalse);
++    expect(
++      service.state,
++      ElevenLabsGatewayState.disabledPendingServerApproval,
++    );
++    expect(service.statusMessage, contains('لا يُرسل التطبيق نصاً أو تسجيلاً'));
++
++    final attempt = await service.requestCloudReading(
++      text: 'نص اختبار',
++      languageCode: 'ar',
++    );
++
++    expect(attempt.allowed, isFalse);
++    expect(attempt.message, contains('لم يُرسل النص'));
++  });
++
++  test('voice cloning stays blocked before a server and explicit consent exist', () async {
++    final service = ElevenLabsVoiceService();
++
++    final attempt = await service.requestInstantVoiceClone();
++
++    expect(attempt.allowed, isFalse);
++    expect(attempt.message, contains('لن يُرفع أي تسجيل'));
++    expect(
++      ElevenLabsVoiceService.consentDocumentPath,
++      contains('elevenlabs-voice-consent-and-deletion-contract'),
++    );
++  });
++}
+diff --git a/todo.md b/todo.md
+index 1c9bf50..1895425 100644
+--- a/todo.md
++++ b/todo.md
+@@ -210,3 +210,23 @@
+ - [ ] تحديد مزود، تكلفة، احتفاظ بيانات، وموافقة صريحة لنسخ صوت المستخدم قبل جمع أي تسجيل صوتي أو إرساله.
+ - [ ] تحديد مزود، تكلفة، حقوق نصوص، وسياسة حذف/موافقة لتحويل القصص إلى فيديو قبل إرسال أي قصة أو إنشاء فيديو.
+ - [ ] عدم عرض نسخ الصوت أو الفيديو كميزات مفعلة قبل اعتماد المزوّد والسياسات واجتياز اختبار Android.
++
++## بحث أدوات نسخ الصوت والفيديو — 2026-08-24
++
++- [x] التحقق من خدمات Google الرسمية: هل تدعم نسخ الصوت أو الفيديو، وما الحصة المجانية والفوترة الفعلية لكل خدمة.
++- [x] مقارنة مزودين رسميين لنسخ الصوت مع أدوات محلية مفتوحة المصدر من حيث التكلفة والخصوصية ومنع انتحال صوت الغير.
++- [x] مقارنة مزودي توليد الفيديو ذوي الحصة المجانية أو التجريبية مع الأدوات المحلية، من حيث السعر والحقوق والاحتفاظ بالمحتوى.
++- [x] توثيق الفرق بين مجاني بالكامل، حصة تجريبية، وخدمة تتطلب حساب فوترة، ومنع أي مفتاح من الظهور في APK.
++- [ ] تصميم طبقة مزود قابلة للاستبدال مع موافقة صريحة وحذف البيانات قبل أي تنفيذ خارجي.
++
++## قرار ElevenLabs للصوت — 2026-08-25
++
++- [ ] التحقق من صلاحيات خطة ElevenLabs المختارة للاستخدام المقصود: TTS فقط أم Instant Voice Cloning، والاستخدام التجاري، والحصة وحدود التجاوز.
++- [x] إعداد عقد موافقة ملكية الصوت وبيان الإفصاح ومدة الاحتفاظ والحذف قبل فتح مسار رفع العينة.
++- [x] تصميم خادم وسيط لـElevenLabs: تخزين سرّي للمفتاح، حد الحصة، سجلات تدقيق، إلغاء، وحذف دون تضمين المفتاح في APK.
++- [x] إضافة واجهة Flutter صادقة تفصل القراءة السحابية عن نسخ الصوت، وتبقي النسخ معطلاً إلى أن تكتمل الموافقة والخادم.
++- [ ] إعداد اختبار CI ثم قبول Android لمسار ElevenLabs المعتمد بعد موافقة المالك على الخطة والخصوصية والتكلفة.
++- [x] إضافة عقد Flutter قابل للاختبار لمزوّد صوت سحابي وحالة تفعيل افتراضية معطّلة بلا مفتاح.
++- [x] إضافة واجهة إعدادات صادقة لقراءة ElevenLabs ونسخ صوت المالك، مع رابط العقد وتعطيل الإرسال الخارجي.
++- [x] إضافة هيكل Firebase Functions غير منشور يتحقق من السرّ والحصة والموافقة قبل استدعاء ElevenLabs.
++- [x] إضافة اختبارات تمنع تشغيل مزود ElevenLabs أو ظهور مفتاحه في Flutter عند غياب تفعيل الخادم.
+-- 
+2.43.0
+

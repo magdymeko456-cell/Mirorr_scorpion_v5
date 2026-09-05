@@ -1,0 +1,215 @@
+From 8082577e3f36aa24c3f6e88a200e607367fa9c2a Mon Sep 17 00:00:00 2001
+From: magdymeko456-cell
+ <2.88837127e+08+magdymeko456-cell@users.noreply.github.com>
+Date: Sun, 23 Aug 2026 22:28:32 +0000
+Subject: [PATCH] fix(speech): reject unsupported language fallback
+
+---
+ .../device_speech_recognition_service.dart    | 67 +++++++++++++++++--
+ lib/features/feature_hub_screen.dart          | 10 ++-
+ ...evice_speech_recognition_service_test.dart | 41 ++++++++++++
+ 3 files changed, 112 insertions(+), 6 deletions(-)
+
+diff --git a/lib/core/speech/device_speech_recognition_service.dart b/lib/core/speech/device_speech_recognition_service.dart
+index 66464c1..cbe3ed5 100644
+--- a/lib/core/speech/device_speech_recognition_service.dart
++++ b/lib/core/speech/device_speech_recognition_service.dart
+@@ -14,6 +14,7 @@ class DeviceSpeechRecognitionService extends ChangeNotifier {
+   bool _isReady = false;
+   String? _message;
+   ValueChanged<String>? _onText;
++  String _requestedLanguageCode = 'ar';
+ 
+   bool get isListening => _speechToText.isListening;
+   bool get isReady => _isReady;
+@@ -24,6 +25,7 @@ class DeviceSpeechRecognitionService extends ChangeNotifier {
+     required ValueChanged<String> onText,
+   }) async {
+     _onText = onText;
++    _requestedLanguageCode = languageCode.toLowerCase();
+     try {
+       if (!_isReady) {
+         _isReady = await _speechToText.initialize(
+@@ -42,11 +44,21 @@ class DeviceSpeechRecognitionService extends ChangeNotifier {
+         languageCode: languageCode,
+         installedLocaleIds: installedLocales.map((locale) => locale.localeId),
+       );
++      if (localeId == null) {
++        final available = SpeechLocaleResolver.availableLanguageCodes(
++          installedLocales.map((locale) => locale.localeId),
++        );
++        _message = available.isEmpty
++            ? 'لا توجد لغة تعرف كلام متاحة في الجهاز. لم يبدأ الاستماع ولم يُستخدم بديل عربي.'
++            : 'لغة الكلام «$languageCode» غير متاحة في خدمة التعرف. اللغات المتاحة: ${available.join('، ')}. لم يبدأ الاستماع ولم يُستخدم بديل عربي.';
++        notifyListeners();
++        return false;
++      }
+       await _speechToText.listen(
+         onResult: _handleResult,
+         listenOptions: stt.SpeechListenOptions(localeId: localeId),
+       );
+-      _message = 'استمع الآن؛ سيظهر النص المعترف به في محرر المصدر.';
++      _message = 'استمع الآن بلغة الكلام «$languageCode» ($localeId)؛ سيظهر النص المعترف به في محرر المصدر.';
+       notifyListeners();
+       return true;
+     } catch (_) {
+@@ -67,7 +79,16 @@ class DeviceSpeechRecognitionService extends ChangeNotifier {
+ 
+   void _handleResult(SpeechRecognitionResult result) {
+     final text = result.recognizedWords.trim();
+-    if (text.isNotEmpty) _onText?.call(text);
++    if (text.isEmpty) return;
++    if (SpeechRecognitionScriptGuard.rejectsArabicFallback(
++      expectedLanguageCode: _requestedLanguageCode,
++      recognizedText: text,
++    )) {
++      _message = 'أعادت خدمة الجهاز نصاً عربياً رغم اختيار «$_requestedLanguageCode». لم يُرسل النص إلى الترجمة؛ ثبّت لغة الكلام المطلوبة في إعدادات التعرف الصوتي ثم أعد المحاولة.';
++      notifyListeners();
++      return;
++    }
++    _onText?.call(text);
+   }
+ 
+   void _handleStatus(String status) {
+@@ -91,8 +112,8 @@ class DeviceSpeechRecognitionService extends ChangeNotifier {
+   }
+ }
+ 
+-/// يطابق لغة المصدر مع لغة تعرف مثبّتة على الهاتف، ثم يعيد null ليستعمل
+-/// النظام لغته الافتراضية عندما لا تتوفر مطابقة صريحة.
++/// يطابق لغة المصدر مع لغة تعرف مثبّتة على الهاتف. لا يسمح للواجهة بالرجوع
++/// بصمت إلى لغة النظام عندما لا تتوفر مطابقة صريحة.
+ class SpeechLocaleResolver {
+   const SpeechLocaleResolver._();
+ 
+@@ -111,4 +132,42 @@ class SpeechLocaleResolver {
+     }
+     return null;
+   }
++
++  static List<String> availableLanguageCodes(Iterable<String> installedLocaleIds) {
++    return installedLocaleIds
++        .map(
++          (localeId) => localeId
++              .replaceAll('_', '-')
++              .split('-')
++              .first
++              .toLowerCase(),
++        )
++        .toSet()
++        .toList()
++      ..sort();
++  }
++}
++
++/// يمنع تمرير ناتج معروف بأنه تعريب نطقي للإنجليزية إلى مترجم الإنجليزية.
++/// هذا حارس شفاف لحالة القبول المبلغ عنها، وليس كاشف لغة عام أو أداة ذكاء.
++class SpeechRecognitionScriptGuard {
++  const SpeechRecognitionScriptGuard._();
++
++  static const _latinScriptLanguages = <String>{
++    'af', 'ca', 'cs', 'da', 'de', 'en', 'es', 'et', 'eu', 'fi', 'fr', 'ga',
++    'gl', 'hr', 'hu', 'id', 'is', 'it', 'lt', 'lv', 'ms', 'nl', 'no', 'pl',
++    'pt', 'ro', 'sk', 'sl', 'sq', 'sv', 'sw', 'tl', 'tr', 'vi', 'zu',
++  };
++
++  static bool rejectsArabicFallback({
++    required String expectedLanguageCode,
++    required String recognizedText,
++  }) {
++    if (!_latinScriptLanguages.contains(expectedLanguageCode.toLowerCase())) {
++      return false;
++    }
++    final hasArabic = RegExp(r'[\u0600-\u06FF]').hasMatch(recognizedText);
++    final hasLatin = RegExp(r'[A-Za-z]').hasMatch(recognizedText);
++    return hasArabic && !hasLatin;
++  }
+ }
+diff --git a/lib/features/feature_hub_screen.dart b/lib/features/feature_hub_screen.dart
+index e7cfb0e..29c0cb2 100644
+--- a/lib/features/feature_hub_screen.dart
++++ b/lib/features/feature_hub_screen.dart
+@@ -132,7 +132,10 @@ class _TranslationPanelState extends State<_TranslationPanel> {
+   }
+ 
+   Future<void> _selectSourceLanguage(String code) async {
+-    setState(() => _sourceLanguage = code);
++    setState(() {
++      _sourceLanguage = code;
++      _notice = 'لغة الكلام المحددة: ${TranslationLanguageCatalog.labels[code] ?? code}. لن يبدأ الميكروفون بلغة بديلة إذا لم تكن هذه اللغة متاحة في خدمة التعرف بالجهاز.';
++    });
+     await context.read<LanguagePreferences>().setTranslationSourceLanguage(code);
+     _queueTranslation(_input.text, sourceLanguageCode: code);
+   }
+@@ -560,7 +563,10 @@ class _DialoguePanelState extends State<_DialoguePanel> {
+   }
+ 
+   Future<void> _selectRightSourceLanguage(String code) async {
+-    setState(() => _rightSourceLanguage = code);
++    setState(() {
++      _rightSourceLanguage = code;
++      _notice = 'لغة الكلام المصدر المحددة: ${TranslationLanguageCatalog.labels[code] ?? code}. لن يبدأ الميكروفون بلغة بديلة إذا لم تكن هذه اللغة متاحة في خدمة التعرف بالجهاز.';
++    });
+     await context.read<LanguagePreferences>().setTranslationSourceLanguage(code);
+     _queueTranslation(_source.text, sourceLanguageCode: code);
+   }
+diff --git a/test/device_speech_recognition_service_test.dart b/test/device_speech_recognition_service_test.dart
+index 3e38400..bb9e0d3 100644
+--- a/test/device_speech_recognition_service_test.dart
++++ b/test/device_speech_recognition_service_test.dart
+@@ -23,6 +23,15 @@ void main() {
+       );
+     });
+ 
++    test('lists unique installed language codes for an unavailable source', () {
++      expect(
++        SpeechLocaleResolver.availableLanguageCodes(
++          const ['ar_EG', 'en-US', 'en_GB'],
++        ),
++        <String>['ar', 'en'],
++      );
++    });
++
+     test('allows the device default when a matching locale is absent', () {
+       expect(
+         SpeechLocaleResolver.preferredLocaleId(
+@@ -33,4 +42,36 @@ void main() {
+       );
+     });
+   });
++
++  group('SpeechRecognitionScriptGuard', () {
++    test('rejects Arabic transliteration when English was requested', () {
++      expect(
++        SpeechRecognitionScriptGuard.rejectsArabicFallback(
++          expectedLanguageCode: 'en',
++          recognizedText: 'جود نايت',
++        ),
++        isTrue,
++      );
++    });
++
++    test('accepts English text when English was requested', () {
++      expect(
++        SpeechRecognitionScriptGuard.rejectsArabicFallback(
++          expectedLanguageCode: 'en',
++          recognizedText: 'good night',
++        ),
++        isFalse,
++      );
++    });
++
++    test('rejects Arabic transliteration for another Latin-script language', () {
++      expect(
++        SpeechRecognitionScriptGuard.rejectsArabicFallback(
++          expectedLanguageCode: 'fr',
++          recognizedText: 'بونجور',
++        ),
++        isTrue,
++      );
++    });
++  });
+ }
+-- 
+2.43.0
+

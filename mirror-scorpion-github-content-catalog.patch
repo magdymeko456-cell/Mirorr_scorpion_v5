@@ -1,0 +1,1102 @@
+From bdca17c9e1a4a15d88a2235ea4d24e83e6332d8a Mon Sep 17 00:00:00 2001
+From: magdymeko456-cell
+ <2.88837127e+08+magdymeko456-cell@users.noreply.github.com>
+Date: Mon, 24 Aug 2026 06:08:44 +0000
+Subject: [PATCH] feat(content): add verified github package catalog
+
+---
+ assets/data/content_manifest.json             |   6 +
+ assets/data/owner_inspiration_ar.json         |  15 +-
+ .../packages/owner-inspiration-ar-1.0.0.json  |  86 ++++++
+ content_catalog/v1/README.md                  |  17 ++
+ content_catalog/v1/index.json                 |  65 ++++
+ docs/content-package-schema-v1.md             |  17 +-
+ docs/github-content-catalog-v1.md             |  48 +++
+ .../github_content_catalog_service.dart       | 285 ++++++++++++++++++
+ lib/core/content/offline_content_storage.dart |  79 ++++-
+ lib/features/feature_hub_screen.dart          | 172 ++++++++++-
+ pubspec.yaml                                  |   1 +
+ test/github_content_catalog_service_test.dart |  86 ++++++
+ todo.md                                       |   4 +
+ 13 files changed, 862 insertions(+), 19 deletions(-)
+ create mode 100644 content_catalog/packages/owner-inspiration-ar-1.0.0.json
+ create mode 100644 content_catalog/v1/README.md
+ create mode 100644 content_catalog/v1/index.json
+ create mode 100644 docs/github-content-catalog-v1.md
+ create mode 100644 lib/core/content/github_content_catalog_service.dart
+ create mode 100644 test/github_content_catalog_service_test.dart
+
+diff --git a/assets/data/content_manifest.json b/assets/data/content_manifest.json
+index e166dac..df1b6d0 100644
+--- a/assets/data/content_manifest.json
++++ b/assets/data/content_manifest.json
+@@ -1,6 +1,12 @@
+ {
+   "schemaVersion": 1,
+   "updatedAt": "2026-08-23",
++  "githubCatalog": {
++    "repository": "magdymeko456-cell/mirror_scorpion_v4",
++    "indexPath": "content_catalog/v1/index.json",
++    "distribution": "user_requested_only",
++    "status": "catalog-prepared-downloader-not-yet-implemented"
++  },
+   "packages": [
+     {
+       "id": "starter-original-ar",
+diff --git a/assets/data/owner_inspiration_ar.json b/assets/data/owner_inspiration_ar.json
+index 6f08aac..1981de2 100644
+--- a/assets/data/owner_inspiration_ar.json
++++ b/assets/data/owner_inspiration_ar.json
+@@ -1,7 +1,20 @@
+ {
+   "schemaVersion": 1,
+   "packageId": "owner-inspiration-ar",
+-  "license": "owner-provided-content",
++  "version": "1.0.0",
++  "title": "تأملات ورسائل إنسانية",
++  "kind": "inspiration",
++  "language": "ar",
++  "ownerProvided": true,
++  "sourceCitation": {
++    "name": "محتوى قدمه مالك التطبيق",
++    "reference": "owner-submission-2026-08-24"
++  },
++  "license": {
++    "usage": "owner-provided-content",
++    "rightsHolder": "Tamer Eldosoky"
++  },
++  "createdAt": "2026-08-24T00:00:00Z",
+   "stories": [
+     {
+       "id": "being-human",
+diff --git a/content_catalog/packages/owner-inspiration-ar-1.0.0.json b/content_catalog/packages/owner-inspiration-ar-1.0.0.json
+new file mode 100644
+index 0000000..1981de2
+--- /dev/null
++++ b/content_catalog/packages/owner-inspiration-ar-1.0.0.json
+@@ -0,0 +1,86 @@
++{
++  "schemaVersion": 1,
++  "packageId": "owner-inspiration-ar",
++  "version": "1.0.0",
++  "title": "تأملات ورسائل إنسانية",
++  "kind": "inspiration",
++  "language": "ar",
++  "ownerProvided": true,
++  "sourceCitation": {
++    "name": "محتوى قدمه مالك التطبيق",
++    "reference": "owner-submission-2026-08-24"
++  },
++  "license": {
++    "usage": "owner-provided-content",
++    "rightsHolder": "Tamer Eldosoky"
++  },
++  "createdAt": "2026-08-24T00:00:00Z",
++  "stories": [
++    {
++      "id": "being-human",
++      "title": "أن تكون إنساناً",
++      "category": "owner_provided_inspiration",
++      "language": "ar",
++      "summary": "رسالة عن احتواء الكسر والكمال، والحزن والفرح، والرجاء في الفرج.",
++      "body": "أن تكون إنساناً يعني أن تحمل كسرك وكمالك معاً، وأن تسمح للحزن أن يجلس بجوار الفرح، وأن تدرك أن ضعفك لا ينفي قوتك. فإذا أراد الله لك الفرج خضعت جميع المستحيلات.",
++      "source": "محتوى قدمه مالك التطبيق",
++      "citation": "نص مقدم من Tamer Eldosoky",
++      "rights": "owner-provided-content"
++    },
++    {
++      "id": "dignity",
++      "title": "عزة النفس",
++      "category": "owner_provided_inspiration",
++      "language": "ar",
++      "summary": "رسالة عن ترك ما يؤذي النفس بهدوء ومن دون خصومة.",
++      "body": "وعندما عزّت علي نفسي، هجرت من كان لي أغلى من نفسي؛ فعزيز النفس لا يعادي، بل يترك الجمل بما حمل.",
++      "source": "محتوى قدمه مالك التطبيق",
++      "citation": "نص مقدم من Tamer Eldosoky",
++      "rights": "owner-provided-content"
++    },
++    {
++      "id": "support-and-betrayal",
++      "title": "أثر السند والخذلان",
++      "category": "owner_provided_inspiration",
++      "language": "ar",
++      "summary": "كلمات عن الأثر الطويل للسند الصادق والخذلان المفاجئ.",
++      "body": "شيئان يتركان أثراً لا تمحوه السنين: سندٌ صادق انتشلك في عزّ انهيارك، وخذلانٌ مفاجئ أسقطك في عزّ ضعفك.",
++      "source": "محتوى قدمه مالك التطبيق",
++      "citation": "نص مقدم من Tamer Eldosoky",
++      "rights": "owner-provided-content"
++    },
++    {
++      "id": "elegance",
++      "title": "الأناقة",
++      "category": "owner_provided_inspiration",
++      "language": "ar",
++      "summary": "رسالة قصيرة عن الأثر الهادئ في الذاكرة.",
++      "body": "الأناقة ليست في أن تلفت الأنظار، بل في أن تبقى عالقاً في الذاكرة.",
++      "source": "محتوى قدمه مالك التطبيق",
++      "citation": "نص مقدم من Tamer Eldosoky",
++      "rights": "owner-provided-content"
++    },
++    {
++      "id": "eyes-of-love",
++      "title": "كلّ يراك بعين طبعه",
++      "category": "owner_provided_inspiration",
++      "language": "ar",
++      "summary": "تأمل في اختلاف نظرة الناس للإنسان بحسب محبتهم وموقعه في قلوبهم.",
++      "body": "كلّ يراك بعين طبعه، وبقدر محبتك في قلبه. ستجد في حياتك من يراك أطيب الناس، وستجد من يراك أسوأهم. ستقابل أشخاصاً ينسون خمسين موقفاً جميلاً منك لأنك قصّرت مرة، وستجد أشخاصاً يبحثون لك عن أعذار ويظهرون لك كم أنت جميل. ستقابل أشخاصاً لا يكفّون عن انتقادك، وآخرين لا يكفيهم كل الكلام الجميل في وصفك. ستقابل أشخاصاً يكرهونك بلا سبب، وأشخاصاً يخترعون أسباباً تحبّبهم فيك. وفي النهاية أنت نفس الشخص، ولكن كل عين تراك على قدر محبتها لك، وكلّ يراك من الزاوية التي تقف فيها من قلبه.",
++      "source": "محتوى قدمه مالك التطبيق",
++      "citation": "نص مقدم من Tamer Eldosoky",
++      "rights": "owner-provided-content"
++    },
++    {
++      "id": "loyalty",
++      "title": "الوفاء الحقيقي",
++      "category": "owner_provided_inspiration",
++      "language": "ar",
++      "summary": "تأمل في أنواع الرفقة ومعنى البقاء في كل الظروف.",
++      "body": "في حياتك ستصادف ثلاثة أنواع من الناس: ناس معك لأنهم لم يجدوا غيرك، وناس معك إلى أن يجدوا غيرك، وناس معك لأنهم لا يريدون غيرك. والوفاء الحقيقي أن يبقى معك أحدهم في كل الظروف لا حسب الظروف. فإذا وجدت هذا النوع من الناس فلا تفرّط فيه أبداً.",
++      "source": "محتوى قدمه مالك التطبيق",
++      "citation": "نص مقدم من Tamer Eldosoky",
++      "rights": "owner-provided-content"
++    }
++  ]
++}
+diff --git a/content_catalog/v1/README.md b/content_catalog/v1/README.md
+new file mode 100644
+index 0000000..6e39588
+--- /dev/null
++++ b/content_catalog/v1/README.md
+@@ -0,0 +1,17 @@
++# فهرس محتوى Mirror Scorpion
++
++هذا المجلد هو **قناة توزيع عامة وخفيفة** لحزم المحتوى التي يختارها المستخدم داخل التطبيق. لا يعني ظهور اسم مصدر في الفهرس أن التطبيق نزّل محتواه؛ لا ينزّل التطبيق إلا حزمة حالتُها `available` وبعد تأكيد المستخدم والتحقق من `contentSha256`.
++
++## البنية
++
++| المسار | الغرض |
++|---|---|
++| `content_catalog/v1/index.json` | قائمة الأسماء والترتيب والنطاق واللغة والمصدر والترخيص والهاش ومسار الحزمة. |
++| `content_catalog/packages/` | ملفات JSON صغيرة مستقلة، حزمة واحدة لكل ملف وإصدار. |
++| `docs/content-package-schema-v1.md` | العقد الذي يجب أن تلتزم به الحزمة قبل إتاحتها. |
++
++## سياسة النشر
++
++تُرفع حزم المالك الأصلية أو المواد ذات الحقوق والمصادر الواضحة فقط. لا ترفع كتباً أو تفاسير أو نصوصاً دينية منسوخة أو ملفات صوت أو فيديو بلا تحقق من حق الاستخدام والمصدر. تظل أي حزمة ناقصة المصدر أو الترخيص في حالة `requires_review` من دون رابط تنزيل.
++
++يقرأ التطبيق الفهرس من فرع `main` ليحصل على الأسماء والترتيب والحالات الحديثة، ثم يقرأ كل حزمة من وسم Git ثابت مثل `content-v1.0.0`. لذلك يمكن تحديث الفهرس من دون تحديث APK، بينما تبقى بايتات الحزمة المحددة ثابتة وقابلة للتحقق بالهاش. لا تشكل GitHub وحدها نظام توقيع؛ ستضاف توقيعات فهرس منفصلة قبل قبول مصادر خارجية حساسة أو واسعة.
+diff --git a/content_catalog/v1/index.json b/content_catalog/v1/index.json
+new file mode 100644
+index 0000000..65e87af
+--- /dev/null
++++ b/content_catalog/v1/index.json
+@@ -0,0 +1,65 @@
++{
++  "catalogVersion": 1,
++  "catalogId": "mirror-scorpion-content",
++  "title": "فهرس محتوى Mirror Scorpion",
++  "updatedAt": "2026-08-24T00:00:00Z",
++  "releaseRef": "content-v1.0.0",
++  "packages": [
++    {
++      "packageId": "owner-inspiration-ar",
++      "version": "1.0.0",
++      "order": 10,
++      "status": "available",
++      "title": "تأملات ورسائل إنسانية",
++      "scope": "inspiration",
++      "language": "ar",
++      "estimatedBytes": 3850,
++      "sourceCitation": {
++        "name": "محتوى قدمه مالك التطبيق",
++        "reference": "owner-submission-2026-08-24"
++      },
++      "license": {
++        "usage": "owner-provided-content",
++        "rightsHolder": "Tamer Eldosoky"
++      },
++      "contentPath": "content_catalog/packages/owner-inspiration-ar-1.0.0.json",
++      "contentSha256": "55321d51f3264df4e0fe6fa8d78d6c1501ec2605841a6eb20fee8a1834f679cc"
++    },
++    {
++      "packageId": "hadith-qudsi-verified",
++      "version": null,
++      "order": 100,
++      "status": "requires_review",
++      "title": "الحديث القدسي — فهرس موثق",
++      "scope": "hadith_qudsi",
++      "language": "ar",
++      "sourceCitation": null,
++      "license": null,
++      "reason": "لا يُنشر محتوى قبل توثيق النص والإسناد والترخيص."
++    },
++    {
++      "packageId": "quran-narratives-index",
++      "version": null,
++      "order": 110,
++      "status": "requires_review",
++      "title": "قصص القرآن — فهرس مصدر",
++      "scope": "quran_narratives",
++      "language": "ar",
++      "sourceCitation": null,
++      "license": null,
++      "reason": "لا يُنشر محتوى قبل توثيق الآيات والمراجع وحق الاستخدام."
++    },
++    {
++      "packageId": "asbab-al-nuzul-index",
++      "version": null,
++      "order": 120,
++      "status": "requires_review",
++      "title": "أسباب النزول — فهرس مرتب",
++      "scope": "asbab_al_nuzul",
++      "language": "ar",
++      "sourceCitation": null,
++      "license": null,
++      "reason": "لا يُنشر محتوى قبل تحديد الطبعة والحقوق والمراجع."
++    }
++  ]
++}
+diff --git a/docs/content-package-schema-v1.md b/docs/content-package-schema-v1.md
+index 5d5e203..f12dc79 100644
+--- a/docs/content-package-schema-v1.md
++++ b/docs/content-package-schema-v1.md
+@@ -16,12 +16,13 @@
+ | `kind` | نص | أحد: `stories` أو `inspiration` أو `language-data`. |
+ | `sourceCitation` | كائن | مرجع ظاهر للمستخدم: اسم المصدر، رابط/معرّف ثابت، وتاريخ الوصول إن وجد. |
+ | `license` | كائن | نوع الاستخدام، صاحب الحق، الرابط أو النص، وأي شرط نسبة أو منع إعادة توزيع. |
+-| `integrity` | كائن | `algorithm` يساوي `sha256` و`contentHash` بصيغة SHA-256 lowercase بطول 64. |
+ | `createdAt` | نص | وقت ISO-8601 لإنشاء الحزمة. |
+ | `items` | قائمة | عناصر المحتوى؛ لا تقبل قائمة فارغة. |
+ 
+ لا تكون `sourceCitation` أو `license` فارغتين في حزمة يوسم محتواها بأنه ديني أو منقول. تبقى حزم المالك الأصلية موسومة صراحةً بـ`ownerProvided: true` ولا تنسب إلى مصدر ديني أو خارجي.
+ 
++يحمل **فهرس التوزيع**، لا ملف الحزمة نفسه، قيمة `contentSha256` للبايتات الخام للحزمة. بذلك لا يقع التصميم في مشكلة هاش ذاتي الإشارة، ويستطيع التطبيق التحقق من الملف الذي نزّله قبل الحفظ.
++
+ ## مثال هيكلي
+ 
+ ```json
+@@ -39,18 +40,20 @@
+     "usage": "owner-authorized",
+     "rightsHolder": "مالك التطبيق"
+   },
+-  "integrity": {
+-    "algorithm": "sha256",
+-    "contentHash": "<sha256-of-canonical-content>"
+-  },
+   "createdAt": "2026-08-24T00:00:00Z",
+-  "items": []
++  "items": [
++    {
++      "id": "example",
++      "title": "مثال",
++      "body": "نص الحزمة"
++    }
++  ]
+ }
+ ```
+ 
+ ## قواعد الاستيراد والحذف
+ 
+-يجب أن يعرض الاستيراد قبل الحفظ: العنوان، النوع، المصدر، الترخيص، والإصدار. يتحقق التطبيق من البنية، ثم من الهاش على المحتوى المعياري قبل الكتابة الذرية. لا يستبدل إصدار أقدم إصداراً أحدث. ويحتاج كل سجل ظاهر إلى زر حذف صريح يمسح ملف الحزمة وحالة فهرستها، مع تأكيد للمستخدم. لا يرسل الملف إلى أي خادم.
++يجب أن يعرض الاستيراد قبل الحفظ: العنوان، النوع، المصدر، الترخيص، والإصدار. يتحقق التطبيق من البنية، ثم من `contentSha256` المعلن في فهرس التوزيع على البايتات الخام قبل الكتابة الذرية. لا يستبدل إصدار أقدم إصداراً أحدث. ويحتاج كل سجل ظاهر إلى زر حذف صريح يمسح ملف الحزمة وحالة فهرستها، مع تأكيد للمستخدم. لا يرسل الملف إلى أي خادم.
+ 
+ ## خطة التنفيذ والاختبار
+ 
+diff --git a/docs/github-content-catalog-v1.md b/docs/github-content-catalog-v1.md
+new file mode 100644
+index 0000000..8cd4a15
+--- /dev/null
++++ b/docs/github-content-catalog-v1.md
+@@ -0,0 +1,48 @@
++# تصميم فهرس مصادر GitHub v1
++
++## القرار
++
++سيبدأ المشروع بفهرس داخل المستودع العام الحالي `magdymeko456-cell/mirror_scorpion_v4` تحت `content_catalog/`. هذا يحقق رابطاً واحداً واضحاً وسريعاً من دون حساب مستخدم أو خادم جديد، ويحصر البيانات المتاحة في حزم صغيرة مرتبة يمكن للمستخدم اختيارها واحدةً واحدة. يبقى الانتقال إلى مستودع محتوى مستقل لاحقاً ممكناً من دون تغيير صيغة الحزمة.
++
++## مسار المستخدم
++
++1. يعرض التطبيق قائمة الفهرس: الاسم، الفئة، اللغة، الحجم التقريبي، المصدر، الترخيص، والإصدار.
++2. يضغط المستخدم «تنزيل» لحزمة محددة؛ لا يوجد تنزيل خلفي أو تنزيل شامل.
++3. يجلب التطبيق **الفهرس المتجدد** من `main`، ثم ملف الحزمة من GitHub Raw عند وسم محتوى محدد، ثم يحسب SHA-256 للبايتات الخام.
++4. يرفض التطبيق الملف إن خالف الهاش أو البنية أو الإصدار المقبول، ولا يستبدل إصداراً أحدث بإصدار أقدم.
++5. بعد نجاح التحقق، يحفظه التطبيق كتابةً ذرية في مساحة التطبيق ويعرض المصدر والترخيص مع زر حذف صريح.
++
++## فهرس `index.json`
++
++| الحقل | الغرض |
++|---|---|
++| `catalogVersion` | إصدار بنية الفهرس، وليس إصدار التطبيق. |
++| `releaseRef` | وسم Git ثابت مثل `content-v1.0.0` يستعمل لقراءة الحزم، بينما يبقى `index.json` نفسه على `main` لتحديث الأسماء والترتيب والحالات دون تحديث APK. |
++| `packages[].order` | ترتيب العرض في التطبيق. |
++| `packages[].status` | `available` أو `requires_review` أو `retired`. لا رابط تنزيل للحالة غير المتاحة. |
++| `packages[].scope` | النطاق الواضح مثل `inspiration` أو `quran_narratives`. |
++| `packages[].sourceCitation` و`license` | بيانات ظاهرة قبل التنزيل ولا تُختصر إلى اسم غير قابل للتحقق. |
++| `packages[].contentPath` و`contentSha256` | موضع الحزمة وهاش بايتاتها للتحقق قبل الحفظ. |
++
++## الحدود الأمنية والقانونية
++
++يوفر هاش الحزمة كشف التلف أو عدم تطابق الملف، لكنه لا يثبت وحده هوية ناشر الفهرس إذا عُدّل الفهرس والحزمة معاً من جهة تمتلك صلاحية المستودع. لذلك تعتمد v1 على حوكمة الوصول إلى المستودع ووسم إصدار للمحتوى، وتضيف v2 توقيع فهرس بمفتاح عام مضمّن قبل قبول مصادر خارجية واسعة. لا تضاف حزمة دينية أو منقولة إلا مع إحالة واضحة وحق استخدام ظاهر ومراجعة قبل النشر.
++
++توثق GitHub أن رابط الملف باستخدام معرف التزام يثبت النسخة التي يشير إليها، بينما يتغير رابط الفرع مع تحديثه.[1] لهذا يستعمل تصميم النشر وسم محتوى ثابتاً لكل إصدار، مع إمكان ترقية لاحقة إلى SHA صريح في الفهرس. كما أن Contents API يعرض خام الملف ويذكر أن `download_url` مؤقت، لذلك لا يعتمد التطبيق على URL مؤقت صادر من API؛ بل يبني رابط Raw من `releaseRef` ومسار الحزمة.[2]
++
++## معايير قبول الدفعة البرمجية التالية
++
++| الاختبار | النتيجة المطلوبة |
++|---|---|
++| فهرس متاح | تظهر حزمة المالك الأصلية باسمها ونطاقها وحقوقها. |
++| مصدر غير موثق | يظهر في الفهرس بلا زر تنزيل. |
++| تنزيل سليم | يطابق SHA-256، ويحفظ محلياً، ويظهر في القائمة. |
++| ملف معدل | يرفض قبل الحفظ ويعرض خطأ نزاهة واضحاً. |
++| حذف | يمسح ملف الحزمة والفهرس المحلي بعد تأكيد المستخدم. |
++| شبكة غير متاحة | لا يفقد التطبيق الحزم المحفوظة، ويعرض خطأ تحميل واضحاً. |
++
++## المراجع
++
++[1]: [GitHub — Getting permanent links to files](https://docs.github.com/en/repositories/working-with-files/using-files/getting-permanent-links-to-files)
++
++[2]: [GitHub — REST API endpoints for repository contents](https://docs.github.com/rest/repos/contents)
+diff --git a/lib/core/content/github_content_catalog_service.dart b/lib/core/content/github_content_catalog_service.dart
+new file mode 100644
+index 0000000..7d03089
+--- /dev/null
++++ b/lib/core/content/github_content_catalog_service.dart
+@@ -0,0 +1,285 @@
++import 'dart:convert';
++import 'dart:typed_data';
++
++import 'package:crypto/crypto.dart';
++import 'package:http/http.dart' as http;
++
++import 'offline_content_storage.dart';
++
++class ContentCatalog {
++  const ContentCatalog({
++    required this.catalogVersion,
++    required this.releaseRef,
++    required this.packages,
++  });
++
++  final int catalogVersion;
++  final String releaseRef;
++  final List<ContentCatalogPackage> packages;
++
++  factory ContentCatalog.fromJson(Map<String, dynamic> json) {
++    final version = json['catalogVersion'];
++    if (version is! int || version != 1) {
++      throw const FormatException('Unsupported catalog version.');
++    }
++    final releaseRef = _requiredString(json, 'releaseRef');
++    if (!_safeRef.hasMatch(releaseRef)) {
++      throw const FormatException('Invalid release reference.');
++    }
++    final rawPackages = json['packages'];
++    if (rawPackages is! List) {
++      throw const FormatException('Catalog packages must be a list.');
++    }
++    return ContentCatalog(
++      catalogVersion: version,
++      releaseRef: releaseRef,
++      packages: rawPackages
++          .whereType<Map<String, dynamic>>()
++          .map(ContentCatalogPackage.fromJson)
++          .toList()
++        ..sort((left, right) => left.order.compareTo(right.order)),
++    );
++  }
++}
++
++class ContentCatalogPackage {
++  const ContentCatalogPackage({
++    required this.id,
++    required this.title,
++    required this.scope,
++    required this.language,
++    required this.order,
++    required this.status,
++    required this.version,
++    required this.sourceName,
++    required this.licenseUsage,
++    this.contentPath,
++    this.contentSha256,
++    this.reason,
++  });
++
++  final String id;
++  final String title;
++  final String scope;
++  final String language;
++  final int order;
++  final String status;
++  final String? version;
++  final String? sourceName;
++  final String? licenseUsage;
++  final String? contentPath;
++  final String? contentSha256;
++  final String? reason;
++
++  bool get canDownload =>
++      status == 'available' &&
++      version != null &&
++      contentPath != null &&
++      contentSha256 != null;
++
++  factory ContentCatalogPackage.fromJson(Map<String, dynamic> json) {
++    final status = _requiredString(json, 'status');
++    if (!const <String>{'available', 'requires_review', 'retired'}
++        .contains(status)) {
++      throw const FormatException('Unknown package status.');
++    }
++    final sourceCitation = json['sourceCitation'] as Map<String, dynamic>?;
++    final license = json['license'] as Map<String, dynamic>?;
++    final contentPath = json['contentPath'] as String?;
++    final contentSha256 = json['contentSha256'] as String?;
++    final version = json['version'] as String?;
++    if (status == 'available') {
++      if (version == null ||
++          !_semanticVersion.hasMatch(version) ||
++          contentPath == null ||
++          !_safePackagePath.hasMatch(contentPath) ||
++          contentSha256 == null ||
++          !_sha256.hasMatch(contentSha256)) {
++        throw const FormatException('Available package is missing integrity metadata.');
++      }
++    }
++    return ContentCatalogPackage(
++      id: _requiredString(json, 'packageId'),
++      title: _requiredString(json, 'title'),
++      scope: _requiredString(json, 'scope'),
++      language: _requiredString(json, 'language'),
++      order: json['order'] is int ? json['order'] as int : 9999,
++      status: status,
++      version: version,
++      sourceName: sourceCitation?['name'] as String?,
++      licenseUsage: license?['usage'] as String?,
++      contentPath: contentPath,
++      contentSha256: contentSha256,
++      reason: json['reason'] as String?,
++    );
++  }
++}
++
++class ContentCatalogLoadResult {
++  const ContentCatalogLoadResult._({this.catalog, required this.message});
++
++  const ContentCatalogLoadResult.success(ContentCatalog catalog)
++      : this._(catalog: catalog, message: 'تم تحميل فهرس المصادر.');
++
++  const ContentCatalogLoadResult.failure(String message)
++      : this._(message: message);
++
++  final ContentCatalog? catalog;
++  final String message;
++
++  bool get isSuccess => catalog != null;
++}
++
++class ContentPackageDownloadResult {
++  const ContentPackageDownloadResult._({required this.success, required this.message});
++
++  const ContentPackageDownloadResult.success(String message)
++      : this._(success: true, message: message);
++
++  const ContentPackageDownloadResult.failure(String message)
++      : this._(success: false, message: message);
++
++  final bool success;
++  final String message;
++}
++
++class GitHubContentCatalogService {
++  GitHubContentCatalogService({
++    http.Client? client,
++    Uri? repositoryRawUri,
++    this.catalogRef = 'main',
++  })  : _client = client ?? http.Client(),
++        _ownsClient = client == null,
++        _repositoryRawUri = repositoryRawUri ?? _defaultRepositoryRawUri;
++
++  static final Uri _defaultRepositoryRawUri = Uri.parse(
++    'https://raw.githubusercontent.com/magdymeko456-cell/mirror_scorpion_v4/',
++  );
++
++  final http.Client _client;
++  final bool _ownsClient;
++  final Uri _repositoryRawUri;
++  final String catalogRef;
++
++  Uri get catalogUri =>
++      _repositoryRawUri.resolve('$catalogRef/content_catalog/v1/index.json');
++
++  Uri packageUriFor(ContentCatalog catalog, ContentCatalogPackage package) =>
++      _repositoryRawUri.resolve('${catalog.releaseRef}/${package.contentPath}');
++
++  Future<ContentCatalogLoadResult> fetchCatalog() async {
++    try {
++      final response = await _client.get(catalogUri);
++      if (response.statusCode != 200) {
++        return ContentCatalogLoadResult.failure(
++          'تعذر الوصول إلى فهرس المصادر (HTTP ${response.statusCode}).',
++        );
++      }
++      final decoded = jsonDecode(utf8.decode(response.bodyBytes));
++      if (decoded is! Map<String, dynamic>) {
++        return const ContentCatalogLoadResult.failure('صيغة فهرس المصادر غير صالحة.');
++      }
++      return ContentCatalogLoadResult.success(ContentCatalog.fromJson(decoded));
++    } on FormatException {
++      return const ContentCatalogLoadResult.failure(
++        'تعذر التحقق من بنية فهرس المصادر.',
++      );
++    } catch (_) {
++      return const ContentCatalogLoadResult.failure(
++        'تعذر تحميل فهرس المصادر. تحقق من اتصال الإنترنت ثم أعد المحاولة.',
++      );
++    }
++  }
++
++  Future<ContentPackageDownloadResult> downloadPackage({
++    required ContentCatalog catalog,
++    required ContentCatalogPackage package,
++    required OfflineContentStorage storage,
++  }) async {
++    if (!package.canDownload) {
++      return const ContentPackageDownloadResult.failure(
++        'هذه الحزمة ليست متاحة للتنزيل قبل اكتمال مراجعة المصدر والحقوق.',
++      );
++    }
++    try {
++      final response = await _client.get(packageUriFor(catalog, package));
++      if (response.statusCode != 200) {
++        return ContentPackageDownloadResult.failure(
++          'تعذر تنزيل الحزمة (HTTP ${response.statusCode}).',
++        );
++      }
++      final bytes = response.bodyBytes;
++      if (!ContentHash.matchesSha256(bytes, package.contentSha256!)) {
++        return const ContentPackageDownloadResult.failure(
++          'رُفضت الحزمة لأن هاش SHA-256 لا يطابق الفهرس.',
++        );
++      }
++      final decoded = jsonDecode(utf8.decode(bytes));
++      if (decoded is! Map<String, dynamic> ||
++          decoded['packageId'] != package.id ||
++          decoded['version'] != package.version) {
++        return const ContentPackageDownloadResult.failure(
++          'رُفضت الحزمة لأن هويتها أو إصدارها لا يطابق الفهرس.',
++        );
++      }
++      final existing = await storage.packageById(package.id);
++      if (existing != null &&
++          ContentVersion.compare(existing.version, package.version!) > 0) {
++        return const ContentPackageDownloadResult.failure(
++          'لن يستبدل التطبيق نسخة محلية أحدث بإصدار أقدم من الفهرس.',
++        );
++      }
++      await storage.savePackageBytes(id: package.id, bytes: bytes);
++      return ContentPackageDownloadResult.success(
++        'تم تنزيل «${package.title}» والتحقق من سلامتها وحفظها محلياً.',
++      );
++    } on FormatException {
++      return const ContentPackageDownloadResult.failure(
++        'رُفضت الحزمة لأن ملف JSON غير صالح.',
++      );
++    } catch (_) {
++      return const ContentPackageDownloadResult.failure(
++        'تعذر تنزيل الحزمة أو حفظها. تحقق من الشبكة ومساحة الجهاز ثم أعد المحاولة.',
++      );
++    }
++  }
++
++  void dispose() {
++    if (_ownsClient) _client.close();
++  }
++}
++
++class ContentHash {
++  const ContentHash._();
++
++  static bool matchesSha256(Uint8List bytes, String expected) =>
++      sha256.convert(bytes).toString() == expected.toLowerCase();
++}
++
++class ContentVersion {
++  const ContentVersion._();
++
++  static int compare(String? local, String incoming) {
++    if (local == null || !_semanticVersion.hasMatch(local)) return -1;
++    final localParts = local.split('.').map(int.parse).toList();
++    final incomingParts = incoming.split('.').map(int.parse).toList();
++    for (var index = 0; index < 3; index++) {
++      final difference = localParts[index].compareTo(incomingParts[index]);
++      if (difference != 0) return difference;
++    }
++    return 0;
++  }
++}
++
++String _requiredString(Map<String, dynamic> json, String key) {
++  final value = json[key];
++  if (value is! String || value.trim().isEmpty) {
++    throw FormatException('Missing $key.');
++  }
++  return value;
++}
++
++final _safeRef = RegExp(r'^[A-Za-z0-9._-]+$');
++final _safePackagePath = RegExp(r'^content_catalog/packages/[a-z0-9-]+-[0-9]+\.[0-9]+\.[0-9]+\.json$');
++final _sha256 = RegExp(r'^[a-f0-9]{64}$');
++final _semanticVersion = RegExp(r'^[0-9]+\.[0-9]+\.[0-9]+$');
+diff --git a/lib/core/content/offline_content_storage.dart b/lib/core/content/offline_content_storage.dart
+index e9c2ad3..5df56aa 100644
+--- a/lib/core/content/offline_content_storage.dart
++++ b/lib/core/content/offline_content_storage.dart
+@@ -1,5 +1,6 @@
+ import 'dart:convert';
+ import 'dart:io';
++import 'dart:typed_data';
+ 
+ import 'package:path_provider/path_provider.dart';
+ 
+@@ -26,26 +27,68 @@ class OfflineContentStorage {
+     final records = <OfflinePackageRecord>[];
+     for (final file in files) {
+       try {
+-        final map = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+-        records.add(OfflinePackageRecord.fromJson(map, path: file.path));
++        final decoded = jsonDecode(await file.readAsString());
++        if (decoded is! Map<String, dynamic>) continue;
++        records.add(OfflinePackageRecord.fromJson(decoded, path: file.path));
+       } on FormatException {
+         // ملف غير متوافق لا يُعرض كحزمة صالحة.
+       }
+     }
++    records.sort((left, right) => left.title.compareTo(right.title));
+     return records;
+   }
+ 
++  Future<OfflinePackageRecord?> packageById(String id) async {
++    final packages = await listPackages();
++    for (final package in packages) {
++      if (package.id == id) return package;
++    }
++    return null;
++  }
++
+   Future<File> savePackage({
+     required String id,
+     required Map<String, dynamic> content,
++  }) => savePackageBytes(
++        id: id,
++        bytes: Uint8List.fromList(utf8.encode(jsonEncode(content))),
++      );
++
++  Future<File> savePackageBytes({
++    required String id,
++    required Uint8List bytes,
+   }) async {
+-    if (!RegExp(r'^[a-z0-9-]+$').hasMatch(id)) {
+-      throw ArgumentError.value(id, 'id', 'Package ID must be lowercase letters, digits, and hyphens only.');
++    _validateId(id);
++    final directory = await packagesDirectory();
++    final target = File('${directory.path}/$id.json');
++    final temporary = File('${target.path}.tmp');
++    await temporary.writeAsBytes(bytes, flush: true);
++    try {
++      await temporary.rename(target.path);
++    } on FileSystemException {
++      if (await target.exists()) await target.delete();
++      await temporary.rename(target.path);
+     }
++    return target;
++  }
++
++  Future<bool> deletePackage(String id) async {
++    _validateId(id);
+     final directory = await packagesDirectory();
+-    final file = File('${directory.path}/$id.json');
+-    await file.writeAsString(jsonEncode(content));
+-    return file;
++    final target = File('${directory.path}/$id.json');
++    if (!await target.exists()) return false;
++    await target.delete();
++    return true;
++  }
++
++  void _validateId(String id) {
++    if (!RegExp(r'^[a-z0-9-]+$').hasMatch(id)) {
++      throw ArgumentError.value(
++        id,
++        'id',
++        'Package ID must be lowercase letters, digits, and hyphens only.',
++      );
++    }
+   }
+ }
+ 
+@@ -53,17 +96,35 @@ class OfflinePackageRecord {
+   const OfflinePackageRecord({
+     required this.id,
+     required this.title,
++    required this.version,
++    required this.sourceName,
++    required this.licenseUsage,
+     required this.path,
+   });
+ 
+   final String id;
+   final String title;
++  final String? version;
++  final String? sourceName;
++  final String? licenseUsage;
+   final String path;
+ 
+-  factory OfflinePackageRecord.fromJson(Map<String, dynamic> json, {required String path}) {
++  factory OfflinePackageRecord.fromJson(
++    Map<String, dynamic> json, {
++    required String path,
++  }) {
++    final sourceCitation = json['sourceCitation'] as Map<String, dynamic>?;
++    final license = json['license'];
+     return OfflinePackageRecord(
+       id: json['packageId'] as String? ?? json['id'] as String? ?? 'unknown',
+-      title: json['title'] as String? ?? json['packageId'] as String? ?? 'حزمة محتوى',
++      title: json['title'] as String? ??
++          json['packageId'] as String? ??
++          'حزمة محتوى',
++      version: json['version'] as String?,
++      sourceName: sourceCitation?['name'] as String? ?? json['source'] as String?,
++      licenseUsage: license is Map<String, dynamic>
++          ? license['usage'] as String?
++          : license as String?,
+       path: path,
+     );
+   }
+diff --git a/lib/features/feature_hub_screen.dart b/lib/features/feature_hub_screen.dart
+index 4aeb142..0c267ec 100644
+--- a/lib/features/feature_hub_screen.dart
++++ b/lib/features/feature_hub_screen.dart
+@@ -10,6 +10,7 @@ import 'package:provider/provider.dart';
+ import '../app/royal_dark_theme.dart';
+ import '../core/localization/language_preferences.dart';
+ import '../core/content/offline_content_storage.dart';
++import '../core/content/github_content_catalog_service.dart';
+ import '../core/games/chess_game_controller.dart';
+ import '../core/inspiration/inspiration_safety.dart';
+ import '../core/mlkit/on_device_ocr_service.dart';
+@@ -1822,12 +1823,77 @@ class _OfflinePackagesPage extends StatefulWidget {
+ 
+ class _OfflinePackagesPageState extends State<_OfflinePackagesPage> {
+   final _storage = const OfflineContentStorage();
++  final _catalogService = GitHubContentCatalogService();
+   late Future<List<OfflinePackageRecord>> _packages;
++  late Future<ContentCatalogLoadResult> _catalog;
++  bool _isDownloading = false;
++  String? _notice;
+ 
+   @override
+   void initState() {
+     super.initState();
+     _packages = _storage.listPackages();
++    _catalog = _catalogService.fetchCatalog();
++  }
++
++  @override
++  void dispose() {
++    _catalogService.dispose();
++    super.dispose();
++  }
++
++  void _refreshCatalog() {
++    setState(() => _catalog = _catalogService.fetchCatalog());
++  }
++
++  Future<void> _downloadPackage(
++    ContentCatalog catalog,
++    ContentCatalogPackage package,
++  ) async {
++    setState(() {
++      _isDownloading = true;
++      _notice = 'جارٍ تنزيل «${package.title}» والتحقق من سلامتها…';
++    });
++    final result = await _catalogService.downloadPackage(
++      catalog: catalog,
++      package: package,
++      storage: _storage,
++    );
++    if (!mounted) return;
++    setState(() {
++      _isDownloading = false;
++      _notice = result.message;
++      if (result.success) _packages = _storage.listPackages();
++    });
++  }
++
++  Future<void> _deletePackage(OfflinePackageRecord package) async {
++    final confirmed = await showDialog<bool>(
++      context: context,
++      builder: (dialogContext) => AlertDialog(
++        title: const Text('حذف الحزمة؟'),
++        content: Text('سيُحذف «${package.title}» من مساحة التطبيق فقط.'),
++        actions: [
++          TextButton(
++            onPressed: () => Navigator.pop(dialogContext, false),
++            child: const Text('إلغاء'),
++          ),
++          FilledButton(
++            onPressed: () => Navigator.pop(dialogContext, true),
++            child: const Text('حذف'),
++          ),
++        ],
++      ),
++    );
++    if (confirmed != true) return;
++    final deleted = await _storage.deletePackage(package.id);
++    if (!mounted) return;
++    setState(() {
++      _packages = _storage.listPackages();
++      _notice = deleted
++          ? 'تم حذف «${package.title}» من مساحة التطبيق.'
++          : 'لم تعد الحزمة موجودة في مساحة التطبيق.';
++    });
+   }
+ 
+   @override
+@@ -1846,12 +1912,114 @@ class _OfflinePackagesPageState extends State<_OfflinePackagesPage> {
+               children: [
+                 const _SectionNotice(
+                   title: 'مساحة العمل أوفلاين',
+-                  detail: 'تحتفظ هذه المساحة فقط بحزم JSON التي يختار المستخدم استيرادها. تنزيل قصص من الشبكة لا يبدأ قبل إعداد مصدر مرخّص، والتحقق من التوقيع، وسياسة تحديث وحذف.',
++                  detail: 'تعرض هذه المساحة حزم JSON التي اختارها المستخدم فقط. تتحقق الحزم المتاحة من SHA-256 قبل الحفظ؛ المصادر غير الموثقة لا يظهر لها تنزيل.',
+                 ),
+                 const SizedBox(height: 16),
+                 if (packages.isEmpty)
+                   const Card(child: ListTile(title: Text('لا توجد حزم مستوردة بعد'), subtitle: Text('يمكن استيراد حزمة JSON من كارت القصص.'))),
+-                ...packages.map((item) => Card(child: ListTile(leading: const Icon(Icons.inventory_2_outlined, color: RoyalColors.cyan), title: Text(item.title), subtitle: Text(item.id)))),
++                ...packages.map(
++                  (item) => Card(
++                    child: ListTile(
++                      leading: const Icon(
++                        Icons.inventory_2_outlined,
++                        color: RoyalColors.cyan,
++                      ),
++                      title: Text(item.title),
++                      subtitle: Text(
++                        '${item.id}${item.version == null ? '' : ' • v${item.version}'}',
++                      ),
++                      trailing: IconButton(
++                        tooltip: 'حذف الحزمة من الجهاز',
++                        icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
++                        onPressed: () => _deletePackage(item),
++                      ),
++                    ),
++                  ),
++                ),
++                const SizedBox(height: 18),
++                FutureBuilder<ContentCatalogLoadResult>(
++                  future: _catalog,
++                  builder: (context, catalogSnapshot) {
++                    if (!catalogSnapshot.hasData) {
++                      return const Center(child: CircularProgressIndicator());
++                    }
++                    final catalogResult = catalogSnapshot.data!;
++                    if (!catalogResult.isSuccess) {
++                      return Card(
++                        child: ListTile(
++                          leading: const Icon(Icons.cloud_off_outlined),
++                          title: const Text('تعذر تحميل فهرس المصادر'),
++                          subtitle: Text(catalogResult.message),
++                          trailing: IconButton(
++                            tooltip: 'إعادة المحاولة',
++                            icon: const Icon(Icons.refresh),
++                            onPressed: _refreshCatalog,
++                          ),
++                        ),
++                      );
++                    }
++                    final catalog = catalogResult.catalog!;
++                    return Column(
++                      crossAxisAlignment: CrossAxisAlignment.stretch,
++                      children: [
++                        Row(
++                          children: [
++                            const Expanded(
++                              child: Text(
++                                'حزم متاحة من GitHub',
++                                style: TextStyle(fontWeight: FontWeight.w800),
++                              ),
++                            ),
++                            IconButton(
++                              tooltip: 'تحديث الفهرس',
++                              icon: const Icon(Icons.refresh, color: RoyalColors.gold),
++                              onPressed: _isDownloading ? null : _refreshCatalog,
++                            ),
++                          ],
++                        ),
++                        ...catalog.packages.map(
++                          (package) => Card(
++                            child: ListTile(
++                              leading: Icon(
++                                package.canDownload
++                                    ? Icons.download_for_offline_outlined
++                                    : Icons.verified_outlined,
++                                color: package.canDownload
++                                    ? RoyalColors.gold
++                                    : RoyalColors.muted,
++                              ),
++                              title: Text(package.title),
++                              subtitle: Text(
++                                package.canDownload
++                                    ? '${package.scope} • ${package.sourceName ?? 'مصدر غير محدد'}'
++                                    : package.reason ?? 'قيد المراجعة قبل الإتاحة.',
++                              ),
++                              trailing: package.canDownload
++                                  ? FilledButton(
++                                      onPressed: _isDownloading
++                                          ? null
++                                          : () => _downloadPackage(catalog, package),
++                                      child: const Text('تنزيل'),
++                                    )
++                                  : const Text(
++                                      'قيد المراجعة',
++                                      style: TextStyle(color: RoyalColors.muted),
++                                    ),
++                            ),
++                          ),
++                        ),
++                      ],
++                    );
++                  },
++                ),
++                if (_notice != null)
++                  Padding(
++                    padding: const EdgeInsets.only(top: 12),
++                    child: Text(
++                      _notice!,
++                      style: const TextStyle(color: RoyalColors.gold, height: 1.5),
++                    ),
++                  ),
+               ],
+             );
+           },
+diff --git a/pubspec.yaml b/pubspec.yaml
+index 31f95a5..20a41aa 100644
+--- a/pubspec.yaml
++++ b/pubspec.yaml
+@@ -11,6 +11,7 @@ dependencies:
+     sdk: flutter
+   provider: ^6.1.2
+   http: ^1.3.0
++  crypto: ^3.0.6
+   shared_preferences: ^2.5.5
+   firebase_core: ^4.13.0
+   google_mlkit_language_id: ^0.15.1
+diff --git a/test/github_content_catalog_service_test.dart b/test/github_content_catalog_service_test.dart
+new file mode 100644
+index 0000000..fd47a25
+--- /dev/null
++++ b/test/github_content_catalog_service_test.dart
+@@ -0,0 +1,86 @@
++import 'dart:convert';
++import 'dart:typed_data';
++
++import 'package:flutter_test/flutter_test.dart';
++import 'package:mirror_scorpion_v4/core/content/github_content_catalog_service.dart';
++
++void main() {
++  final packageBytes = Uint8List.fromList(<int>[109, 105, 114, 114, 111, 114]);
++  const packageHash = '00154761637ca746c354a6d9cfbf1da1a92e79afa6bb127bb8a1c434e9c73170';
++
++  Map<String, dynamic> availablePackage({String? hash}) => <String, dynamic>{
++        'packageId': 'owner-inspiration-ar',
++        'version': '1.0.0',
++        'order': 10,
++        'status': 'available',
++        'title': 'تأملات',
++        'scope': 'inspiration',
++        'language': 'ar',
++        'sourceCitation': <String, dynamic>{'name': 'مالك التطبيق'},
++        'license': <String, dynamic>{'usage': 'owner-provided-content'},
++        'contentPath': 'content_catalog/packages/owner-inspiration-ar-1.0.0.json',
++        'contentSha256': hash ?? packageHash,
++      };
++
++  test('parses and orders a catalog with an available package', () {
++    final catalog = ContentCatalog.fromJson(<String, dynamic>{
++      'catalogVersion': 1,
++      'releaseRef': 'content-v1.0.0',
++      'packages': <Map<String, dynamic>>[
++        <String, dynamic>{
++          'packageId': 'waiting',
++          'order': 20,
++          'status': 'requires_review',
++          'title': 'قيد المراجعة',
++          'scope': 'quran_narratives',
++          'language': 'ar',
++        },
++        availablePackage(),
++      ],
++    });
++
++    expect(catalog.packages.first.id, 'owner-inspiration-ar');
++    expect(catalog.packages.first.canDownload, isTrue);
++    expect(catalog.packages.last.canDownload, isFalse);
++  });
++
++  test('rejects an available package without a valid SHA-256', () {
++    expect(
++      () => ContentCatalogPackage.fromJson(availablePackage(hash: 'not-a-hash')),
++      throwsFormatException,
++    );
++  });
++
++  test('checks raw package bytes against the catalog hash', () {
++    expect(ContentHash.matchesSha256(packageBytes, packageHash), isTrue);
++    expect(ContentHash.matchesSha256(packageBytes, '0' * 64), isFalse);
++  });
++
++  test('prevents replacing a newer local semantic version', () {
++    expect(ContentVersion.compare('1.1.0', '1.0.0'), greaterThan(0));
++    expect(ContentVersion.compare('1.0.0', '1.0.0'), 0);
++    expect(ContentVersion.compare(null, '1.0.0'), lessThan(0));
++  });
++
++  test('uses main for the changing catalog and a release ref for package bytes', () {
++    final catalog = ContentCatalog.fromJson(<String, dynamic>{
++      'catalogVersion': 1,
++      'releaseRef': 'content-v1.0.0',
++      'packages': <Map<String, dynamic>>[availablePackage()],
++    });
++    final service = GitHubContentCatalogService(
++      repositoryRawUri: Uri.parse('https://raw.example.test/owner/repository/'),
++    );
++
++    expect(service.catalogUri.path, '/owner/repository/main/content_catalog/v1/index.json');
++    expect(
++      service.packageUriFor(catalog, catalog.packages.single).path,
++      '/owner/repository/content-v1.0.0/content_catalog/packages/owner-inspiration-ar-1.0.0.json',
++    );
++    service.dispose();
++  });
++
++  test('catalog payload remains JSON encodable for remote delivery', () {
++    expect(jsonEncode(availablePackage()), contains('owner-inspiration-ar'));
++  });
++}
+diff --git a/todo.md b/todo.md
+index 5c80264..57fc978 100644
+--- a/todo.md
++++ b/todo.md
+@@ -137,6 +137,10 @@
+ - [x] أرشفة أو تصحيح وثائق v3/Expo التاريخية كي لا تُستخدم كحقيقة عن Flutter v4 أو عن لغة المايك الحالية.
+ - [x] مراجعة مخطط حزم المحتوى المحلي وتوثيق حقول المصدر والحقوق والتكامل قبل إدخال محتوى موثق إضافي.
+ - [ ] تنفيذ validator وحذف ذري واختبارات لحزم المحتوى وفق `docs/content-package-schema-v1.md`.
++- [x] تصميم فهرس GitHub خفيف للحزم المتاحة يتضمن الاسم والنطاق والترتيب والمصدر والترخيص والإصدار والهاش والرابط الثابت.
++- [x] إعداد حزمة مثال أصلية مرخصة وربطها بفهرس GitHub دون إضافة محتوى ديني غير موثق.
++- [x] تنفيذ تنزيل اختياري من الفهرس مع HTTPS والتحقق من SHA-256 والحفظ الذري ومنع downgrade.
++- [x] إضافة واجهة عرض الحزم وتنزيل/حذف واضحين، ثم اختبار CI وAndroid لمسار الفهرس.
+ - [x] إصلاح رسالة نسخ الترجمة لتأكيد النسخ فقط عند وجود ناتج فعلي.
+ - [x] إزالة إنشاء متحكم نصي جديد داخل كل إعادة بناء لصفحة تفعيل PRO.
+ - [x] منع متابعة ساعة أو حركات الشطرنج بعد انتهاء الوقت أو انتهاء المباراة.
+-- 
+2.43.0
+

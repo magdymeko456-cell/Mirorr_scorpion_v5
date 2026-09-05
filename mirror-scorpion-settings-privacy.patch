@@ -1,0 +1,164 @@
+From f1576723b213ea2e4846ccc5b66d5ea4fb64386a Mon Sep 17 00:00:00 2001
+From: magdymeko456-cell
+ <2.88837127e+08+magdymeko456-cell@users.noreply.github.com>
+Date: Sun, 23 Aug 2026 21:05:20 +0000
+Subject: [PATCH] feat(settings): add offline and privacy guidance
+
+---
+ docs/3d-game-engine-gate.md          |  22 ++++++
+ lib/features/feature_hub_screen.dart | 103 ++++++++++++++++++++++++++-
+ 2 files changed, 123 insertions(+), 2 deletions(-)
+ create mode 100644 docs/3d-game-engine-gate.md
+
+diff --git a/docs/3d-game-engine-gate.md b/docs/3d-game-engine-gate.md
+new file mode 100644
+index 0000000..bfb450d
+--- /dev/null
++++ b/docs/3d-game-engine-gate.md
+@@ -0,0 +1,22 @@
++# بوابة الألعاب ثلاثية الأبعاد في Mirror Scorpion v4
++
++## القرار الحالي
++
++تتطلب النسخة المطلوبة **شطرنجاً وروبيك ثلاثيي الأبعاد فعليين**، مع منطق لعب حقيقي، وليس لوحة ثنائية الأبعاد مائلة أو نموذجاً تجريبياً. لذلك لا يُعاد توصيف الساعة الحالية أو واجهة روبيك مبدئية على أنها لعبة 3D.
++
++أقرب محرك Flutter حديث تمت مراجعته هو `flutter_scene`. توثق صفحته أنه محرك قبل 1.0 ويتطور بسرعة، وأنه يتطلب Flutter 3.47 أو أحدث مع Flutter GPU/Impeller على المنصات الأصلية. أما CI الحالي في هذا المشروع فيثبت Flutter 3.44.7. لذلك لا يجوز إضافته في دفعة واجهة عادية: يلزم نموذج توافق مستقل يثبت ترقية Flutter، تفعيل الرسم المطلوب، ونجاح APK على Android قبل نقل أي لعبة إليه.[1]
++
++| شريحة العمل | المعيار قبل الادعاء بالاكتمال |
++|---|---|
++| نموذج محرك 3D | APK يفتح مشهداً بمكعب قابل للدوران ولمس الكاميرا على Android. |
++| روبيك | ستة أوجه وحركات صفوف/أعمدة حقيقية، حفظ حالة، زر حل يشرح الخطوات ولا يعيد الضبط صامتاً. |
++| شطرنج | قطع ثلاثية الأبعاد، حركات قانونية، ساعة، خصم محلي مستقل ومؤشر دوري واضح. |
++| القبول | لقطات وفيديو قصير من هاتف Android واختبار لمسية، لا اختبار CI فقط. |
++
++## ما يمكن إنجازه الآن بلا ادعاء زائد
++
++يستمر التطبيق في عرض ساعة الشطرنج كأداة مستقلة، ويجري تطوير أقسام الإعدادات والخصوصية والبيانات المحلية. لا يبدأ دمج محرك 3D أو ترقية Flutter حتى تكون دفعة التوافق مخصصة ومبنية وحدها.
++
++## المراجع
++
++[1] [Flutter Scene — المتطلبات وحالة ما قبل 1.0](https://github.com/bdero/flutter_scene)
+diff --git a/lib/features/feature_hub_screen.dart b/lib/features/feature_hub_screen.dart
+index 7644320..c4f2577 100644
+--- a/lib/features/feature_hub_screen.dart
++++ b/lib/features/feature_hub_screen.dart
+@@ -1485,15 +1485,114 @@ class _SettingsPanel extends StatelessWidget {
+             ),
+           ),
+           const SizedBox(height: 12),
+-          const Card(child: ListTile(leading: Icon(Icons.download_outlined, color: RoyalColors.cyan), title: Text('حزم لغات أوف لاين'), subtitle: Text('تُضاف بعد اختيار محرك الترجمة وملفات النماذج المعتمدة.'))),
++          Card(
++            child: ListTile(
++              leading: const Icon(Icons.download_outlined, color: RoyalColors.cyan),
++              title: const Text('حزم المحتوى واللغات أوف لاين'),
++              subtitle: const Text('عرض المساحة المحلية وحزم JSON المستوردة؛ نماذج ML Kit تُدار من مسار الترجمة.'),
++              trailing: const Icon(Icons.chevron_left),
++              onTap: () => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => const _OfflinePackagesPage())),
++            ),
++          ),
++          const SizedBox(height: 12),
++          Card(
++            child: ListTile(
++              leading: const Icon(Icons.bubble_chart_outlined, color: RoyalColors.teal),
++              title: const Text('الفقاعة العائمة والخصوصية'),
++              subtitle: const Text('غير مفعلة حتى يكتمل إذن Android وخدمة foreground واختبار الهاتف.'),
++              trailing: const Icon(Icons.chevron_left),
++              onTap: () => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => const _BubblePrivacyPage())),
++            ),
++          ),
+           const SizedBox(height: 12),
+-          const Card(child: ListTile(leading: Icon(Icons.bubble_chart_outlined, color: RoyalColors.teal), title: Text('الفقاعة العائمة'), subtitle: Text('تحتاج خدمة Android Foreground وإذن الظهور فوق التطبيقات.'))),
++          const Card(
++            child: ListTile(
++              leading: Icon(Icons.info_outline, color: RoyalColors.gold),
++              title: Text('حول Mirror Scorpion'),
++              subtitle: Text('ترجمة محلية عندما تدعمها نماذج الجهاز، محتوى أوفلاين اختياري، وخصوصية قائمة على الفعل الصريح للمستخدم.'),
++            ),
++          ),
+         ],
+       ),
+     );
+   }
+ }
+ 
++class _OfflinePackagesPage extends StatefulWidget {
++  const _OfflinePackagesPage();
++
++  @override
++  State<_OfflinePackagesPage> createState() => _OfflinePackagesPageState();
++}
++
++class _OfflinePackagesPageState extends State<_OfflinePackagesPage> {
++  final _storage = const OfflineContentStorage();
++  late Future<List<OfflinePackageRecord>> _packages;
++
++  @override
++  void initState() {
++    super.initState();
++    _packages = _storage.listPackages();
++  }
++
++  @override
++  Widget build(BuildContext context) {
++    return Directionality(
++      textDirection: TextDirection.rtl,
++      child: Scaffold(
++        appBar: AppBar(title: const Text('الحزم المحلية')),
++        body: FutureBuilder<List<OfflinePackageRecord>>(
++          future: _packages,
++          builder: (context, snapshot) {
++            if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
++            final packages = snapshot.data!;
++            return ListView(
++              padding: const EdgeInsets.all(18),
++              children: [
++                const _SectionNotice(
++                  title: 'مساحة العمل أوفلاين',
++                  detail: 'تحتفظ هذه المساحة فقط بحزم JSON التي يختار المستخدم استيرادها. تنزيل قصص من الشبكة لا يبدأ قبل إعداد مصدر مرخّص، والتحقق من التوقيع، وسياسة تحديث وحذف.',
++                ),
++                const SizedBox(height: 16),
++                if (packages.isEmpty)
++                  const Card(child: ListTile(title: Text('لا توجد حزم مستوردة بعد'), subtitle: Text('يمكن استيراد حزمة JSON من كارت القصص.'))),
++                ...packages.map((item) => Card(child: ListTile(leading: const Icon(Icons.inventory_2_outlined, color: RoyalColors.cyan), title: Text(item.title), subtitle: Text(item.id)))),
++              ],
++            );
++          },
++        ),
++      ),
++    );
++  }
++}
++
++class _BubblePrivacyPage extends StatelessWidget {
++  const _BubblePrivacyPage();
++
++  @override
++  Widget build(BuildContext context) {
++    return Directionality(
++      textDirection: TextDirection.rtl,
++      child: Scaffold(
++        appBar: AppBar(title: const Text('الفقاعة العائمة والخصوصية')),
++        body: ListView(
++          padding: const EdgeInsets.all(18),
++          children: const [
++            _SectionNotice(
++              title: 'حدود الفقاعة',
++              detail: 'عند تنفيذها ستحتاج الفقاعة إلى إذن Android صريح للظهور فوق التطبيقات وخدمة foreground. ستعمل فقط عندما يطلب المستخدم ترجمة نص عبر Share أو Process Text أو من داخل الفقاعة نفسها.',
++            ),
++            SizedBox(height: 12),
++            Card(child: ListTile(leading: Icon(Icons.block_outlined, color: Colors.redAccent), title: Text('غير مسموح'), subtitle: Text('لا خدمة Accessibility، ولا Notification Listener، ولا قراءة تلقائية لرسائل WhatsApp أو البريد أو Messenger.'))),
++            SizedBox(height: 12),
++            Card(child: ListTile(leading: Icon(Icons.check_circle_outline, color: Colors.greenAccent), title: Text('مسموح بعد الاختبار'), subtitle: Text('إظهار فقاعة قابلة للسحب، وفتح محرر الترجمة للنص الذي شاركه المستخدم بوضوح.'))),
++          ],
++        ),
++      ),
++    );
++  }
++}
++
+ class _ProActivationPage extends StatefulWidget {
+   const _ProActivationPage();
+ 
+-- 
+2.43.0
+

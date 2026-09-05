@@ -1,0 +1,26 @@
+From 5894167d8fa25042f2bfe172664916f9e104ed1e Mon Sep 17 00:00:00 2001
+From: magdymeko456-cell
+ <2.88837127e+08+magdymeko456-cell@users.noreply.github.com>
+Date: Sun, 23 Aug 2026 21:28:47 +0000
+Subject: [PATCH] fix(games): use runtime piece value map
+
+---
+ lib/core/games/chess_game_controller.dart | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/lib/core/games/chess_game_controller.dart b/lib/core/games/chess_game_controller.dart
+index 7dec188..c976a6d 100644
+--- a/lib/core/games/chess_game_controller.dart
++++ b/lib/core/games/chess_game_controller.dart
+@@ -59,7 +59,7 @@ class ChessGameController {
+   void reset() => _game = chess.Chess();
+ 
+   int _materialScore(chess.Chess position) {
+-    const values = {
++    final values = {
+       chess.Chess.PAWN: 100,
+       chess.Chess.KNIGHT: 320,
+       chess.Chess.BISHOP: 330,
+-- 
+2.43.0
+

@@ -1,0 +1,19 @@
+name: Mirror Scorpion v5 analyze and test
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: "3.44.7"
+      - run: flutter pub get
+      - run: flutter gen-l10n
+      - run: flutter analyze --no-fatal-infos
+      - run: flutter test --reporter expanded

@@ -1,0 +1,36 @@
+From 564b75ec33eab6cc1834ab2adca64da860d57232 Mon Sep 17 00:00:00 2001
+From: magdymeko456-cell
+ <2.88837127e+08+magdymeko456-cell@users.noreply.github.com>
+Date: Wed, 26 Aug 2026 04:29:06 +0000
+Subject: [PATCH] fix(ci): keep overlay manifest setup valid YAML
+
+---
+ .github/workflows/build_apk.yml | 12 +++++++++---
+ 1 file changed, 9 insertions(+), 3 deletions(-)
+
+diff --git a/.github/workflows/build_apk.yml b/.github/workflows/build_apk.yml
+index 295b7cc..e062c8b 100644
+--- a/.github/workflows/build_apk.yml
++++ b/.github/workflows/build_apk.yml
+@@ -120,9 +120,15 @@ jobs:
+             fi
+           done
+           if ! grep -q 'flutter.overlay.window.flutter_overlay_window.OverlayService' "$MANIFEST"; then
+-            sed -i '/<\/application>/i\        <service android:name="flutter.overlay.window.flutter_overlay_window.OverlayService" android:exported="false" android:foregroundServiceType="specialUse">\
+-            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User initiated translation shortcut overlay." />\
+-        </service>' "$MANIFEST"
++            awk '
++              /<\/application>/ {
++                print "        <service android:name=\"flutter.overlay.window.flutter_overlay_window.OverlayService\" android:exported=\"false\" android:foregroundServiceType=\"specialUse\">"
++                print "            <property android:name=\"android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE\" android:value=\"User initiated translation shortcut overlay.\" />"
++                print "        </service>"
++              }
++              { print }
++            ' "$MANIFEST" > "$MANIFEST.tmp"
++            mv "$MANIFEST.tmp" "$MANIFEST"
+           fi
+       - name: Configure PDF text extraction R8 rule
+         run: |
+-- 
+2.43.0
+

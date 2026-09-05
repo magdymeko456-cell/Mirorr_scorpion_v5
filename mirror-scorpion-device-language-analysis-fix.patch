@@ -1,0 +1,45 @@
+From 9649fec4e290829239ec0d7357fab08533f9285a Mon Sep 17 00:00:00 2001
+From: magdymeko456-cell
+ <2.88837127e+08+magdymeko456-cell@users.noreply.github.com>
+Date: Sun, 23 Aug 2026 22:50:18 +0000
+Subject: [PATCH] fix(dialogue): guard device language async flow
+
+---
+ lib/features/feature_hub_screen.dart | 10 +++++++---
+ 1 file changed, 7 insertions(+), 3 deletions(-)
+
+diff --git a/lib/features/feature_hub_screen.dart b/lib/features/feature_hub_screen.dart
+index 1bbda45..1613082 100644
+--- a/lib/features/feature_hub_screen.dart
++++ b/lib/features/feature_hub_screen.dart
+@@ -592,11 +592,14 @@ class _DialoguePanelState extends State<_DialoguePanel> {
+   }
+ 
+   Future<void> _selectLeftTargetLanguage(String code) async {
++    final preferences = context.read<LanguagePreferences>();
++    final sourceLanguage = preferences.deviceLanguageCode;
+     setState(() => _leftTargetLanguage = code);
+-    await context.read<LanguagePreferences>().setTranslationTargetLanguage(code);
++    await preferences.setTranslationTargetLanguage(code);
++    if (!mounted) return;
+     _queueTranslation(
+       _source.text,
+-      sourceLanguageCode: context.read<LanguagePreferences>().deviceLanguageCode,
++      sourceLanguageCode: sourceLanguage,
+     );
+   }
+ 
+@@ -608,8 +611,9 @@ class _DialoguePanelState extends State<_DialoguePanel> {
+       }
+       return;
+     }
+-    await _speechService.stop();
+     final sourceLanguage = context.read<LanguagePreferences>().deviceLanguageCode;
++    await _speechService.stop();
++    if (!mounted) return;
+     await _recognitionService.start(
+       languageCode: sourceLanguage,
+       onText: (recognizedText) {
+-- 
+2.43.0
+

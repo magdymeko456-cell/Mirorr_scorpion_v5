@@ -1,0 +1,163 @@
+From 7bb5743ee3e7e6a65f3db0e0fad292707d970b9f Mon Sep 17 00:00:00 2001
+From: magdymeko456-cell
+ <2.88837127e+08+magdymeko456-cell@users.noreply.github.com>
+Date: Sat, 22 Aug 2026 14:25:07 +0000
+Subject: [PATCH] chore(repo): remove remaining merge artifacts
+
+---
+ .github/workflows/build_apk.yml.rej   | 18 ------------------
+ .gitignore                            |  5 +++++
+ .gitignore.rej                        | 11 -----------
+ docs/firebase-test-environment.md.rej | 10 ----------
+ resolve_conflict.sh                   |  0
+ secure_keys.sh                        | 15 ---------------
+ sync_github.sh                        | 20 --------------------
+ todo.md.rej                           | 10 ----------
+ 8 files changed, 5 insertions(+), 84 deletions(-)
+ delete mode 100644 .github/workflows/build_apk.yml.rej
+ delete mode 100644 .gitignore.rej
+ delete mode 100644 docs/firebase-test-environment.md.rej
+ delete mode 100755 resolve_conflict.sh
+ delete mode 100755 secure_keys.sh
+ delete mode 100755 sync_github.sh
+ delete mode 100644 todo.md.rej
+
+diff --git a/.github/workflows/build_apk.yml.rej b/.github/workflows/build_apk.yml.rej
+deleted file mode 100644
+index 4b7255e..0000000
+--- a/.github/workflows/build_apk.yml.rej
++++ /dev/null
+@@ -1,18 +0,0 @@
+-diff a/.github/workflows/build_apk.yml b/.github/workflows/build_apk.yml	(rejected hunks)
+-@@ -13,6 +13,16 @@ jobs:
+-     runs-on: ubuntu-latest
+-     steps:
+-       - uses: actions/checkout@v4
+-+      - uses: actions/setup-node@v4
+-+        with:
+-+          node-version: "22"
+-+          cache: npm
+-+          cache-dependency-path: functions/package-lock.json
+-+      - name: Verify Firebase Functions
+-+        working-directory: functions
+-+        run: |
+-+          npm ci
+-+          npm run verify
+-       - uses: subosito/flutter-action@v2
+-         with:
+-           flutter-version: "3.44.7"
+diff --git a/.gitignore b/.gitignore
+index 9203801..bf849ad 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -23,3 +23,8 @@ test_firebase.js
+ functions/node_modules/
+ firebase-debug.log
+ firebase-debug.*.log
++node_modules/
++*.rej
++/resolve_conflict.sh
++/secure_keys.sh
++/sync_github.sh
+diff --git a/.gitignore.rej b/.gitignore.rej
+deleted file mode 100644
+index f1e48a0..0000000
+--- a/.gitignore.rej
++++ /dev/null
+@@ -1,11 +0,0 @@
+-diff a/.gitignore b/.gitignore	(rejected hunks)
+-@@ -17,3 +17,9 @@ lib/firebase_options.dart
+- functions/.env
+- serviceAccountKey.json
+- private_key.pem
+-+test_firebase.js
+-+**/serviceAccountKey.json
+-+**/test_firebase.js
+-+functions/node_modules/
+-+firebase-debug.log
+-+firebase-debug.*.log
+diff --git a/docs/firebase-test-environment.md.rej b/docs/firebase-test-environment.md.rej
+deleted file mode 100644
+index 696a785..0000000
+--- a/docs/firebase-test-environment.md.rej
++++ /dev/null
+@@ -1,10 +0,0 @@
+-diff a/docs/firebase-test-environment.md b/docs/firebase-test-environment.md	(rejected hunks)
+-@@ -4,6 +4,8 @@
+- 
+- تم اعتماد Google/Firebase لطبقة الاختبار والإنتاج. يحتفظ Flutter بالواجهة، وML Kit بالمهام المحلية، بينما تحتفظ Cloud Functions بالمفاتيح وعمليات الترجمة والتفريغ والذكاء والفيديو والتحقق من PRO. لا يضع التطبيق مفتاح ترجمة أو LLM أو RSA خاصاً داخل APK.
+- 
+-+مشروع Firebase المعتمد للاختبار هو `mirorr-d11b2`. Project ID غير سري ويكفي لربط إعداد الدوال، أما Project Number وملفات حساب الخدمة فلا توضع في Flutter أو GitHub.
+-+
+- ## تهيئة مشروع Firebase
+- 
+- ينشئ مالك المشروع مشروع Firebase ثم يشغّل من جذر مشروع Flutter، بعد تثبيت Flutter وFirebase CLI وFlutterFire CLI:
+diff --git a/resolve_conflict.sh b/resolve_conflict.sh
+deleted file mode 100755
+index e69de29..0000000
+diff --git a/secure_keys.sh b/secure_keys.sh
+deleted file mode 100755
+index 854f810..0000000
+--- a/secure_keys.sh
++++ /dev/null
+@@ -1,15 +0,0 @@
+-#!/bin/bash
+-set -Eeuo pipefail
+-
+-WORKDIR="$HOME/mirror_scorpion_v4"
+-cd "$WORKDIR"
+-
+-echo "=== 1/2. إضافة المفاتيح الحساسة إلى .gitignore ==="
+-grep -qxF 'serviceAccountKey.json' .gitignore 2>/dev/null || echo 'serviceAccountKey.json' >> .gitignore
+-grep -qxF 'private_key.pem' .gitignore 2>/dev/null || echo 'private_key.pem' >> .gitignore
+-
+-echo "=== 2/2. تحديث المستودع محلياً ==="
+-git add .gitignore
+-git commit -m "security: ignore firebase and rsa private keys" || echo "لا تغييرات جديدة"
+-
+-echo "🛡️ تم تأمين الملفات الحساسة ومنع رفعها إلى GitHub بنجاح!"
+diff --git a/sync_github.sh b/sync_github.sh
+deleted file mode 100755
+index c5d2ad3..0000000
+--- a/sync_github.sh
++++ /dev/null
+@@ -1,20 +0,0 @@
+-#!/bin/bash
+-set -Eeuo pipefail
+-
+-WORKDIR="$HOME/mirror_scorpion_v4"
+-cd "$WORKDIR"
+-
+-echo "=== 1/4. تسجيل الخروج من الحساب القديم ==="
+-gh auth logout -h github.com 2>/dev/null || true
+-
+-echo "=== 2/4. تسجيل الدخول عبر المتصفح (Web Flow) ==="
+-echo "سيظهر لك رمز (Code) الآن، انسخه وافتحه في المتصفح لتأكيد الحساب:"
+-gh auth login -h github.com -p https -w
+-
+-echo "=== 3/4. تهيئة Git لاستخدام اعتمادات GitHub CLI ==="
+-gh auth setup-git
+-
+-echo "=== 4/4. رفع التعديلات إلى الفرع الرئيسي main ==="
+-git push origin main
+-
+-echo "🚀 تم رفع كافة التعديلات وتأمين المستودع بنجاح!"
+diff --git a/todo.md.rej b/todo.md.rej
+deleted file mode 100644
+index 19a2bf4..0000000
+--- a/todo.md.rej
++++ /dev/null
+@@ -1,10 +0,0 @@
+-diff a/todo.md b/todo.md	(rejected hunks)
+-@@ -110,4 +110,8 @@
+- - [ ] متابعة سجل GitHub Actions وإصلاح أخطاء البناء حتى ينجح APK الأساسي
+- - [ ] استبدال مصادقة Git المحلية المرفوضة بمصادقة GitHub المحدثة دون تخزين الرمز داخل المستودع
+- - [ ] إصلاح أخطاء تحليل Flutter: اختبار MyApp القديم، مجلد الأصول، وتحذيرات الواجهة التي تمنع CI
+-+- [x] استعادة إعداد Firebase Functions الآمن لمشروع `mirorr-d11b2` بعد فقدان نسخة العمل المحلية، دون ملف حساب خدمة
+-+- [x] إنشاء واختبار `healthCheck` عبر Firebase Emulator قبل ربط Flutter أو مزودات خارجية
+-+- [ ] إضافة تحقق Functions إلى GitHub Actions ثم متابعة بناء APK
+-+- [x] مراجعة قواعد تجاهل `serviceAccountKey.json` و`private_key.pem` بعد حل التعارض الأخير
+- - [ ] جمع لقطات مرجعية قابلة للعرض للواجهة الأصلية إذا تعذر استنتاجها بصرياً من APK وحده
+-- 
+2.43.0
+

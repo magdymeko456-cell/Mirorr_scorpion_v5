@@ -1,0 +1,26 @@
+From 0cc9f39ebc337cafe8071e2def3c5a7efa197af6 Mon Sep 17 00:00:00 2001
+From: magdymeko456-cell
+ <2.88837127e+08+magdymeko456-cell@users.noreply.github.com>
+Date: Wed, 26 Aug 2026 06:07:23 +0000
+Subject: [PATCH] fix(android): pin sharing intent to API 36 compatible release
+
+---
+ pubspec.yaml | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/pubspec.yaml b/pubspec.yaml
+index a31c121..da584eb 100644
+--- a/pubspec.yaml
++++ b/pubspec.yaml
+@@ -25,7 +25,7 @@ dependencies:
+   speech_to_text: ^7.4.0
+   read_pdf_text: ^0.3.1
+   flutter_overlay_window: ^0.5.0
+-  receive_sharing_intent: ^1.9.0
++  receive_sharing_intent: 1.8.1
+ 
+ dev_dependencies:
+   flutter_test:
+-- 
+2.43.0
+

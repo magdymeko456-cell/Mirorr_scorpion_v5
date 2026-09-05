@@ -1,0 +1,355 @@
+From d1176632012f8c18b4b4f434fb3bcbaed92f408a Mon Sep 17 00:00:00 2001
+From: magdymeko456-cell
+ <2.88837127e+08+magdymeko456-cell@users.noreply.github.com>
+Date: Mon, 24 Aug 2026 17:14:38 +0000
+Subject: [PATCH] feat(tts): let readers choose installed system voices
+
+---
+ ...-overlay-activation-contract-2026-08-24.md | 59 +++++++++++
+ lib/core/speech/system_tts_service.dart       | 99 +++++++++++++++++++
+ lib/features/feature_hub_screen.dart          | 69 +++++++++++++
+ test/system_tts_voice_test.dart               | 26 +++++
+ todo.md                                       | 10 ++
+ 5 files changed, 263 insertions(+)
+ create mode 100644 docs/media-and-overlay-activation-contract-2026-08-24.md
+ create mode 100644 test/system_tts_voice_test.dart
+
+diff --git a/docs/media-and-overlay-activation-contract-2026-08-24.md b/docs/media-and-overlay-activation-contract-2026-08-24.md
+new file mode 100644
+index 0000000..b3be72c
+--- /dev/null
++++ b/docs/media-and-overlay-activation-contract-2026-08-24.md
+@@ -0,0 +1,59 @@
++# عقد تفعيل الصوت والفقاعة والفيديو
++
++> **الحالة:** وثيقة قرار وتنفيذ. لا تعني الواجهة أو هذه الوثيقة أن نسخ الصوت أو فيديو القصص مفعّل. لا تُرسل أي مادة صوتية أو قصة إلى خارج الجهاز قبل اعتماد مزود، وتكلفة، وسياسة خصوصية، وموافقة صريحة.
++
++## 1. القراءة الصوتية المتاحة الآن
++
++يعتمد التطبيق حالياً على محرك TTS المثبت في جهاز Android من خلال `flutter_tts`. يستطيع محرك Android نطق النص فوراً أو توليد ملف صوتي، لكن يجب تهيئته قبل الاستخدام، ويجب تحرير موارده عند الانتهاء. كما أن توافر اللغة أو بيانات الصوت يختلف من جهاز لآخر؛ ولذلك يعرض التطبيق رسالة واضحة إذا كان صوت اللغة غير مثبّت بدلاً من التحويل الصامت إلى لغة أخرى. [1]
++
++| الحالة | ما يفعله التطبيق | ما لا يدّعيه |
++|---|---|---|
++| قراءة ترجمة أو قصة | يقرأ النص بلغة الهدف أو لغة القصة باستخدام صوت النظام المتاح. | لا يضمن جودة موحدة أو صوتاً بشرياً واحداً على جميع الأجهزة. |
++| إيقاف القراءة | يوقف طابور النطق عند ضغط المستخدم أو مغادرة الشاشة. | لا يسجل الصوت ولا يحفظه ولا يرفعه. |
++| لغة غير مثبّتة | يعرض رسالة تطلب تنزيل بيانات الصوت من إعدادات الجهاز. | لا يستبدل اللغة تلقائياً ولا يخترع نطقاً. |
++
++لا توجد حالياً «خمسة أصوات» مضمّنة في Flutter v4. المسار الصادق هو اختيار أحد أصوات النظام المتاحة أو فتح إعدادات الصوت في الجهاز؛ أما الصوت ذو العلامة التجارية أو الصوت العصبي الثابت فيتطلب ملفات صوت مرخّصة أو مزوداً خارجياً مع بيان التكلفة.
++
++## 2. الفقاعة فوق التطبيقات
++
++تعمل الفقاعة فقط كمكوّن Android أصلي منفصل، وليس كزر داخل Flutter. العقد المسموح به هو: يضغط المستخدم **تفعيل**، يفتح التطبيق شاشة إذن `SYSTEM_ALERT_WINDOW`، ثم يبدأ foreground service بإشعار مرئي، وتُظهر الفقاعة مساراً واحداً: نص كتبه المستخدم أو نص أرسله بنفسه عبر **Share/Process Text** إلى التطبيق. لا تطلب الخدمة `AccessibilityService` أو `NotificationListenerService`، ولا تقرأ WhatsApp أو البريد أو أي تطبيق آخر تلقائياً. [2] [3] [4]
++
++| يجب أن يكون موجوداً | مرفوض صراحةً |
++|---|---|
++| إذن overlay من إعدادات النظام، زر تعطيل، إشعار foreground service، وشرح داخل التطبيق. | مراقبة الإشعارات، قراءة الرسائل، التقاط الشاشة، أو بدء تسجيل الميكروفون من الخلفية. |
++| تحريك الفقاعة وحفظ موضعها، ثم فتح شاشة ترجمة بالنص الذي اختاره المستخدم. | ترجمة تلقائية لمحتوى تطبيقات أخرى أو إرسال النص إلى خدمة خارجية بلا ضغط وموافقة. |
++
++يتطلب Android 14+ أنواع foreground service وأذونات صحيحة، ويقيّد Android 15+ بدء الخدمة من الخلفية في مسار overlay؛ لذلك لا تُدرج الفقاعة في APK قبل نموذج Android أصلي واختبار فعلي على هاتف. [2] [3]
++
++## 3. نسخ صوت المستخدم
++
++نسخ الصوت **خدمة خارجية غير مفعلة**. قبل أي تسجيل يجب أن يختار المالك مزوداً ويعتمد اتفاقية معالجة البيانات والتكلفة. كما يجب أن يرى المستخدم شاشة منفصلة تتضمن:
++
++1. الغرض المحدد من العينة، واسم المزود، ومكان المعالجة، ومدة الاحتفاظ والحذف.
++2. تأكيداً صريحاً بأن الصوت صوته أو أنه مخول قانونياً باستعماله؛ لا يدعم التطبيق تقليد صوت طرف ثالث بلا تفويض.
++3. مقدار العينة المطلوبة، والحد الأقصى للحجم، وخيار حذف العينة والنموذج الناتج.
++4. موافقة منفصلة قبل أي مشاركة أو تصدير لصوت مولد.
++
++> لا يجمع التطبيق حالياً عينة نسخ صوت، ولا ينشئ نموذج صوت، ولا يحتفظ بمفتاح مزود أو بيانات اعتماد في التطبيق.
++
++## 4. تحويل القصص إلى فيديو
++
++توليد فيديو من القصص **خدمة خارجية غير مفعلة**. قبل التنفيذ يلزم اعتماد مزود الفيديو، سعر الدقيقة/الثانية، حدود الاستخدام، وسياسة حفظ النصوص والوسائط. لا ترسل إلا قصة يملكها المستخدم أو نصاً مرخصاً يسمح بالتحويل؛ وتبقى نصوص الحزم المرخصة مرتبطة بشروط نسبتها ورخصتها. يجب أن يتيح المسار: معاينة النص، اختيار ما يرسل، تقدير تكلفة أو خصم حصة، حالة job قابلة للإلغاء، تنزيل الناتج، حذف المدخلات والناتج، وإظهار أن الفيديو مولد آلياً.
++
++لا يخلط التطبيق بين المحتوى الديني أو الإلهامي وبين «علاج» أو «تشخيص». ويجب أن تخضع النصوص التي يكتبها المستخدم لقواعد منع الكراهية والتنمر والبذاءة قبل طلب توليد فيديو.
++
++## 5. ترتيب التنفيذ والقبول
++
++| الترتيب | الدفعة | شرط القبول |
++|---|---|---|
++| 1 | تحسين TTS المحلي | Android: تشغيل/إيقاف قصة وترجمة، لغة مدعومة وغير مدعومة، ولا رفع بيانات. |
++| 2 | نموذج فقاعة Android | Android: إذن واضح، إشعار ظاهر، Share Text فقط، تعطيل كامل، ولا صلاحيات مراقبة. |
++| 3 | اختيار مزود نسخ صوت | موافقة مالك التطبيق على التكلفة والخصوصية، ثم موافقة مستخدم وتدفق حذف واختبار sandbox. |
++| 4 | اختيار مزود فيديو | موافقة مالك التطبيق على التكلفة والحقوق والاحتفاظ، ثم job قابل للإلغاء والحذف واختبار جهاز. |
++
++## المراجع
++
++[1]: https://developer.android.com/reference/android/speech/tts/TextToSpeech "Android TextToSpeech API reference"
++[2]: https://developer.android.com/develop/background-work/services/fgs/changes "Android foreground-service changes"
++[3]: https://developer.android.com/develop/background-work/services/fgs/restrictions-bg-start "Android foreground-service background-start restrictions"
++[4]: https://developer.android.com/guide/components/intents-filters "Android intents and intent filters"
+diff --git a/lib/core/speech/system_tts_service.dart b/lib/core/speech/system_tts_service.dart
+index b4a6534..e7c1e61 100644
+--- a/lib/core/speech/system_tts_service.dart
++++ b/lib/core/speech/system_tts_service.dart
+@@ -3,16 +3,53 @@ import 'package:flutter_tts/flutter_tts.dart';
+ 
+ enum SystemSpeechState { idle, speaking, unavailable, failed }
+ 
++class SystemTtsVoice {
++  const SystemTtsVoice({required this.name, required this.locale});
++
++  final String name;
++  final String locale;
++
++  factory SystemTtsVoice.fromPlatformMap(Map<dynamic, dynamic> value) {
++    final name = value['name'];
++    final locale = value['locale'];
++    if (name is! String || name.trim().isEmpty ||
++        locale is! String || locale.trim().isEmpty) {
++      throw const FormatException('Invalid system TTS voice.');
++    }
++    return SystemTtsVoice(name: name, locale: locale);
++  }
++
++  bool supportsLocale(String requestedLocale) =>
++      _languagePart(locale) == _languagePart(requestedLocale);
++
++  Map<String, String> toPlatformMap() => <String, String>{
++        'name': name,
++        'locale': locale,
++      };
++
++  @override
++  bool operator ==(Object other) =>
++      other is SystemTtsVoice && other.name == name && other.locale == locale;
++
++  @override
++  int get hashCode => Object.hash(name, locale);
++
++  static String _languagePart(String locale) =>
++      locale.replaceAll('_', '-').split('-').first.toLowerCase();
++}
++
+ class SystemTtsService extends ChangeNotifier {
+   SystemTtsService() : _tts = FlutterTts();
+ 
+   final FlutterTts _tts;
+   SystemSpeechState _state = SystemSpeechState.idle;
+   String? _message;
++  SystemTtsVoice? _selectedVoice;
+ 
+   SystemSpeechState get state => _state;
+   String? get message => _message;
+   bool get isSpeaking => _state == SystemSpeechState.speaking;
++  SystemTtsVoice? get selectedVoice => _selectedVoice;
+ 
+   Future<void> initialize() async {
+     _tts.setStartHandler(() {
+@@ -50,6 +87,12 @@ class SystemTtsService extends ChangeNotifier {
+       }
+       await _tts.stop();
+       await _tts.setLanguage(locale);
++      final voice = _selectedVoice;
++      if (voice != null && voice.supportsLocale(locale)) {
++        await _tts.setVoice(voice.toPlatformMap());
++      } else if (voice != null) {
++        await _tts.clearVoice();
++      }
+       final result = await _tts.speak(content, focus: true);
+       if (result == 1) return true;
+       _state = SystemSpeechState.failed;
+@@ -69,6 +112,62 @@ class SystemTtsService extends ChangeNotifier {
+     _markIdle();
+   }
+ 
++  Future<List<SystemTtsVoice>> voicesForLanguage(String languageCode) async {
++    final requestedLocale = _localeFor(languageCode);
++    try {
++      final rawVoices = await _tts.getVoices;
++      if (rawVoices is! List) return const <SystemTtsVoice>[];
++      final voices = <SystemTtsVoice>[];
++      for (final rawVoice in rawVoices) {
++        if (rawVoice is! Map) continue;
++        try {
++          final voice = SystemTtsVoice.fromPlatformMap(rawVoice);
++          if (voice.supportsLocale(requestedLocale)) voices.add(voice);
++        } on FormatException {
++          // محرك النظام قد يعيد سجلاً ناقصاً؛ لا نعرضه للمستخدم.
++        }
++      }
++      voices.sort((left, right) => left.name.compareTo(right.name));
++      return voices;
++    } catch (_) {
++      _message = 'تعذر قراءة قائمة أصوات النظام في هذا الجهاز.';
++      notifyListeners();
++      return const <SystemTtsVoice>[];
++    }
++  }
++
++  Future<bool> selectVoice(
++    SystemTtsVoice? voice, {
++    required String languageCode,
++  }) async {
++    final requestedLocale = _localeFor(languageCode);
++    if (voice != null && !voice.supportsLocale(requestedLocale)) {
++      _state = SystemSpeechState.unavailable;
++      _message = 'هذا الصوت لا يدعم لغة القصة الحالية.';
++      notifyListeners();
++      return false;
++    }
++    try {
++      if (voice == null) {
++        await _tts.clearVoice();
++      } else {
++        await _tts.setVoice(voice.toPlatformMap());
++      }
++      _selectedVoice = voice;
++      _state = SystemSpeechState.idle;
++      _message = voice == null
++          ? 'سيستخدم التطبيق صوت النظام الافتراضي.'
++          : 'تم اختيار صوت النظام: ${voice.name}.';
++      notifyListeners();
++      return true;
++    } catch (_) {
++      _state = SystemSpeechState.failed;
++      _message = 'تعذر اختيار صوت النظام المطلوب.';
++      notifyListeners();
++      return false;
++    }
++  }
++
+   void _markIdle() {
+     _state = SystemSpeechState.idle;
+     _message = null;
+diff --git a/lib/features/feature_hub_screen.dart b/lib/features/feature_hub_screen.dart
+index 0c267ec..290f0bf 100644
+--- a/lib/features/feature_hub_screen.dart
++++ b/lib/features/feature_hub_screen.dart
+@@ -1220,6 +1220,67 @@ class _StoriesPanelState extends State<_StoriesPanel> {
+     }
+   }
+ 
++  Future<void> _chooseStoryVoice() async {
++    final languageCode = context.read<LanguagePreferences>().storyLanguageCode;
++    final voices = await _speechService.voicesForLanguage(languageCode);
++    if (!mounted) return;
++    if (voices.isEmpty) {
++      setState(() {
++        _notice = _speechService.message ??
++            'لا توجد أصوات نظام متاحة للغة القصة على هذا الجهاز.';
++      });
++      return;
++    }
++    await showModalBottomSheet<void>(
++      context: context,
++      backgroundColor: const Color(0xFF0D1623),
++      builder: (sheetContext) => Directionality(
++        textDirection: TextDirection.rtl,
++        child: SafeArea(
++          child: ListView(
++            shrinkWrap: true,
++            children: [
++              const ListTile(
++                title: Text('أصوات النظام المتاحة'),
++                subtitle: Text('تظهر أصوات جهازك فقط؛ لا يُرفع النص أو يُنسخ صوتك.'),
++              ),
++              RadioListTile<SystemTtsVoice?>(
++                value: null,
++                groupValue: _speechService.selectedVoice,
++                title: const Text('صوت النظام الافتراضي'),
++                onChanged: (_) async {
++                  await _speechService.selectVoice(
++                    null,
++                    languageCode: languageCode,
++                  );
++                  if (sheetContext.mounted) Navigator.pop(sheetContext);
++                },
++              ),
++              ...voices.map(
++                (voice) => RadioListTile<SystemTtsVoice?>(
++                  value: voice,
++                  groupValue: _speechService.selectedVoice,
++                  title: Text(voice.name),
++                  subtitle: Text(voice.locale),
++                  onChanged: (_) async {
++                    await _speechService.selectVoice(
++                      voice,
++                      languageCode: languageCode,
++                    );
++                    if (sheetContext.mounted) Navigator.pop(sheetContext);
++                  },
++                ),
++              ),
++            ],
++          ),
++        ),
++      ),
++    );
++    if (mounted && _speechService.message != null) {
++      setState(() => _notice = _speechService.message);
++    }
++  }
++
+   void _openReader(_StoryEntry story) {
+     showModalBottomSheet<void>(
+       context: context,
+@@ -1426,6 +1487,14 @@ class _StoriesPanelState extends State<_StoriesPanel> {
+                               },
+                               icon: Icon(_speechService.isSpeaking ? Icons.stop_circle_outlined : Icons.volume_up, color: RoyalColors.gold),
+                             ),
++                            IconButton(
++                              tooltip: 'اختيار صوت النظام للقصة',
++                              onPressed: _chooseStoryVoice,
++                              icon: const Icon(
++                                Icons.record_voice_over_outlined,
++                                color: RoyalColors.cyan,
++                              ),
++                            ),
+                             const Text('المزيد', style: TextStyle(color: RoyalColors.purple)),
+                           ],
+                         ),
+diff --git a/test/system_tts_voice_test.dart b/test/system_tts_voice_test.dart
+new file mode 100644
+index 0000000..b6488ad
+--- /dev/null
++++ b/test/system_tts_voice_test.dart
+@@ -0,0 +1,26 @@
++import 'package:flutter_test/flutter_test.dart';
++import 'package:mirror_scorpion_v4/core/speech/system_tts_service.dart';
++
++void main() {
++  test('parses a valid platform voice map', () {
++    final voice = SystemTtsVoice.fromPlatformMap(<String, dynamic>{
++      'name': 'Arabic local voice',
++      'locale': 'ar-SA',
++    });
++
++    expect(voice.name, 'Arabic local voice');
++    expect(voice.supportsLocale('ar-EG'), isTrue);
++    expect(voice.supportsLocale('en-US'), isFalse);
++    expect(
++      voice.toPlatformMap(),
++      <String, String>{'name': 'Arabic local voice', 'locale': 'ar-SA'},
++    );
++  });
++
++  test('rejects incomplete platform voice maps', () {
++    expect(
++      () => SystemTtsVoice.fromPlatformMap(<String, dynamic>{'name': 'voice'}),
++      throwsFormatException,
++    );
++  });
++}
+diff --git a/todo.md b/todo.md
+index 84a6cc0..217e995 100644
+--- a/todo.md
++++ b/todo.md
+@@ -199,3 +199,13 @@
+ - [x] إضافة الحزمة التجريبية إلى فهرس GitHub مع SHA-256 ووسم يمنع عرضها كنصيحة علاجية.
+ - [ ] تشغيل تدقيق JSON وFlutter analyze وFlutter test وبناء APK للحزمة.
+ - [ ] اختبار تنزيل الحزمة وإظهار الإسناد والرخصة وحذفها على Android.
++
++## الأصوات والفقاعة والفيديو — 2026-08-24
++
++- [ ] مراجعة وتثبيت القراءة الصوتية المحلية للنصوص والقصص مع أصوات جهاز المستخدم واختبار Android.
++- [x] عرض أصوات النظام المتاحة للغة القصة وتمكين اختيار صوت محلي في الجلسة دون رفع أي نص أو عينة صوت.
++- [x] توثيق متطلبات الفقاعة الأصلية: إذن overlay صريح، خدمة foreground، مشاركة/معالجة نص باختيار المستخدم فقط، ومنع القراءة التلقائية للتطبيقات الأخرى.
++- [ ] إعداد نموذج فقاعة Android معزول لا يطلب Accessibility أو Notification Listener ولا يصل إلى رسائل البريد أو WhatsApp تلقائياً.
++- [ ] تحديد مزود، تكلفة، احتفاظ بيانات، وموافقة صريحة لنسخ صوت المستخدم قبل جمع أي تسجيل صوتي أو إرساله.
++- [ ] تحديد مزود، تكلفة، حقوق نصوص، وسياسة حذف/موافقة لتحويل القصص إلى فيديو قبل إرسال أي قصة أو إنشاء فيديو.
++- [ ] عدم عرض نسخ الصوت أو الفيديو كميزات مفعلة قبل اعتماد المزوّد والسياسات واجتياز اختبار Android.
+-- 
+2.43.0
+

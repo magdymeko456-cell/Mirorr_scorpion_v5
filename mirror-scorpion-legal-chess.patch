@@ -1,0 +1,425 @@
+From afe8695d5e9b12d0cf39d52a7bfbd5060d76f1ec Mon Sep 17 00:00:00 2001
+From: magdymeko456-cell
+ <2.88837127e+08+magdymeko456-cell@users.noreply.github.com>
+Date: Sun, 23 Aug 2026 21:20:09 +0000
+Subject: [PATCH] feat(games): add legal chess prototype
+
+---
+ docs/3d-game-engine-gate.md               |   9 ++
+ docs/third-party-notices.md               |  12 ++
+ lib/core/games/chess_game_controller.dart |  81 ++++++++++
+ lib/features/feature_hub_screen.dart      | 185 +++++++++++++++++++++-
+ pubspec.yaml                              |   1 +
+ test/chess_game_controller_test.dart      |  21 +++
+ 6 files changed, 306 insertions(+), 3 deletions(-)
+ create mode 100644 docs/third-party-notices.md
+ create mode 100644 lib/core/games/chess_game_controller.dart
+ create mode 100644 test/chess_game_controller_test.dart
+
+diff --git a/docs/3d-game-engine-gate.md b/docs/3d-game-engine-gate.md
+index bfb450d..a85d0df 100644
+--- a/docs/3d-game-engine-gate.md
++++ b/docs/3d-game-engine-gate.md
+@@ -13,6 +13,12 @@
+ | شطرنج | قطع ثلاثية الأبعاد، حركات قانونية، ساعة، خصم محلي مستقل ومؤشر دوري واضح. |
+ | القبول | لقطات وفيديو قصير من هاتف Android واختبار لمسية، لا اختبار CI فقط. |
+ 
++## منطق الشطرنج قبل العرض ثلاثي الأبعاد
++
++تمت مراجعة `dartchess` الإصدار 0.13.1، وهو متوافق مع Flutter وAndroid ويوفر توليد الحركات القانونية وحالات النهاية وFEN وPGN. يمكن أن يكون أساساً مناسباً لنموذج قواعد شطرنج محلي، لكنه **ليس محرك خصم** ولا مشهد 3D. كذلك ترخيصه GPL-3.0؛ لا يُدمج قبل مراجعة التوافق القانوني مع مشروع التطبيق وخطة التوزيع.[2]
++
++تمت مراجعة البديل `chess.dart` أيضاً. يقدم توليد حركات قانونية وحالة الشطرنج وFEN/PGN من دون تبعيات خارجية، ويحمل ترخيصاً متساهلاً مبنياً على MIT وBSD-2-Clause مع واجب الاحتفاظ بإشعارات الحقوق. هذا يجعله مرشحاً أولياً أفضل لنموذج قواعد محلي، بشرط إضافة الإشعارات المطلوبة في توزيع التطبيق ومراجعة النسخة المثبتة قبل الدمج.[3]
++
+ ## ما يمكن إنجازه الآن بلا ادعاء زائد
+ 
+ يستمر التطبيق في عرض ساعة الشطرنج كأداة مستقلة، ويجري تطوير أقسام الإعدادات والخصوصية والبيانات المحلية. لا يبدأ دمج محرك 3D أو ترقية Flutter حتى تكون دفعة التوافق مخصصة ومبنية وحدها.
+@@ -20,3 +26,6 @@
+ ## المراجع
+ 
+ [1] [Flutter Scene — المتطلبات وحالة ما قبل 1.0](https://github.com/bdero/flutter_scene)
++[2] [dartchess — قواعد شطرنج Dart والترخيص](https://pub.dev/packages/dartchess)
++[3] [ترخيص chess.dart](https://raw.githubusercontent.com/davecom/chess.dart/master/LICENSE)
++[4] [واجهة Chess: الحركات القانونية وFEN وPGN](https://pub.dev/documentation/chess/latest/chess/Chess-class.html)
+diff --git a/docs/third-party-notices.md b/docs/third-party-notices.md
+new file mode 100644
+index 0000000..f0f3c8a
+--- /dev/null
++++ b/docs/third-party-notices.md
+@@ -0,0 +1,12 @@
++# إشعارات مكونات الطرف الثالث
++
++## chess.dart 0.8.1
++
++يستخدم نموذج قواعد الشطرنج المحلي حزمة `chess` (chess.dart) لتوليد الحركات القانونية وFEN وPGN. ترخيص الحزمة يجمع MIT وBSD-2-Clause؛ يجب تضمين إشعارات الحقوق وشروط التوزيع في أي توزيع للـAPK يحتويها.[1] [2]
++
++المكتبة تدير القواعد والحالة فقط. الخصم المحلي في هذه المرحلة تقييم مادي بسيط، وليس محركاً احترافياً أو بديلاً عن مشهد ثلاثي الأبعاد.
++
++## المراجع
++
++[1] [chess 0.8.1 على pub.dev](https://pub.dev/packages/chess)
++[2] [نص ترخيص chess.dart](https://raw.githubusercontent.com/davecom/chess.dart/master/LICENSE)
+diff --git a/lib/core/games/chess_game_controller.dart b/lib/core/games/chess_game_controller.dart
+new file mode 100644
+index 0000000..6e33ced
+--- /dev/null
++++ b/lib/core/games/chess_game_controller.dart
+@@ -0,0 +1,81 @@
++import 'dart:math';
++
++import 'package:chess/chess.dart' as chess;
++
++/// قواعد شطرنج قانونية محلية وخصم مادي بسيط. لا يمثل هذا الملف مشهداً 3D؛
++/// يبقى عرض القطع ثلاثي الأبعاد مرحلة منفصلة بعد نموذج توافق المحرك.
++class ChessGameController {
++  ChessGameController() : _game = chess.Chess();
++
++  chess.Chess _game;
++  final Random _random = Random();
++
++  chess.Piece? pieceAt(String square) => _game.get(square);
++  bool get isWhiteTurn => _game.turn == chess.Color.WHITE;
++  bool get gameOver => _game.game_over;
++  bool get isCheckmate => _game.in_checkmate;
++  bool get isDraw => _game.in_draw;
++  String get pgn => _game.pgn();
++
++  List<String> legalMovesFrom(String square) {
++    final legalTargets = <String>[];
++    for (final move in _game.moves({'verbose': true})) {
++      if (move is Map && move['from'] == square && move['to'] is String) {
++        legalTargets.add(move['to'] as String);
++      }
++    }
++    return legalTargets;
++  }
++
++  bool movePlayer(String from, String to) {
++    if (!isWhiteTurn || gameOver) return false;
++    return _game.move({'from': from, 'to': to, 'promotion': 'q'});
++  }
++
++  bool moveComputer() {
++    if (isWhiteTurn || gameOver) return false;
++    final moves = _game.moves().whereType<String>().toList();
++    if (moves.isEmpty) return false;
++
++    var bestScore = 1 << 30;
++    final bestMoves = <String>[];
++    for (final move in moves) {
++      final candidate = _game.copy();
++      if (!candidate.move(move)) continue;
++      final score = _materialScore(candidate);
++      if (score < bestScore) {
++        bestScore = score;
++        bestMoves
++          ..clear()
++          ..add(move);
++      } else if (score == bestScore) {
++        bestMoves.add(move);
++      }
++    }
++    if (bestMoves.isEmpty) return false;
++    return _game.move(bestMoves[_random.nextInt(bestMoves.length)]);
++  }
++
++  void reset() => _game = chess.Chess();
++
++  int _materialScore(chess.Chess position) {
++    const values = {
++      chess.PAWN: 100,
++      chess.KNIGHT: 320,
++      chess.BISHOP: 330,
++      chess.ROOK: 500,
++      chess.QUEEN: 900,
++      chess.KING: 20000,
++    };
++    var score = 0;
++    for (final file in const ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']) {
++      for (var rank = 1; rank <= 8; rank++) {
++        final piece = position.get('$file$rank');
++        if (piece == null) continue;
++        final value = values[piece.type] ?? 0;
++        score += piece.color == chess.Color.WHITE ? value : -value;
++      }
++    }
++    return score;
++  }
++}
+diff --git a/lib/features/feature_hub_screen.dart b/lib/features/feature_hub_screen.dart
+index c4f2577..a99453b 100644
+--- a/lib/features/feature_hub_screen.dart
++++ b/lib/features/feature_hub_screen.dart
+@@ -10,6 +10,7 @@ import 'package:provider/provider.dart';
+ import '../app/royal_dark_theme.dart';
+ import '../core/localization/language_preferences.dart';
+ import '../core/content/offline_content_storage.dart';
++import '../core/games/chess_game_controller.dart';
+ import '../core/inspiration/inspiration_safety.dart';
+ import '../core/mlkit/on_device_ocr_service.dart';
+ import '../core/mlkit/on_device_translation_service.dart';
+@@ -1394,10 +1395,16 @@ class _GamesPanel extends StatefulWidget {
+ }
+ 
+ class _GamesPanelState extends State<_GamesPanel> {
++  final _chess = ChessGameController();
+   Timer? _timer;
++  int _initialMinutes = 5;
+   int _whiteSeconds = 300;
+   int _blackSeconds = 300;
+   bool _whiteTurn = true;
++  String? _selectedSquare;
++  List<String> _legalTargets = const [];
++  bool _computerThinking = false;
++  String _gameNotice = 'ابدأ بنقل قطعة بيضاء؛ الخصم المحلي يختار حركة قانونية بتقييم مادي بسيط.';
+ 
+   @override
+   void dispose() {
+@@ -1416,6 +1423,11 @@ class _GamesPanelState extends State<_GamesPanel> {
+       setState(() {
+         if (_whiteTurn && _whiteSeconds > 0) _whiteSeconds--;
+         if (!_whiteTurn && _blackSeconds > 0) _blackSeconds--;
++        if (_whiteSeconds == 0 || _blackSeconds == 0) {
++          _timer?.cancel();
++          _timer = null;
++          _gameNotice = _whiteSeconds == 0 ? 'انتهى وقت الأبيض.' : 'انتهى وقت الأسود.';
++        }
+       });
+     });
+     setState(() {});
+@@ -1423,24 +1435,191 @@ class _GamesPanelState extends State<_GamesPanel> {
+ 
+   String _format(int value) => '${(value ~/ 60).toString().padLeft(2, '0')}:${(value % 60).toString().padLeft(2, '0')}';
+ 
++  Future<void> _tapSquare(String square) async {
++    if (_computerThinking || _chess.gameOver || !_chess.isWhiteTurn) return;
++    final piece = _chess.pieceAt(square);
++    if (_selectedSquare == null) {
++      if (piece == null || piece.color.name != 'WHITE') return;
++      setState(() {
++        _selectedSquare = square;
++        _legalTargets = _chess.legalMovesFrom(square);
++        _gameNotice = _legalTargets.isEmpty ? 'لا توجد حركة قانونية لهذه القطعة.' : 'اختر مربعاً مميزاً للحركة.';
++      });
++      return;
++    }
++
++    if (square == _selectedSquare) {
++      setState(() {
++        _selectedSquare = null;
++        _legalTargets = const [];
++      });
++      return;
++    }
++    if (!_legalTargets.contains(square)) {
++      if (piece != null && piece.color.name == 'WHITE') {
++        setState(() {
++          _selectedSquare = square;
++          _legalTargets = _chess.legalMovesFrom(square);
++        });
++      }
++      return;
++    }
++
++    final moved = _chess.movePlayer(_selectedSquare!, square);
++    if (!moved) return;
++    setState(() {
++      _selectedSquare = null;
++      _legalTargets = const [];
++      _whiteTurn = false;
++      _computerThinking = true;
++      _gameNotice = 'الخصم المحلي يفكر…';
++    });
++    await Future<void>.delayed(const Duration(milliseconds: 450));
++    if (!mounted) return;
++    _chess.moveComputer();
++    if (!mounted) return;
++    setState(() {
++      _whiteTurn = true;
++      _computerThinking = false;
++      _gameNotice = _outcomeMessage();
++    });
++  }
++
++  String _outcomeMessage() {
++    if (_chess.isCheckmate) return 'كش مات. انتهت المباراة.';
++    if (_chess.isDraw) return 'تعادل وفق قواعد الشطرنج.';
++    return 'دور الأبيض. اختر قطعة ثم مربعاً مميزاً للحركة.';
++  }
++
++  void _resetGame() {
++    _timer?.cancel();
++    setState(() {
++      _timer = null;
++      _chess.reset();
++      _whiteSeconds = _initialMinutes * 60;
++      _blackSeconds = _initialMinutes * 60;
++      _whiteTurn = true;
++      _selectedSquare = null;
++      _legalTargets = const [];
++      _computerThinking = false;
++      _gameNotice = 'بدأت مباراة جديدة. دور الأبيض.';
++    });
++  }
++
++  String _pieceSymbol(dynamic piece) {
++    if (piece == null) return '';
++    const white = {'PAWN': '♙', 'KNIGHT': '♘', 'BISHOP': '♗', 'ROOK': '♖', 'QUEEN': '♕', 'KING': '♔'};
++    const black = {'PAWN': '♟', 'KNIGHT': '♞', 'BISHOP': '♝', 'ROOK': '♜', 'QUEEN': '♛', 'KING': '♚'};
++    final symbols = piece.color.name == 'WHITE' ? white : black;
++    return symbols[piece.type.name] ?? '';
++  }
++
++  Widget _buildChessBoard() {
++    const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
++    return AspectRatio(
++      aspectRatio: 1,
++      child: Container(
++        decoration: BoxDecoration(
++          borderRadius: BorderRadius.circular(12),
++          border: Border.all(color: RoyalColors.gold.withValues(alpha: 0.65), width: 2),
++          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.4), blurRadius: 14, offset: const Offset(0, 8))],
++        ),
++        child: GridView.builder(
++          physics: const NeverScrollableScrollPhysics(),
++          itemCount: 64,
++          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 8),
++          itemBuilder: (context, index) {
++            final rank = 8 - (index ~/ 8);
++            final file = files[index % 8];
++            final square = '$file$rank';
++            final piece = _chess.pieceAt(square);
++            final isLight = (index ~/ 8 + index % 8).isEven;
++            final isSelected = _selectedSquare == square;
++            final isTarget = _legalTargets.contains(square);
++            return GestureDetector(
++              onTap: () => _tapSquare(square),
++              child: AnimatedContainer(
++                duration: const Duration(milliseconds: 130),
++                decoration: BoxDecoration(
++                  color: isSelected
++                      ? Colors.amber.withValues(alpha: 0.9)
++                      : isTarget
++                          ? Colors.lightGreen.withValues(alpha: 0.78)
++                          : isLight
++                              ? const Color(0xFFB7C7D4)
++                              : const Color(0xFF29455E),
++                ),
++                child: Center(
++                  child: Text(
++                    _pieceSymbol(piece),
++                    style: TextStyle(
++                      fontSize: 31,
++                      height: 1,
++                      color: piece?.color.name == 'WHITE' ? Colors.white : Colors.black,
++                      shadows: const [Shadow(color: Colors.black54, blurRadius: 2, offset: Offset(1, 1))],
++                    ),
++                  ),
++                ),
++              ),
++            );
++          },
++        ),
++      ),
++    );
++  }
++
+   @override
+   Widget build(BuildContext context) {
+     return ListView(
+       padding: const EdgeInsets.all(18),
+       children: [
+-        const _SectionNotice(title: 'شطرنج وروبيك', detail: 'ساعة الشطرنج تعمل محلياً. محرك الشطرنج والمشهد ثلاثي الأبعاد الكامل يدخلان بعد اختبار Flame/Flame 3D على جهاز Android.'),
++        const _SectionNotice(title: 'شطرنج وروبيك', detail: 'لوحة الشطرنج أدناه تستخدم قواعد قانونية وخصماً محلياً بسيطاً. ليست هذه بعد مشهداً ثلاثي الأبعاد؛ دمج 3D الحقيقي ينتظر نموذج توافق Flutter GPU منفصل. روبيك ثلاثي الأبعاد لم يُفعّل بعد.'),
+         const SizedBox(height: 16),
+         Card(
+           child: Padding(
+             padding: const EdgeInsets.all(18),
+             child: Column(
+               children: [
++                Row(
++                  children: [
++                    const Text('زمن البداية: '),
++                    const SizedBox(width: 8),
++                    DropdownButton<int>(
++                      value: _initialMinutes,
++                      items: const [1, 3, 5, 10].map((minutes) => DropdownMenuItem(value: minutes, child: Text('$minutes دقائق'))).toList(),
++                      onChanged: _timer == null && !_computerThinking
++                          ? (minutes) {
++                              if (minutes == null) return;
++                              setState(() {
++                                _initialMinutes = minutes;
++                                _whiteSeconds = minutes * 60;
++                                _blackSeconds = minutes * 60;
++                              });
++                            }
++                          : null,
++                    ),
++                  ],
++                ),
++                const SizedBox(height: 10),
+                 Text('الأبيض: ${_format(_whiteSeconds)}', style: const TextStyle(fontSize: 26, color: RoyalColors.text)),
+                 const SizedBox(height: 8),
+                 Text('الأسود: ${_format(_blackSeconds)}', style: const TextStyle(fontSize: 26, color: RoyalColors.text)),
+                 const SizedBox(height: 14),
+-                FilledButton(onPressed: _toggleClock, child: Text(_timer == null ? 'بدء الساعة' : 'إيقاف الساعة')),
+-                TextButton(onPressed: () => setState(() => _whiteTurn = !_whiteTurn), child: const Text('تبديل الدور')),
++                _buildChessBoard(),
++                const SizedBox(height: 12),
++                Text(_gameNotice, textAlign: TextAlign.center, style: const TextStyle(color: RoyalColors.gold, height: 1.5)),
++                const SizedBox(height: 10),
++                Wrap(
++                  spacing: 8,
++                  runSpacing: 8,
++                  alignment: WrapAlignment.center,
++                  children: [
++                    FilledButton(onPressed: _toggleClock, child: Text(_timer == null ? 'بدء الساعة' : 'إيقاف الساعة')),
++                    OutlinedButton(onPressed: _resetGame, child: const Text('مباراة جديدة')),
++                  ],
++                ),
++                const SizedBox(height: 8),
++                SelectableText('PGN: ${_chess.pgn}', style: const TextStyle(color: RoyalColors.muted, fontSize: 11)),
+               ],
+             ),
+           ),
+diff --git a/pubspec.yaml b/pubspec.yaml
+index af8e6a4..31f95a5 100644
+--- a/pubspec.yaml
++++ b/pubspec.yaml
+@@ -19,6 +19,7 @@ dependencies:
+   image_picker: ^1.2.3
+   file_picker: ^12.0.0
+   path_provider: ^2.1.5
++  chess: ^0.8.1
+   flutter_tts: ^4.2.5
+   speech_to_text: ^7.4.0
+ 
+diff --git a/test/chess_game_controller_test.dart b/test/chess_game_controller_test.dart
+new file mode 100644
+index 0000000..5d6fddb
+--- /dev/null
++++ b/test/chess_game_controller_test.dart
+@@ -0,0 +1,21 @@
++import 'package:flutter_test/flutter_test.dart';
++import 'package:mirror_scorpion_v4/core/games/chess_game_controller.dart';
++
++void main() {
++  test('starts with legal white pawn moves and alternates with local computer', () {
++    final game = ChessGameController();
++
++    expect(game.legalMovesFrom('e2'), containsAll(<String>['e3', 'e4']));
++    expect(game.movePlayer('e2', 'e4'), isTrue);
++    expect(game.isWhiteTurn, isFalse);
++    expect(game.moveComputer(), isTrue);
++    expect(game.isWhiteTurn, isTrue);
++  });
++
++  test('does not let the player move while it is the computer turn', () {
++    final game = ChessGameController();
++
++    expect(game.movePlayer('e2', 'e4'), isTrue);
++    expect(game.movePlayer('d2', 'd4'), isFalse);
++  });
++}
+-- 
+2.43.0
+

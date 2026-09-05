@@ -1,0 +1,166 @@
+From f044e589f3bf9454dd863020a3d401f0540e1ed9 Mon Sep 17 00:00:00 2001
+From: magdymeko456-cell
+ <2.88837127e+08+magdymeko456-cell@users.noreply.github.com>
+Date: Mon, 24 Aug 2026 05:41:56 +0000
+Subject: [PATCH] fix(ui): harden copy pro and chess interactions
+
+---
+ lib/features/feature_hub_screen.dart | 85 ++++++++++++++++++++++------
+ todo.md                              | 12 ++++
+ 2 files changed, 81 insertions(+), 16 deletions(-)
+
+diff --git a/lib/features/feature_hub_screen.dart b/lib/features/feature_hub_screen.dart
+index c12f1f5..4aeb142 100644
+--- a/lib/features/feature_hub_screen.dart
++++ b/lib/features/feature_hub_screen.dart
+@@ -340,8 +340,20 @@ return ListView(
+             _EditorAction(icon: _speechService.isSpeaking ? Icons.stop_circle_outlined : Icons.volume_up, tooltip: _speechService.isSpeaking ? 'إيقاف النطق' : 'نطق الترجمة بصوت النظام', onPressed: _speakTranslation),
+             _EditorAction(icon: Icons.share, tooltip: 'مشاركة ملف صوت مترجم', onPressed: () => _beginNewInput('مشاركة الترجمة')),
+             _EditorAction(icon: Icons.copy, tooltip: 'نسخ الترجمة', onPressed: () async {
+-              if (_output.text.isNotEmpty) await Clipboard.setData(ClipboardData(text: _output.text));
+-              if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('لا يوجد نص مترجم لنسخه بعد.')));
++              if (_output.text.isEmpty) {
++                if (context.mounted) {
++                  ScaffoldMessenger.of(context).showSnackBar(
++                    const SnackBar(content: Text('لا يوجد نص مترجم لنسخه بعد.')),
++                  );
++                }
++                return;
++              }
++              await Clipboard.setData(ClipboardData(text: _output.text));
++              if (context.mounted) {
++                ScaffoldMessenger.of(context).showSnackBar(
++                  const SnackBar(content: Text('تم نسخ الترجمة.')),
++                );
++              }
+             }),
+           ],
+         ),
+@@ -1484,6 +1496,14 @@ class _GamesPanelState extends State<_GamesPanel> {
+       setState(() {});
+       return;
+     }
++    if (_chess.gameOver || _whiteSeconds == 0 || _blackSeconds == 0) {
++      setState(() {
++        _gameNotice = _chess.gameOver
++            ? _outcomeMessage()
++            : 'انتهت المباراة بالوقت. ابدأ مباراة جديدة أولاً.';
++      });
++      return;
++    }
+     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+       setState(() {
+         if (_whiteTurn && _whiteSeconds > 0) _whiteSeconds--;
+@@ -1502,6 +1522,10 @@ class _GamesPanelState extends State<_GamesPanel> {
+ 
+   Future<void> _tapSquare(String square) async {
+     if (_computerThinking || _chess.gameOver || !_chess.isWhiteTurn) return;
++    if (_whiteSeconds == 0 || _blackSeconds == 0) {
++      setState(() => _gameNotice = 'انتهت المباراة بالوقت. ابدأ مباراة جديدة أولاً.');
++      return;
++    }
+     final piece = _chess.pieceAt(square);
+     if (_selectedSquare == null) {
+       if (piece == null || piece.color.name != 'WHITE') return;
+@@ -1532,6 +1556,17 @@ class _GamesPanelState extends State<_GamesPanel> {
+ 
+     final moved = _chess.movePlayer(_selectedSquare!, square);
+     if (!moved) return;
++    if (_chess.gameOver) {
++      _timer?.cancel();
++      setState(() {
++        _timer = null;
++        _selectedSquare = null;
++        _legalTargets = const [];
++        _computerThinking = false;
++        _gameNotice = _outcomeMessage();
++      });
++      return;
++    }
+     setState(() {
+       _selectedSquare = null;
+       _legalTargets = const [];
+@@ -1544,8 +1579,12 @@ class _GamesPanelState extends State<_GamesPanel> {
+     _chess.moveComputer();
+     if (!mounted) return;
+     setState(() {
+-      _whiteTurn = true;
++      _whiteTurn = _chess.isWhiteTurn;
+       _computerThinking = false;
++      if (_chess.gameOver) {
++        _timer?.cancel();
++        _timer = null;
++      }
+       _gameNotice = _outcomeMessage();
+     });
+   }
+@@ -1896,19 +1935,33 @@ class _ProActivationPageState extends State<_ProActivationPage> {
+               const SizedBox(height: 18),
+               const Text('معرّف التثبيت', style: TextStyle(fontWeight: FontWeight.w800)),
+               const SizedBox(height: 8),
+-              TextField(
+-                controller: TextEditingController(text: premium.installationId),
+-                readOnly: true,
+-                maxLines: 2,
+-                decoration: InputDecoration(
+-                  suffixIcon: IconButton(
+-                    tooltip: 'نسخ المعرّف',
+-                    icon: const Icon(Icons.copy, color: RoyalColors.gold),
+-                    onPressed: () async {
+-                      await Clipboard.setData(ClipboardData(text: premium.installationId));
+-                      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم نسخ معرّف التثبيت.')));
+-                    },
+-                  ),
++              Container(
++                padding: const EdgeInsetsDirectional.only(start: 12, end: 4, top: 8, bottom: 8),
++                decoration: BoxDecoration(
++                  border: Border.all(color: RoyalColors.border),
++                  borderRadius: BorderRadius.circular(12),
++                ),
++                child: Row(
++                  children: [
++                    Expanded(
++                      child: SelectableText(
++                        premium.installationId,
++                        textDirection: TextDirection.ltr,
++                      ),
++                    ),
++                    IconButton(
++                      tooltip: 'نسخ المعرّف',
++                      icon: const Icon(Icons.copy, color: RoyalColors.gold),
++                      onPressed: () async {
++                        await Clipboard.setData(ClipboardData(text: premium.installationId));
++                        if (context.mounted) {
++                          ScaffoldMessenger.of(context).showSnackBar(
++                            const SnackBar(content: Text('تم نسخ معرّف التثبيت.')),
++                          );
++                        }
++                      },
++                    ),
++                  ],
+                 ),
+               ),
+               const SizedBox(height: 16),
+diff --git a/todo.md b/todo.md
+index 3a9ab25..f3a1c13 100644
+--- a/todo.md
++++ b/todo.md
+@@ -127,3 +127,15 @@
+ - [ ] إضافة TTS نظامي وتشغيل/إيقاف صادق للنصوص المترجمة والقصص قبل الأصوات المميزة ونسخ الصوت
+ - [ ] اختبار الترجمة وOCR من الكاميرا والمعرض على جهاز Android فعلياً قبل اعتمادها
+ - [ ] استئناف نشر `healthCheck` والاختبار الحي بعد اكتمال الخدمات وقبل تطبيق أي قفل PRO
++
++## سجل Flutter الحالي — 2026-08-24
++
++- [x] إصلاح اختبار لوحة البداية ليتحقق من التسميات الصادقة بعد الالتزام `4dbcf3c`.
++- [x] اجتياز التحليل والاختبارات وبناء APK في GitHub Actions، التشغيل `32691243120`.
++- [x] إتمام قبول Android المختصر للواجهة والمايك والمحررات وبطاقات التواصل.
++- [ ] مراجعة كود Flutter والاختبارات وإعدادات Android وCI بحثاً عن أخطاء خفية أو تناقضات وظيفية.
++- [ ] أرشفة أو تصحيح وثائق v3/Expo التاريخية كي لا تُستخدم كحقيقة عن Flutter v4 أو عن لغة المايك الحالية.
++- [ ] مراجعة مخطط حزم المحتوى المحلي وفرض حقول المصدر والحقوق والتكامل قبل إدخال محتوى موثق إضافي.
++- [x] إصلاح رسالة نسخ الترجمة لتأكيد النسخ فقط عند وجود ناتج فعلي.
++- [x] إزالة إنشاء متحكم نصي جديد داخل كل إعادة بناء لصفحة تفعيل PRO.
++- [x] منع متابعة ساعة أو حركات الشطرنج بعد انتهاء الوقت أو انتهاء المباراة.
+-- 
+2.43.0
+

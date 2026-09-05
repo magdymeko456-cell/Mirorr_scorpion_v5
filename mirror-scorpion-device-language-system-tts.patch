@@ -1,0 +1,557 @@
+From 54f7029f2c1699db32422e5aa935719375d67767 Mon Sep 17 00:00:00 2001
+From: magdymeko456-cell
+ <2.88837127e+08+magdymeko456-cell@users.noreply.github.com>
+Date: Sun, 23 Aug 2026 15:26:04 +0000
+Subject: [PATCH] feat(accessibility): add device language preferences and
+ system TTS
+
+---
+ .github/workflows/build_apk.yml               |   5 +
+ docs/device-language-and-system-tts.md        |  22 ++++
+ lib/app/mirror_scorpion_app.dart              |   4 +
+ .../localization/language_preferences.dart    |  54 +++++++++
+ lib/core/speech/system_tts_service.dart       | 106 +++++++++++++++++
+ lib/features/feature_hub_screen.dart          | 111 +++++++++++++++---
+ lib/main.dart                                 |  10 +-
+ pubspec.yaml                                  |   1 +
+ test/language_preferences_test.dart           |  30 +++++
+ todo.md                                       |   3 +
+ 10 files changed, 330 insertions(+), 16 deletions(-)
+ create mode 100644 docs/device-language-and-system-tts.md
+ create mode 100644 lib/core/localization/language_preferences.dart
+ create mode 100644 lib/core/speech/system_tts_service.dart
+ create mode 100644 test/language_preferences_test.dart
+
+diff --git a/.github/workflows/build_apk.yml b/.github/workflows/build_apk.yml
+index 02fbaf6..37103ca 100644
+--- a/.github/workflows/build_apk.yml
++++ b/.github/workflows/build_apk.yml
+@@ -82,6 +82,11 @@ jobs:
+               "    implementation 'com.google.mlkit:text-recognition-korean:16.0.1'" \
+               '}' >> android/app/build.gradle
+           fi
++      - name: Configure Android TTS visibility
++        run: |
++          if ! grep -q 'android.intent.action.TTS_SERVICE' android/app/src/main/AndroidManifest.xml; then
++            sed -i '/<application/i\    <queries><intent><action android:name="android.intent.action.TTS_SERVICE" /></intent></queries>' android/app/src/main/AndroidManifest.xml
++          fi
+       - name: Install dependencies
+         run: flutter pub get
+       - name: Static analysis
+diff --git a/docs/device-language-and-system-tts.md b/docs/device-language-and-system-tts.md
+new file mode 100644
+index 0000000..3662b01
+--- /dev/null
++++ b/docs/device-language-and-system-tts.md
+@@ -0,0 +1,22 @@
++# لغة الجهاز وTTS النظامي
++
++## ما أضيف في وضع الاختبار
++
++تستخدم الترجمة لغة الجهاز كبداية عندما لا توجد تفضيلات محفوظة، ثم تحفظ آخر لغة مصدر وآخر لغة هدف بصورة مستقلة. تستخدم القصص لغة الجهاز كإشارة للبيانات المترجمة مستقبلاً؛ لا تتحول النصوص العربية الثابتة تلقائياً إلى لغة أخرى قبل إضافة ملفات ترجمة واجهة حقيقية.
++
++يستخدم زر السماعة `flutter_tts` وصوت النظام المتاح على الجهاز. يمكن تشغيل النص أو إيقافه، وتظهر حالة صريحة إذا لم يكن صوت اللغة مثبتاً. لا يمثل هذا أيّاً من أصوات سيف أو سلمى أو سما أو سارة، ولا يستنسخ صوت المستخدم ولا ينشئ ملف مشاركة صوتي في هذه المرحلة.
++
++| الاختبار | النتيجة المطلوبة |
++|---|---|
++| جهاز عربي مع هدف إنجليزي | تظل اللغة المختارة محفوظة بعد إعادة فتح التطبيق؛ ينطق النص الإنجليزي إذا كان صوت `en-US` متاحاً. |
++| جهاز إنجليزي بلا تفضيل سابق | يبدأ مصدر الترجمة من `en` وهدف افتراضي `ar`. |
++| صوت لغة غير مثبت | لا يتعطل التطبيق؛ تظهر رسالة أن صوت النظام غير متاح. |
++| مغادرة كارت الترجمة أو القصص | يتوقف النطق. |
++
++## حدود صادقة
++
++تحتاج ترجمة واجهة التطبيق وبيانات القصص بلغة الجهاز إلى حزمة localisation ومحتوى مترجم موثوق، وهي ليست جزءاً من هذه الدفعة. ولا يبدأ توليد أو مشاركة ملف صوت أو أصوات مميزة أو نسخ الصوت قبل اختيار مزود خادمي وموافقة وسياسة حذف واضحة.
++
++## المراجع
++
++[1]: https://pub.dev/packages/flutter_tts "flutter_tts package"
+diff --git a/lib/app/mirror_scorpion_app.dart b/lib/app/mirror_scorpion_app.dart
+index 05f2342..9c89c3c 100644
+--- a/lib/app/mirror_scorpion_app.dart
++++ b/lib/app/mirror_scorpion_app.dart
+@@ -1,5 +1,7 @@
+ import 'package:flutter/material.dart';
++import 'package:provider/provider.dart';
+ 
++import '../core/localization/language_preferences.dart';
+ import '../features/home/dashboard_screen.dart';
+ import 'royal_dark_theme.dart';
+ 
+@@ -8,10 +10,12 @@ class MirrorScorpionApp extends StatelessWidget {
+ 
+   @override
+   Widget build(BuildContext context) {
++    final languagePreferences = context.watch<LanguagePreferences>();
+     return MaterialApp(
+       title: 'Mirror Scorpion v4',
+       debugShowCheckedModeBanner: false,
+       theme: royalDarkTheme(),
++      locale: languagePreferences.deviceLocale,
+       home: const DashboardScreen(),
+     );
+   }
+diff --git a/lib/core/localization/language_preferences.dart b/lib/core/localization/language_preferences.dart
+new file mode 100644
+index 0000000..496a737
+--- /dev/null
++++ b/lib/core/localization/language_preferences.dart
+@@ -0,0 +1,54 @@
++import 'dart:ui';
++
++import 'package:flutter/foundation.dart';
++import 'package:shared_preferences/shared_preferences.dart';
++
++/// يحتفظ باللغة التي اختارها المستخدم في تدفقات الترجمة، ويستخدم لغة الجهاز
++/// كبداية فقط عندما لا توجد تفضيلات محفوظة. لا يترجم نصوص الواجهة ذاتها.
++class LanguagePreferences extends ChangeNotifier {
++  static const _sourceKey = 'mirror_scorpion_translation_source';
++  static const _targetKey = 'mirror_scorpion_translation_target';
++
++  LanguagePreferences({Locale? deviceLocale})
++      : _deviceLocale = deviceLocale ?? PlatformDispatcher.instance.locale;
++
++  final Locale _deviceLocale;
++  late SharedPreferences _preferences;
++  late String _sourceLanguage;
++  late String _targetLanguage;
++
++  Locale get deviceLocale => _deviceLocale;
++  String get deviceLanguageCode => _deviceLocale.languageCode.toLowerCase();
++  String get translationSourceLanguage => _sourceLanguage;
++  String get translationTargetLanguage => _targetLanguage;
++  String get storyLanguageCode => deviceLanguageCode;
++
++  Future<void> initialize() async {
++    _preferences = await SharedPreferences.getInstance();
++    final fallbackSource = deviceLanguageCode;
++    _sourceLanguage = _preferences.getString(_sourceKey) ?? fallbackSource;
++    _targetLanguage = _preferences.getString(_targetKey) ??
++        (fallbackSource == 'ar' ? 'en' : 'ar');
++  }
++
++  Future<void> setTranslationSourceLanguage(String code) async {
++    _sourceLanguage = code.toLowerCase();
++    await _preferences.setString(_sourceKey, _sourceLanguage);
++    notifyListeners();
++  }
++
++  Future<void> setTranslationTargetLanguage(String code) async {
++    _targetLanguage = code.toLowerCase();
++    await _preferences.setString(_targetKey, _targetLanguage);
++    notifyListeners();
++  }
++
++  Future<void> swapTranslationLanguages() async {
++    final oldSource = _sourceLanguage;
++    _sourceLanguage = _targetLanguage;
++    _targetLanguage = oldSource;
++    await _preferences.setString(_sourceKey, _sourceLanguage);
++    await _preferences.setString(_targetKey, _targetLanguage);
++    notifyListeners();
++  }
++}
+diff --git a/lib/core/speech/system_tts_service.dart b/lib/core/speech/system_tts_service.dart
+new file mode 100644
+index 0000000..b4a6534
+--- /dev/null
++++ b/lib/core/speech/system_tts_service.dart
+@@ -0,0 +1,106 @@
++import 'package:flutter/foundation.dart';
++import 'package:flutter_tts/flutter_tts.dart';
++
++enum SystemSpeechState { idle, speaking, unavailable, failed }
++
++class SystemTtsService extends ChangeNotifier {
++  SystemTtsService() : _tts = FlutterTts();
++
++  final FlutterTts _tts;
++  SystemSpeechState _state = SystemSpeechState.idle;
++  String? _message;
++
++  SystemSpeechState get state => _state;
++  String? get message => _message;
++  bool get isSpeaking => _state == SystemSpeechState.speaking;
++
++  Future<void> initialize() async {
++    _tts.setStartHandler(() {
++      _state = SystemSpeechState.speaking;
++      _message = 'جارٍ النطق بصوت النظام…';
++      notifyListeners();
++    });
++    _tts.setCompletionHandler(_markIdle);
++    _tts.setCancelHandler(_markIdle);
++    _tts.setErrorHandler((_) {
++      _state = SystemSpeechState.failed;
++      _message = 'تعذر تشغيل صوت النظام للنص المحدد.';
++      notifyListeners();
++    });
++    await _tts.setSpeechRate(0.45);
++    await _tts.setPitch(1.0);
++  }
++
++  Future<bool> speak({required String text, required String languageCode}) async {
++    final content = text.trim();
++    if (content.isEmpty) {
++      _state = SystemSpeechState.unavailable;
++      _message = 'لا يوجد نص لقراءته.';
++      notifyListeners();
++      return false;
++    }
++    final locale = _localeFor(languageCode);
++    try {
++      final available = await _tts.isLanguageAvailable(locale);
++      if (available != true) {
++        _state = SystemSpeechState.unavailable;
++        _message = 'صوت النظام للغة $locale غير متاح على هذا الجهاز.';
++        notifyListeners();
++        return false;
++      }
++      await _tts.stop();
++      await _tts.setLanguage(locale);
++      final result = await _tts.speak(content, focus: true);
++      if (result == 1) return true;
++      _state = SystemSpeechState.failed;
++      _message = 'لم يبدأ صوت النظام. جرّب تنزيل صوت لهذه اللغة من إعدادات الجهاز.';
++      notifyListeners();
++      return false;
++    } catch (_) {
++      _state = SystemSpeechState.failed;
++      _message = 'تعذر تهيئة صوت النظام للغة المطلوبة.';
++      notifyListeners();
++      return false;
++    }
++  }
++
++  Future<void> stop() async {
++    await _tts.stop();
++    _markIdle();
++  }
++
++  void _markIdle() {
++    _state = SystemSpeechState.idle;
++    _message = null;
++    notifyListeners();
++  }
++
++  String _localeFor(String languageCode) {
++    switch (languageCode.toLowerCase()) {
++      case 'ar':
++        return 'ar-SA';
++      case 'en':
++        return 'en-US';
++      case 'fr':
++        return 'fr-FR';
++      case 'es':
++        return 'es-ES';
++      case 'de':
++        return 'de-DE';
++      case 'pt':
++        return 'pt-PT';
++      case 'zh':
++        return 'zh-CN';
++      case 'ja':
++        return 'ja-JP';
++      case 'ko':
++        return 'ko-KR';
++      case 'ru':
++        return 'ru-RU';
++      case 'tr':
++        return 'tr-TR';
++      default:
++        return languageCode;
++    }
++  }
++}
+diff --git a/lib/features/feature_hub_screen.dart b/lib/features/feature_hub_screen.dart
+index fc9bba6..1f6674a 100644
+--- a/lib/features/feature_hub_screen.dart
++++ b/lib/features/feature_hub_screen.dart
+@@ -4,12 +4,13 @@ import 'package:flutter/material.dart';
+ import 'package:flutter/services.dart';
+ import 'package:image_picker/image_picker.dart';
+ import 'package:provider/provider.dart';
+-import 'package:shared_preferences/shared_preferences.dart';
+ 
+ import '../app/royal_dark_theme.dart';
++import '../core/localization/language_preferences.dart';
+ import '../core/mlkit/on_device_ocr_service.dart';
+ import '../core/mlkit/on_device_translation_service.dart';
+ import '../core/pro/premium_verification_service.dart';
++import '../core/speech/system_tts_service.dart';
+ 
+ enum FeatureKind { translation, dialogue, documents, stories, games, settings }
+ 
+@@ -55,10 +56,12 @@ class _TranslationPanelState extends State<_TranslationPanel> {
+   final _input = TextEditingController();
+   final _output = TextEditingController();
+   final _translationService = const OnDeviceTranslationService();
++  final _speechService = SystemTtsService();
+   String _selectedLanguage = 'ar';
+   String? _notice;
+   bool _clearOnNextInput = false;
+   bool _isTranslating = false;
++  bool _loadedLanguagePreference = false;
+   Timer? _translationDebounce;
+   static const _languages = <String, String>{
+     'af': 'Afrikaans', 'sq': 'Shqip', 'am': 'አማርኛ', 'ar': 'العربية', 'hy': 'Հայերեն', 'az': 'Azərbaycan',
+@@ -84,24 +87,44 @@ class _TranslationPanelState extends State<_TranslationPanel> {
+   @override
+   void initState() {
+     super.initState();
+-    _loadLastLanguage();
++    _speechService.addListener(_onSpeechChanged);
++    _speechService.initialize();
+   }
+ 
+-  Future<void> _loadLastLanguage() async {
+-    final preferences = await SharedPreferences.getInstance();
+-    final saved = preferences.getString('mirror_scorpion_translation_target');
+-    if (saved != null && _languages.containsKey(saved) && mounted) {
+-      setState(() => _selectedLanguage = saved);
++  @override
++  void didChangeDependencies() {
++    super.didChangeDependencies();
++    if (!_loadedLanguagePreference) {
++      final saved = context.read<LanguagePreferences>().translationTargetLanguage;
++      if (_languages.containsKey(saved)) _selectedLanguage = saved;
++      _loadedLanguagePreference = true;
+     }
+   }
+ 
+   Future<void> _selectLanguage(String code) async {
+     setState(() => _selectedLanguage = code);
+-    final preferences = await SharedPreferences.getInstance();
+-    await preferences.setString('mirror_scorpion_translation_target', code);
++    await context.read<LanguagePreferences>().setTranslationTargetLanguage(code);
+     _queueTranslation(_input.text);
+   }
+ 
++  void _onSpeechChanged() {
++    if (mounted) setState(() {});
++  }
++
++  Future<void> _speakTranslation() async {
++    if (_speechService.isSpeaking) {
++      await _speechService.stop();
++      return;
++    }
++    await _speechService.speak(
++      text: _output.text,
++      languageCode: _selectedLanguage,
++    );
++    if (mounted && _speechService.message != null) {
++      setState(() => _notice = _speechService.message);
++    }
++  }
++
+   void _beginNewInput(String action) {
+     if (_clearOnNextInput) {
+       _input.clear();
+@@ -138,6 +161,12 @@ class _TranslationPanelState extends State<_TranslationPanel> {
+       targetLanguageCode: _selectedLanguage,
+     );
+     if (!mounted || value.trim() != _input.text.trim()) return;
++    if (result.sourceLanguage != null) {
++      await context
++          .read<LanguagePreferences>()
++          .setTranslationSourceLanguage(result.sourceLanguage!);
++    }
++    if (!mounted || value.trim() != _input.text.trim()) return;
+     setState(() {
+       _isTranslating = false;
+       if (result.isSuccess) _output.text = result.text ?? '';
+@@ -149,6 +178,8 @@ class _TranslationPanelState extends State<_TranslationPanel> {
+   @override
+   void dispose() {
+     _translationDebounce?.cancel();
++    _speechService.removeListener(_onSpeechChanged);
++    _speechService.stop();
+     _input.dispose();
+     _output.dispose();
+     super.dispose();
+@@ -245,7 +276,7 @@ class _TranslationPanelState extends State<_TranslationPanel> {
+           readOnly: true,
+           actionsOnRight: true,
+           actions: [
+-            _EditorAction(icon: Icons.volume_up, tooltip: 'نطق الترجمة', onPressed: () => _beginNewInput('نطق الترجمة')),
++            _EditorAction(icon: _speechService.isSpeaking ? Icons.stop_circle_outlined : Icons.volume_up, tooltip: _speechService.isSpeaking ? 'إيقاف النطق' : 'نطق الترجمة بصوت النظام', onPressed: _speakTranslation),
+             _EditorAction(icon: Icons.share, tooltip: 'مشاركة ملف صوت مترجم', onPressed: () => _beginNewInput('مشاركة الترجمة')),
+             _EditorAction(icon: Icons.attach_file, tooltip: 'رفع ملف صوتي', onPressed: () => _beginNewInput('رفع الملف الصوتي')),
+             _EditorAction(icon: Icons.copy, tooltip: 'نسخ الترجمة', onPressed: () async {
+@@ -255,7 +286,7 @@ class _TranslationPanelState extends State<_TranslationPanel> {
+           ],
+         ),
+         const SizedBox(height: 18),
+-        const _SectionNotice(title: 'ترجمة محلية صادقة', detail: 'تحدد ML Kit لغة النص وتنزّل نموذجَي المصدر والهدف عند الحاجة، ثم تترجم على الجهاز. القائمة المرئية واسعة، لكن تظهر حالة واضحة إذا كانت لغة مختارة خارج اللغات التي يدعمها ML Kit محلياً.'),
++        const _SectionNotice(title: 'ترجمة محلية صادقة', detail: 'تبدأ تفضيلات الترجمة من لغة الجهاز ثم تحفظ آخر لغة مصدر وهدف. تحدد ML Kit لغة النص وتنزّل نموذجَي المصدر والهدف عند الحاجة، ثم تترجم على الجهاز. صوت القراءة هو صوت النظام المتاح، وليس أحد الأصوات المميزة أو صوت المستخدم بعد.'),
+       ],
+     );
+   }
+@@ -464,9 +495,34 @@ class _DocumentsPanelState extends State<_DocumentsPanel> {
+   }
+ }
+ 
+-class _StoriesPanel extends StatelessWidget {
++class _StoriesPanel extends StatefulWidget {
+   const _StoriesPanel();
+ 
++  @override
++  State<_StoriesPanel> createState() => _StoriesPanelState();
++}
++
++class _StoriesPanelState extends State<_StoriesPanel> {
++  final _speechService = SystemTtsService();
++
++  @override
++  void initState() {
++    super.initState();
++    _speechService.addListener(_onSpeechChanged);
++    _speechService.initialize();
++  }
++
++  void _onSpeechChanged() {
++    if (mounted) setState(() {});
++  }
++
++  @override
++  void dispose() {
++    _speechService.removeListener(_onSpeechChanged);
++    _speechService.stop();
++    super.dispose();
++  }
++
+   @override
+   Widget build(BuildContext context) {
+     const stories = [
+@@ -477,9 +533,36 @@ class _StoriesPanel extends StatelessWidget {
+     return ListView(
+       padding: const EdgeInsets.all(18),
+       children: [
+-        const _SectionNotice(title: 'قصص وإلهام آمن', detail: 'القراءة الصوتية وسيناريو الفيديو يعتمدان على خدمات منفصلة. يبقى إنتاج MP4 خارج نطاق التطبيق حتى يربط مزود فيديو حقيقي.'),
++        const _SectionNotice(title: 'قصص وإلهام آمن', detail: 'تبدأ لغة القراءة من لغة الجهاز عند توفر بيانات مترجمة. يمكن تجربة صوت النظام على النصوص الظاهرة؛ أما الأصوات المميزة وسيناريو الفيديو فيتطلبان خدمات منفصلة.'),
+         const SizedBox(height: 12),
+-        ...stories.map((story) => Card(child: ListTile(title: Text(story.$1), subtitle: Text(story.$2), trailing: const Text('المزيد', style: TextStyle(color: RoyalColors.purple))))),
++        ...stories.map(
++          (story) => Card(
++            child: ListTile(
++              title: Text(story.$1),
++              subtitle: Text(story.$2),
++              trailing: Wrap(
++                crossAxisAlignment: WrapCrossAlignment.center,
++                children: [
++                  IconButton(
++                    tooltip: _speechService.isSpeaking ? 'إيقاف القراءة' : 'قراءة النص بصوت النظام',
++                    onPressed: () async {
++                      if (_speechService.isSpeaking) {
++                        await _speechService.stop();
++                      } else {
++                        await _speechService.speak(
++                          text: '${story.$1}. ${story.$2}',
++                          languageCode: context.read<LanguagePreferences>().storyLanguageCode,
++                        );
++                      }
++                    },
++                    icon: Icon(_speechService.isSpeaking ? Icons.stop_circle_outlined : Icons.volume_up, color: RoyalColors.gold),
++                  ),
++                  const Text('المزيد', style: TextStyle(color: RoyalColors.purple)),
++                ],
++              ),
++            ),
++          ),
++        ),
+       ],
+     );
+   }
+diff --git a/lib/main.dart b/lib/main.dart
+index dfa7ba9..d433409 100644
+--- a/lib/main.dart
++++ b/lib/main.dart
+@@ -4,6 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
+ import 'package:provider/provider.dart';
+ 
+ import 'app/mirror_scorpion_app.dart';
++import 'core/localization/language_preferences.dart';
+ import 'core/pro/premium_verification_service.dart';
+ 
+ Future<void> main() async {
+@@ -13,9 +14,14 @@ Future<void> main() async {
+   }
+   final premiumService = PremiumVerificationService();
+   await premiumService.initialize();
++  final languagePreferences = LanguagePreferences();
++  await languagePreferences.initialize();
+   runApp(
+-    ChangeNotifierProvider.value(
+-      value: premiumService,
++    MultiProvider(
++      providers: [
++        ChangeNotifierProvider.value(value: premiumService),
++        ChangeNotifierProvider.value(value: languagePreferences),
++      ],
+       child: const MirrorScorpionApp(),
+     ),
+   );
+diff --git a/pubspec.yaml b/pubspec.yaml
+index 7d4529e..d915834 100644
+--- a/pubspec.yaml
++++ b/pubspec.yaml
+@@ -17,6 +17,7 @@ dependencies:
+   google_mlkit_translation: ^0.15.1
+   google_mlkit_text_recognition: ^0.17.1
+   image_picker: ^1.2.3
++  flutter_tts: ^4.2.5
+ 
+ dev_dependencies:
+   flutter_test:
+diff --git a/test/language_preferences_test.dart b/test/language_preferences_test.dart
+new file mode 100644
+index 0000000..3beb3b6
+--- /dev/null
++++ b/test/language_preferences_test.dart
+@@ -0,0 +1,30 @@
++import 'dart:ui';
++
++import 'package:flutter_test/flutter_test.dart';
++import 'package:mirror_scorpion_v4/core/localization/language_preferences.dart';
++import 'package:shared_preferences/shared_preferences.dart';
++
++void main() {
++  test('uses device language first then persists source and target preferences', () async {
++    SharedPreferences.setMockInitialValues(<String, Object>{});
++    final preferences = LanguagePreferences(deviceLocale: const Locale('en', 'US'));
++
++    await preferences.initialize();
++
++    expect(preferences.translationSourceLanguage, 'en');
++    expect(preferences.translationTargetLanguage, 'ar');
++
++    await preferences.setTranslationSourceLanguage('fr');
++    await preferences.setTranslationTargetLanguage('de');
++
++    SharedPreferences.setMockInitialValues(<String, Object>{
++      'mirror_scorpion_translation_source': 'fr',
++      'mirror_scorpion_translation_target': 'de',
++    });
++    final restored = LanguagePreferences(deviceLocale: const Locale('ar', 'SA'));
++    await restored.initialize();
++
++    expect(restored.translationSourceLanguage, 'fr');
++    expect(restored.translationTargetLanguage, 'de');
++  });
++}
+diff --git a/todo.md b/todo.md
+index ac90c3e..3a9ab25 100644
+--- a/todo.md
++++ b/todo.md
+@@ -123,4 +123,7 @@
+ - [ ] إضافة OCR محلي حقيقي للصور عبر ML Kit مع اختيار من الكاميرا أو المعرض وحالات فشل صادقة
+ - [ ] تشخيص وإصلاح فشل GitHub Actions رقم `32646736497` الخاص بمرحلة OCR ثم إعادة بناء APK بنجاح
+ - [ ] إعداد مراجعة قبول تفصيلية للوصف الأخير تغطي الكروت الستة والذكاء والقصص والألعاب والفقاعة وPRO والأمان
++- [ ] إضافة لغة واجهة الجهاز وحفظ لغة المصدر والهدف لكل من الترجمة والحوار
++- [ ] إضافة TTS نظامي وتشغيل/إيقاف صادق للنصوص المترجمة والقصص قبل الأصوات المميزة ونسخ الصوت
++- [ ] اختبار الترجمة وOCR من الكاميرا والمعرض على جهاز Android فعلياً قبل اعتمادها
+ - [ ] استئناف نشر `healthCheck` والاختبار الحي بعد اكتمال الخدمات وقبل تطبيق أي قفل PRO
+-- 
+2.43.0
+

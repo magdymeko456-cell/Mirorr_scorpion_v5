@@ -1,0 +1,57 @@
+From d6d410b5d592a1e5122cd9aa08405f6ee22d3ca9 Mon Sep 17 00:00:00 2001
+From: magdymeko456-cell
+ <2.88837127e+08+magdymeko456-cell@users.noreply.github.com>
+Date: Sun, 23 Aug 2026 15:08:34 +0000
+Subject: [PATCH] fix(ci): keep ML Kit dependency injection valid YAML
+
+---
+ .github/workflows/build_apk.yml | 32 ++++++++++++++------------------
+ 1 file changed, 14 insertions(+), 18 deletions(-)
+
+diff --git a/.github/workflows/build_apk.yml b/.github/workflows/build_apk.yml
+index d002031..02fbaf6 100644
+--- a/.github/workflows/build_apk.yml
++++ b/.github/workflows/build_apk.yml
+@@ -66,25 +66,21 @@ jobs:
+             exit 1
+           fi
+           if [ -f android/app/build.gradle.kts ]; then
+-            cat <<'EOF' >> android/app/build.gradle.kts
+-
+-dependencies {
+-    implementation("com.google.mlkit:text-recognition-chinese:16.0.1")
+-    implementation("com.google.mlkit:text-recognition-devanagari:16.0.1")
+-    implementation("com.google.mlkit:text-recognition-japanese:16.0.1")
+-    implementation("com.google.mlkit:text-recognition-korean:16.0.1")
+-}
+-EOF
++            printf '\n%s\n' \
++              'dependencies {' \
++              '    implementation("com.google.mlkit:text-recognition-chinese:16.0.1")' \
++              '    implementation("com.google.mlkit:text-recognition-devanagari:16.0.1")' \
++              '    implementation("com.google.mlkit:text-recognition-japanese:16.0.1")' \
++              '    implementation("com.google.mlkit:text-recognition-korean:16.0.1")' \
++              '}' >> android/app/build.gradle.kts
+           else
+-            cat <<'EOF' >> android/app/build.gradle
+-
+-dependencies {
+-    implementation 'com.google.mlkit:text-recognition-chinese:16.0.1'
+-    implementation 'com.google.mlkit:text-recognition-devanagari:16.0.1'
+-    implementation 'com.google.mlkit:text-recognition-japanese:16.0.1'
+-    implementation 'com.google.mlkit:text-recognition-korean:16.0.1'
+-}
+-EOF
++            printf '\n%s\n' \
++              'dependencies {' \
++              "    implementation 'com.google.mlkit:text-recognition-chinese:16.0.1'" \
++              "    implementation 'com.google.mlkit:text-recognition-devanagari:16.0.1'" \
++              "    implementation 'com.google.mlkit:text-recognition-japanese:16.0.1'" \
++              "    implementation 'com.google.mlkit:text-recognition-korean:16.0.1'" \
++              '}' >> android/app/build.gradle
+           fi
+       - name: Install dependencies
+         run: flutter pub get
+-- 
+2.43.0
+

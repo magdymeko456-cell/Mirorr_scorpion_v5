@@ -1,0 +1,195 @@
+From 2ffa01e5e5b8966fabb2fd1f8c952ae2294c09e5 Mon Sep 17 00:00:00 2001
+From: magdymeko456-cell
+ <2.88837127e+08+magdymeko456-cell@users.noreply.github.com>
+Date: Mon, 24 Aug 2026 10:19:50 +0000
+Subject: [PATCH] docs(content): classify requested source editions
+
+---
+ content_catalog/v1/index.json                 | 80 +++++++++++++++----
+ docs/source-rights-review-2026-08-24.md       | 31 +++++++
+ .../github_content_catalog_service.dart       |  4 +-
+ todo.md                                       |  8 ++
+ 4 files changed, 107 insertions(+), 16 deletions(-)
+ create mode 100644 docs/source-rights-review-2026-08-24.md
+
+diff --git a/content_catalog/v1/index.json b/content_catalog/v1/index.json
+index 65e87af..021d16a 100644
+--- a/content_catalog/v1/index.json
++++ b/content_catalog/v1/index.json
+@@ -26,40 +26,90 @@
+       "contentSha256": "55321d51f3264df4e0fe6fa8d78d6c1501ec2605841a6eb20fee8a1834f679cc"
+     },
+     {
+-      "packageId": "hadith-qudsi-verified",
++      "packageId": "jalalayn-asbab-al-nuzul",
+       "version": null,
+       "order": 100,
+       "status": "requires_review",
+-      "title": "الحديث القدسي — فهرس موثق",
+-      "scope": "hadith_qudsi",
++      "title": "أسباب النزول — تفسير الجلالين ولباب النقول",
++      "scope": "asbab_al_nuzul",
+       "language": "ar",
+-      "sourceCitation": null,
++      "sourceCitation": {
++        "work": "تفسير الجلالين وبهامشه لباب النقول في أسباب النزول",
++        "authors": ["جلال الدين المحلي", "جلال الدين السيوطي"],
++        "publisher": "دار الكتب العلمية",
++        "year": 2019,
++        "isbn": "9782745138996"
++      },
+       "license": null,
+-      "reason": "لا يُنشر محتوى قبل توثيق النص والإسناد والترخيص."
++      "reason": "تحتاج الطبعة وإذن إعادة التوزيع أو ترخيصاً رقمياً قبل نشر النص."
+     },
+     {
+-      "packageId": "quran-narratives-index",
++      "packageId": "ibn-kathir-prophets",
+       "version": null,
+       "order": 110,
+       "status": "requires_review",
+-      "title": "قصص القرآن — فهرس مصدر",
+-      "scope": "quran_narratives",
++      "title": "قصص الأنبياء — ابن كثير",
++      "scope": "ibn_kathir_prophets",
+       "language": "ar",
+-      "sourceCitation": null,
++      "sourceCitation": {
++        "work": "قصص الأنبياء",
++        "author": "ابن كثير",
++        "publisher": "المكتبة التوفيقية للطبع والنشر والتوزيع",
++        "year": 1998,
++        "pages": 608
++      },
+       "license": null,
+-      "reason": "لا يُنشر محتوى قبل توثيق الآيات والمراجع وحق الاستخدام."
++      "reason": "تحتاج بيانات المحقق والطبعة وإذن إعادة التوزيع قبل نشر النص."
+     },
+     {
+-      "packageId": "asbab-al-nuzul-index",
++      "packageId": "ibn-kathir-women",
+       "version": null,
+       "order": 120,
+       "status": "requires_review",
+-      "title": "أسباب النزول — فهرس مرتب",
+-      "scope": "asbab_al_nuzul",
++      "title": "قصص النساء — من مصادر ابن كثير",
++      "scope": "ibn_kathir_women",
++      "language": "ar",
++      "sourceCitation": {
++        "work": "قصص الأنبياء ومواضع النساء في مؤلفات ابن كثير",
++        "author": "ابن كثير",
++        "referenceStatus": "يجب تحديد الموضع والطبعة قبل الاقتباس"
++      },
++      "license": null,
++      "reason": "لا يوجد ملف تنزيل؛ يلزم تحديد النص والموضع والطبعة وحقوقها."
++    },
++    {
++      "packageId": "ibn-kathir-peoples",
++      "version": null,
++      "order": 130,
++      "status": "requires_review",
++      "title": "قصص الأقوام — من مصادر ابن كثير",
++      "scope": "ibn_kathir_peoples",
++      "language": "ar",
++      "sourceCitation": {
++        "work": "قصص الأنبياء ومواضع الأقوام في مؤلفات ابن كثير",
++        "author": "ابن كثير",
++        "referenceStatus": "يجب تحديد الموضع والطبعة قبل الاقتباس"
++      },
++      "license": null,
++      "reason": "لا يوجد ملف تنزيل؛ يلزم تحديد النص والموضع والطبعة وحقوقها."
++    },
++    {
++      "packageId": "la-tahzan-inspiration",
++      "version": null,
++      "order": 140,
++      "status": "requires_review",
++      "title": "الإلهام — لا تحزن",
++      "scope": "la_tahzan_inspiration",
+       "language": "ar",
+-      "sourceCitation": null,
++      "sourceCitation": {
++        "work": "لا تحزن",
++        "author": "عائض بن عبد الله القرني",
++        "publisher": "مكتبة الصحابة للطباعة والنشر والتوزيع",
++        "year": 1999,
++        "pages": 424
++      },
+       "license": null,
+-      "reason": "لا يُنشر محتوى قبل تحديد الطبعة والحقوق والمراجع."
++      "reason": "تحتاج إذن صاحب الحق أو الناشر قبل نشر نصوص الكتاب."
+     }
+   ]
+ }
+diff --git a/docs/source-rights-review-2026-08-24.md b/docs/source-rights-review-2026-08-24.md
+new file mode 100644
+index 0000000..19e0a26
+--- /dev/null
++++ b/docs/source-rights-review-2026-08-24.md
+@@ -0,0 +1,31 @@
++# مراجعة مصادر ركن القصص والإلهام وحقوق استخدامها
++
++## النتيجة الحالية
++
++المصادر التي حددها مالك التطبيق هي: تفسير الجلالين وكتاب لباب النقول في أسباب النزول لمسار أسباب النزول، وكتب ابن كثير لمسارات قصص الأنبياء والنساء والأقوام، وكتاب **لا تحزن** لعائض القرني لمسار الإلهام. هذه أسماء مصادر مناسبة للفهرسة، لكنها لا تكفي وحدها لإثبات حق نسخ طبعة حديثة أو إعادة توزيعها داخل التطبيق.
++
++تنص اتفاقية برن، كما تعرضها المنظمة العالمية للملكية الفكرية، على أن الترجمات والتكييفات والتحريرات قد تتمتع بحماية كأعمال أصلية، مع بقاء حقوق العمل الأصلي، كما تقرر حق المؤلف في الإذن بالترجمة والاستنساخ والاقتباس ضمن شروط محددة.[1] لذلك يجب فصل العمل التراثي القديم عن حقوق المحقق والناشر والطبعة الحديثة، وعدم نسخ ملفات PDF أو النص الكامل من مواقع غير مرخصة.
++
++## سجلات ببليوغرافية مرشحة وليست اعتماداً للنشر
++
++| المسار | السجل المرشح | ما ثبت من السجل | ما يزال مطلوباً قبل النشر |
++|---|---|---|---|
++| أسباب النزول | **تفسير الجلالين (بدون مصحف) وبهامشه لباب النقول في أسباب النزول** | المؤلفان: جلال الدين السيوطي وجلال الدين المحلي؛ الناشر: دار الكتب العلمية؛ سنة 2019؛ ISBN 9782745138996؛ 440 صفحة.[2] | تحديد الطبعة التي يملكها المستخدم، المحقق/المشرف إن وجد، وإذن رقمي أو ترخيص يتيح النسخ والتوزيع. |
++| قصص الأنبياء | **قصص الأنبياء** | المؤلف: ابن كثير؛ الناشر: المكتبة التوفيقية للطبع والنشر والتوزيع؛ سنة 1998؛ 608 صفحات.[3] | تحديد المحقق والطبعة بدقة، والتحقق من حقوق هذه الطبعة قبل استخراج نصوص أو نشرها. |
++| الإلهام | **لا تحزن** | المؤلف: عائض بن عبد الله القرني؛ الناشر: مكتبة الصحابة للطباعة والنشر والتوزيع؛ سنة 1999؛ 424 صفحة.[4] | الحصول على إذن صاحب الحق/الناشر أو استخدام محتوى مرخص بديل؛ لا يكفي كون الكتاب متاحاً في متجر أو موقع. |
++
++## قرار الفهرس
++
++يُسجل كل مصدر في فهرس GitHub بحالة `requires_review` ما لم تتوافر بيانات الطبعة والترخيص. ويظهر للمستخدم اسم المجال والمصدر، لكن لا يظهر زر تنزيل لنص منقول قبل اعتماد الحقوق. تبقى حزمة `owner-inspiration-ar` منفصلة تماماً، وتُوسم بأنها محتوى مقدم من مالك التطبيق ولا تُنسب إلى الجلالين أو ابن كثير أو لا تحزن.
++
++حتى اعتماد الحقوق، لا تُنشأ حزم كاملة لهذه الكتب ولا تُنشر نسخ PDF أو OCR أو نصوص مطولة. يمكن لاحقاً بناء حزمة فهرسة غير نصية تتضمن العنوان، المؤلف، بيانات الطبعة، مواضع الموضوعات، ورابطاً قانونياً إلى الجهة المرخصة، بشرط ألا تعيد نشر المحتوى المحمي.
++
++## المراجع
++
++[1]: [WIPO Lex — Berne Convention for the Protection of Literary and Artistic Works](https://www.wipo.int/wipolex/en/text/283698)
++
++[2]: [Google Books — تفسير الجلالين ولباب النقول في أسباب النزول، دار الكتب العلمية، 2019](https://books.google.com/books/about/%D8%AA%D9%81%D8%B3%D9%8A%D8%B1_%D8%A7%D9%84%D8%AC%D9%84%D8%A7%D9%84%D9%8A%D9%86_%D8%A8%D8%AF%D9%88%D9%86_%D9%85.html?hl=id&id=t-3tDwAAQBAJ)
++
++[3]: [Google Books — قصص الأنبياء، المكتبة التوفيقية، 1998](https://books.google.com/books/about/%D9%82%D8%B5%D8%B5_%D8%A7%D9%84%D8%A7%D9%86%D8%A8%D9%8A%D8%A7%D8%A1.html?id=PnJTtQEACAAJ)
++
++[4]: [Google Books — لا تحزن، مكتبة الصحابة، 1999](https://books.google.com/books/about/%D9%84%D8%A7_%D8%AA%D8%AD%D8%B2%D9%86.html?id=E09-wgEACAAJ)
+diff --git a/lib/core/content/github_content_catalog_service.dart b/lib/core/content/github_content_catalog_service.dart
+index 7d03089..cef0ce4 100644
+--- a/lib/core/content/github_content_catalog_service.dart
++++ b/lib/core/content/github_content_catalog_service.dart
+@@ -106,7 +106,9 @@ class ContentCatalogPackage {
+       order: json['order'] is int ? json['order'] as int : 9999,
+       status: status,
+       version: version,
+-      sourceName: sourceCitation?['name'] as String?,
++      sourceName: sourceCitation?['name'] as String? ??
++          sourceCitation?['work'] as String? ??
++          sourceCitation?['author'] as String?,
+       licenseUsage: license?['usage'] as String?,
+       contentPath: contentPath,
+       contentSha256: contentSha256,
+diff --git a/todo.md b/todo.md
+index 57fc978..41dc6d5 100644
+--- a/todo.md
++++ b/todo.md
+@@ -144,3 +144,11 @@
+ - [x] إصلاح رسالة نسخ الترجمة لتأكيد النسخ فقط عند وجود ناتج فعلي.
+ - [x] إزالة إنشاء متحكم نصي جديد داخل كل إعادة بناء لصفحة تفعيل PRO.
+ - [x] منع متابعة ساعة أو حركات الشطرنج بعد انتهاء الوقت أو انتهاء المباراة.
++
++## مصادر المحتوى المحددة — 2026-08-24
++
++- [ ] توثيق بيانات طبعة/محقق/ناشر تفسير الجلالين لمسار أسباب النزول وتحديد حق الاستخدام.
++- [ ] توثيق بيانات طبعة/محقق/ناشر ابن كثير لمسارات قصص الأنبياء والنساء والأقوام وتحديد حق الاستخدام.
++- [ ] توثيق بيانات طبعة/ناشر كتاب لا تحزن لمسار الإلهام وتحديد حق الاستخدام.
++- [x] تحديث فهرس GitHub بهذه المجالات كمصادر قيد المراجعة، مع منع تنزيل النصوص قبل اعتماد الحقوق.
++- [x] عدم خلط حزمة المالك الأصلية بالمصادر الدينية أو كتاب لا تحزن، وإظهار الإسناد لكل حزمة على حدة.
+-- 
+2.43.0
+

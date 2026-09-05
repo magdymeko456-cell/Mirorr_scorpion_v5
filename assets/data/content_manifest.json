@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-08-23",
+  "githubCatalog": {
+    "repository": "magdymeko456-cell/mirror_scorpion_v4",
+    "indexPath": "content_catalog/v1/index.json",
+    "distribution": "user_requested_only",
+    "status": "catalog-prepared-downloader-not-yet-implemented"
+  },
+  "packages": [
+    {
+      "id": "starter-original-ar",
+      "title": "بداية هادئة",
+      "category": "user_original",
+      "language": "ar",
+      "distribution": "bundled",
+      "license": "original-app-content",
+      "source": "Mirror Scorpion starter content",
+      "asset": "assets/data/starter_original_ar.json"
+    },
+    {
+      "id": "owner-inspiration-ar",
+      "title": "تأملات ورسائل إنسانية",
+      "category": "owner_provided_inspiration",
+      "language": "ar",
+      "distribution": "bundled",
+      "license": "owner-provided-content",
+      "source": "نصوص قدمها مالك التطبيق",
+      "asset": "assets/data/owner_inspiration_ar.json"
+    },
+    {
+      "id": "hadith-qudsi-verified",
+      "title": "الحديث القدسي — فهرس موثق",
+      "category": "hadith_qudsi",
+      "language": "ar",
+      "distribution": "downloadable_when_verified",
+      "license": "source-and-rights-required",
+      "source": "لا يُعرض محتوى حتى توثيق النص والإسناد والترخيص",
+      "asset": null
+    },
+    {
+      "id": "quran-narratives-index",
+      "title": "قصص القرآن — فهرس مصدر",
+      "category": "quran_narratives",
+      "language": "ar",
+      "distribution": "downloadable_when_verified",
+      "license": "source-and-rights-required",
+      "source": "لا يُعرض محتوى حتى توثيق الآيات والمراجع والترخيص",
+      "asset": null
+    },
+    {
+      "id": "asbab-al-nuzul-index",
+      "title": "أسباب النزول — فهرس مرتب",
+      "category": "asbab_al_nuzul",
+      "language": "ar",
+      "distribution": "downloadable_when_verified",
+      "license": "source-and-rights-required",
+      "source": "لا يُعرض محتوى حتى تحديد الطبعة والحقوق والمراجع",
+      "asset": null
+    }
+  ],
+  "languagePacks": [
+    {
+      "id": "ar",
+      "title": "العربية",
+      "distribution": "device_or_mlkit",
+      "source": "لغة التطبيق أو نموذج ML Kit بحسب الخدمة"
+    },
+    {
+      "id": "en",
+      "title": "English",
+      "distribution": "device_or_mlkit",
+      "source": "لغة التطبيق أو نموذج ML Kit بحسب الخدمة"
+    }
+  ]
+}

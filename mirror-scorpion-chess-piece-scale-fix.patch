@@ -1,0 +1,94 @@
+From c1310247cc456ba056c917c36c231403d03d08c5 Mon Sep 17 00:00:00 2001
+From: magdymeko456-cell
+ <2.88837127e+08+magdymeko456-cell@users.noreply.github.com>
+Date: Wed, 26 Aug 2026 23:08:10 +0000
+Subject: [PATCH] fix(games): balance chess piece scale
+
+---
+ lib/features/feature_hub_screen.dart | 53 +++++++++++++++-------------
+ todo.md                              |  1 +
+ 2 files changed, 29 insertions(+), 25 deletions(-)
+
+diff --git a/lib/features/feature_hub_screen.dart b/lib/features/feature_hub_screen.dart
+index 4ac5707..363d2e5 100644
+--- a/lib/features/feature_hub_screen.dart
++++ b/lib/features/feature_hub_screen.dart
+@@ -2313,37 +2313,40 @@ class _ChessPieceToken extends StatelessWidget {
+       clipBehavior: Clip.none,
+       children: [
+         Positioned(
+-          bottom: -4,
++          bottom: -2,
+           child: Container(
+-            width: 26,
+-            height: 7,
++            width: 22,
++            height: 5,
+             decoration: BoxDecoration(
+-              color: Colors.black.withValues(alpha: 0.35),
++              color: Colors.black.withValues(alpha: 0.28),
+               borderRadius: BorderRadius.circular(99),
+-              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.38), blurRadius: 5, offset: const Offset(0, 2))],
++              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.30), blurRadius: 3.5, offset: const Offset(0, 1.5))],
+             ),
+           ),
+         ),
+-        ShaderMask(
+-          blendMode: BlendMode.srcIn,
+-          shaderCallback: (bounds) => LinearGradient(
+-            begin: Alignment.topLeft,
+-            end: Alignment.bottomRight,
+-            colors: colors,
+-            stops: const [0, 0.30, 0.72, 1],
+-          ).createShader(bounds),
+-          child: Text(
+-            symbol,
+-            textAlign: TextAlign.center,
+-            style: TextStyle(
+-              color: Colors.white,
+-              fontSize: 43,
+-              height: 1,
+-              fontWeight: FontWeight.w600,
+-              shadows: [
+-                Shadow(color: Colors.black.withValues(alpha: 0.78), blurRadius: 2.8, offset: const Offset(1.4, 2)),
+-                Shadow(color: Colors.white.withValues(alpha: isWhite ? 0.40 : 0.12), blurRadius: 0.7, offset: const Offset(-0.6, -0.8)),
+-              ],
++        Transform.translate(
++          offset: const Offset(0, -1),
++          child: ShaderMask(
++            blendMode: BlendMode.srcIn,
++            shaderCallback: (bounds) => LinearGradient(
++              begin: Alignment.topLeft,
++              end: Alignment.bottomRight,
++              colors: colors,
++              stops: const [0, 0.30, 0.72, 1],
++            ).createShader(bounds),
++            child: Text(
++              symbol,
++              textAlign: TextAlign.center,
++              style: TextStyle(
++                color: Colors.white,
++                fontSize: 38,
++                height: 1,
++                fontWeight: FontWeight.w600,
++                shadows: [
++                  Shadow(color: Colors.black.withValues(alpha: 0.64), blurRadius: 1.8, offset: const Offset(1, 1.2)),
++                  Shadow(color: Colors.white.withValues(alpha: isWhite ? 0.32 : 0.09), blurRadius: 0.45, offset: const Offset(-0.4, -0.5)),
++                ],
++              ),
+             ),
+           ),
+         ),
+diff --git a/todo.md b/todo.md
+index 8eb1df6..0cad772 100644
+--- a/todo.md
++++ b/todo.md
+@@ -271,4 +271,5 @@
+ - [x] تكبير رقعة الشطرنج قليلاً وتحسين مظهر القطع بأسلوب شطرنج حديث، مع الحفاظ على وضوحها وقابلية اللمس على الهاتف.
+ - [x] إضفاء هوية شطرنج حديثة أصلية عالية الجودة: إطار عميق وقطع أنيقة وتباين وخامات محسّنة، مستوحاة من مستوى تطبيقات الشطرنج المعاصرة دون نسخ علامة أو أصول أي تطبيق آخر.
+ - [x] إضافة شريط حالة ملكي وقطع مأسورة وتمييز قانوني للحركة والأسر إلى شاشة الشطرنج الحالية، مع إبقاء الرقعة الكبيرة ومحرك اللعب كما هما.
++- [x] تقليل حجم القطع وظلها لضبط نسبتها داخل مربعات الرقعة بعد ملاحظة Android، مع منع تجاوز حدود المربع أو تشويش الإحداثيات.
+ - [ ] التحقق من هوية المصدر والرخصة أو إذن إعادة النشر لكتاب لا تحزن عبر مكتبة عين الجامعة قبل إدراج تنزيل أو محتوى داخل ركن الإلهام.
+-- 
+2.43.0
+

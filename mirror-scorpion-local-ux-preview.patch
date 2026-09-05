@@ -1,0 +1,513 @@
+From b8f64f2693af8fd267d92df5b3da8377ab5e6bcd Mon Sep 17 00:00:00 2001
+From: magdymeko456-cell
+ <2.88837127e+08+magdymeko456-cell@users.noreply.github.com>
+Date: Wed, 26 Aug 2026 04:04:07 +0000
+Subject: [PATCH] fix(local): refine translation sessions and document preview
+
+---
+ docs/requirements-gap-review-2026-08-26.md |  68 ++++++
+ lib/features/feature_hub_screen.dart       | 260 ++++++++++++++++++---
+ todo.md                                    |  12 +-
+ 3 files changed, 304 insertions(+), 36 deletions(-)
+ create mode 100644 docs/requirements-gap-review-2026-08-26.md
+
+diff --git a/docs/requirements-gap-review-2026-08-26.md b/docs/requirements-gap-review-2026-08-26.md
+new file mode 100644
+index 0000000..cdad1ab
+--- /dev/null
++++ b/docs/requirements-gap-review-2026-08-26.md
+@@ -0,0 +1,68 @@
++# مراجعة مطابقة الوصف التفصيلي — Mirror Scorpion v4
++
++**تاريخ المراجعة:** 26 أغسطس 2026
++**رأس GitHub المدقق:** `8d968e7`
++**دليل البناء:** GitHub Actions التشغيل [`32927668624`](https://github.com/magdymeko456-cell/mirror_scorpion_v4/actions/runs/32927668624) نجح في تحليل Flutter والاختبارات وبناء APK ورفع الأثر.
++
++## منهج المراجعة والحدود المعتمدة
++
++هذه الوثيقة تقارن الوصف الأخير بالكود الذي نجح بناؤه، لا بالواجهات أو الخطط التاريخية. يثبت نجاح CI قابلية البناء فقط؛ ولا يثبت أذونات Android على هاتف فعلي، أو ظهور الفقاعة فوق التطبيقات، أو توافر نماذج ML Kit، أو جودة تعرف الصوت، أو تشغيل خدمة سحابية.
++
++يظل التطبيق ملتزماً بالمبادئ التالية: لا مفتاح مزود داخل APK، ولا طلب فيديو أو نسخ صوت أو إلهام سحابي قبل اعتماد مستقل للتكلفة والخصوصية والاحتفاظ والموافقة؛ ولا ادعاء «فيديو غير محدود»؛ ولا Accessibility أو Notification Listener أو قراءة تلقائية لرسائل WhatsApp أو البريد. يقتصر مسار النص بين التطبيقات مستقبلاً على Share أو Process Text الذي يبدأه المستخدم بنفسه. [1] [2]
++
++| حالة التقييم | المعنى |
++|---|---|
++| **يعمل محلياً** | يوجد مسار فعلي في Flutter، لكنه يحتاج قبول Android إذا كان أصلياً. |
++| **جزئي** | يظهر جزء عملي من التدفق مع فجوة وظيفية أو واجهة مؤثرة. |
++| **مغلق بصدق** | توجد واجهة/عقد يمنعان الإرسال أو الادعاء بالتشغيل. |
++| **غير منفذ** | لا يوجد مسار برمجي يحقق النتيجة المطلوبة. |
++
++## نتيجة الكروت الستة
++
++| الكرت | الوضع الفعلي في `8d968e7` | الفجوة عن الوصف | الأولوية العملية |
++|---|---|---|---|
++| **الترجمة النصية** | يقرأ النص من المحرر، مصدر المايك هو لغة الجهاز، ويحفظ لغة الهدف، ويستخدم ML Kit محلياً عند توافر النموذج. النص يظل قابلاً للتحرير. | اختيار ملف الصوت يعرض رسالة فقط؛ لا تفريغ ولا ترجمة ملف. المشاركة لا تنتج ملفاً صوتياً موقّعاً، ولا يوجد تصدير MP3. تصميم زر لغة الهدف يحتاج ضبطاً ليتوافق مع الموضع المطلوب. | عالية — تطوير محلي وإخفاء أي زر لا يملك مخرجاً فعلياً. |
++| **الحوار المترجم** | مربعان وميكروفون جهاز وترجمة محلية ونطق للنتيجة. مساحة كل محرر حالياً 270px. | لا زر تبديل حقيقي بين لغتين قابلتين للتبديل؛ المصدر مقيد عمداً بلغة الجهاز. لا تفريغ للملف الصوتي ولا مشاركة نتيجة الحوار. يلزم حسم التعارض بين «المصدر دائماً لغة الجهاز» وطلب قائمتي مصدر/هدف مع تبديل. | عالية — تثبيت قاعدة اللغة ثم تحسين المحرر والتدفق. |
++| **المستندات والعدسة** | كاميرا/معرض لـOCR محلي، وPDF ذي طبقة نصية أو TXT، ثم ترجمة إلى لغة الجهاز. | لا إدخال رابط أو فتح مستعرض، ولا PDF مصوّر متعدد الصفحات، ولا حد 5 صفحات، ولا شاشة وثيقة مترجمة تغطي الأصل بالضغط الطويل، ولا ختم أو مشاركة ملف مترجم. | عالية — اختبار Android أولاً، ثم تنفيذ ملف/صفحات/مشاركة على مراحل. |
++| **القصص والإلهام** | حزمة عربية أصلية صغيرة وحزمة إلهام من المالك، قارئ داخلي ونطق Android واستيراد JSON يدوي. فلتر سلامة أولي لمسودة المستخدم. | لا أحاديث قدسية موثقة، ولا أسباب نزول مرتبة، ولا قصص كاملة للأنبياء/النساء/الأقوام/الحيوانات من مصادر محققة، ولا عرض بلغة الجهاز، ولا «المزيد» كرابط/تنزيل؛ كلمة المزيد نص غير قابل للضغط. | عالية — محتوى مرخص ومراجع أولاً، ثم فهرسة وحزم محلية. |
++| **الألعاب** | شطرنج قانوني بساعة وخصم محلي بسيط على لوحة ثنائية الأبعاد. | ليس شطرنجاً 3D، ولا يوجد روبيك. يوجد تعارض بين توجيه سابق بإزالة روبيك ووصف أخير يعيده؛ لا يبدأ تنفيذ روبيك قبل تثبيت القرار. | متوسطة — لا يحجب الترجمة والمستندات. |
++| **الإعدادات وPRO** | معرّف تثبيت محلي، لصق باتش، حدود خدمات صادقة، وحالة Runware/الصوت السحابي مقفلة. | لا تحقق خادمي للباتش، ولا اشتراك أو دفع أو سعر، ولا ربط بسجل جهاز موثوق، ولا زمن شبكي للتفعيل. | متوسطة — يعالج بعد تثبيت الخدمات وحدود المتجر والدفع. |
++
++## تدقيق الذكاء والصوت والفيديو والفقاعة
++
++| الوظيفة | ما يعمل أو يوجد الآن | الحكم الصادق والخطوة التالية |
++|---|---|---|
++| **ذكاء الإلهام** | فحص سلامة وموافقة محلية؛ عند الموافقة لا يرسل النص بل يعرض أن الخادم غير منشور. تذكير 3 ساعات يعاد تعطيله عمداً. | **مغلق بصدق.** لا يفسر مشاعر المستخدم ولا يرسل إشعاراً ذكياً بعد. يتطلب نموذجاً خادمياً وسياسة أزمة واحتفاظ وإشعارات محلية واختبار Android. |
++| **الأصوات: سلمى/سيف/سما/ساره** | أربعة ملفات أداء محلية تغير السرعة وطبقة النطق فوق صوت Android المثبت، ويمكن اختيار صوت النظام المتاح للغة. | **جزئي.** لا يمكن ضمان جنس أو شخصية صوت مختلفة، لأن الجهاز قد يحتوي صوتاً واحداً. لا يوجد الصوت الخامس للمستخدم؛ ولا يجوز اعتباره نسخ صوت قبل موافقة وملكية ومزود ممول. |
++| **الملفات الصوتية والمشاركة** | دبوس اختيار الملف موجود في الترجمة والحوار، لكنه لا يفك الصوت إلى نص. النسخ النصي يعمل فقط عند وجود نتيجة. | **غير منفذ وظيفياً** لتفريغ الصوت ومشاركة ملف صوتي موقّع. يحتاج نموذج تفريغ محلي/خادمي محدد، ثم تركيب صوت أو ملف مشاركة فعلي. |
++| **فيديو القصص Runware** | بوابة Firebase وFlutter موجودتان بحالة معطلة، حصة 0، وموافقة نص القصة، ومنع CI للمفتاح أو endpoint داخل Flutter. | **مغلق بصدق.** لا حساب ولا رصيد ولا مفتاح ولا نشر Firebase ولا فيديو. لا يعتمد فيديو 10–15 دقيقة أو حصة يومية عامة قبل سقف صريح ومراجعة خصوصية وحقوق واحتفاظ. |
++| **الفقاعة فوق التطبيقات** | الشاشة الرئيسية تقول «قيد الإعداد» فقط، ولا يوجد Android/Kotlin محفوظ في المستودع. | **غير منفذة.** لا يكفي مفتاح واجهة. يلزم وحدة Android أصلية وOverlay permission وخدمة foreground وإشعار وShare/Process Text واختبار APK، مع عدم قراءة تطبيقات أخرى تلقائياً. [1] [2] |
++| **حماية التطبيق** | يبني CI APK إصداراً ويضيف قاعدة R8 لتجاوز تحذير اختياري لـPDF فقط. | لم أجد `minifyEnabled` أو سياسة Obfuscation أو آلية تجعل الهندسة العكسية «مستحيلة». لا يوجد ضمان «360». تحسن حماية الإصدار والمفاتيح الخادمية تدريجياً، لكنها لا تعوض عن تصميم أمان مناسب. |
++
++## قيود المحتوى والحقوق
++
++المحتوى المدمج حالياً عربي ومحدود: قصة أصلية واحدة وست رسائل إلهام منسوبة إلى مالك التطبيق. لا تشكل هذه الحزمة مكتبة الأحاديث أو قصص القرآن أو أسباب النزول المطلوبة. لا يجوز إدراج أو تنزيل نصوص الجلالين أو ابن كثير أو «لا تحزن» لمجرد وجود نسخة مجانية على الإنترنت؛ يلزم مصدر وحق إعادة نشر صريح لكل حزمة. أما كلام المستخدم فيخضع لفحص يمنع التنمر والكراهية والإيحاءات والمحتوى المسيء قبل أي استخدام خارجي.
++
++قصص العرض ينبغي أن تستخدم لغة الجهاز، لكن الحزم الحالية لا توفر ترجمات متعددة. الترتيب الصحيح هو: بناء مخطط حزمة يتضمن `language` و`source` و`citation` و`license` و`rights` و`contentHash`، ثم إدراج حزم مستقلة موثقة لكل لغة، ثم تنزيل اختياري وتخزين محلي وحذف واضح.
++
++## ترتيب التنفيذ المقترح
++
++| المرحلة | النطاق القابل للتسليم | شرط الانتقال |
++|---|---|---|
++| **A — قبول APK الحالي** | تثبيت APK الناتج وقبول حالة Runware المغلقة، الترجمة النصية والمايك والـOCR والصوت المحلي. | تقرير Android يميز «عمل» و«لم يعمل» لكل تدفق. |
++| **B — ترجمة محلية حقيقية** | إصلاح تخطيط المحررين، جلسة مايك جديدة تمسح المخرجات بوضوح، وإظهار قائمة اللغات المدعومة فعلياً فقط. | تحليل واختبارات وAPK وقبول Android. |
++| **C — مستندات وعدسة** | وضع حد صفحات صريح، OCR للصور/الـPDF المصور ضمن حد محدد، معاينة أصل/ترجمة، وتوقيع ظاهر ومشاركة مخرجات فعلية فقط. | اختبار ملفات عربية/إنجليزية وصور وPDF نصي ومصور على Android. |
++| **D — محتوى مرخص** | فهرس حزم موثقة ومحتوى أولي مرخص، قارئ واسع وخيارات النطق، وعمل «المزيد» كمصدر شفاف لا انتقال خفي. | مراجعة الحقوق والبصمات والقبول. |
++| **E — فقاعة Android** | وحدة Native مع الإذن وخدمة foreground وShare/Process Text فقط. | قبول هاتف حقيقي، دون Accessibility أو قراءة تلقائية. |
++| **F — خدمات الذكاء السحابية** | تشغيل منفصل لكل خدمة بعد اعتماد الحد المالي والخصوصية والموافقة وسجل الحذف. | اختبار مالك محدود ومراجعة فشل/إلغاء/تكلفة قبل الإتاحة العامة. |
++
++## قرارات مطلوبة قبل التفعيل السحابي
++
++لا يلزم قرار منك لتنفيذ الإصلاحات المحلية في المراحل B وC، لكن يلزم اعتماد صريح قبل أي حساب أو مفتاح أو رصيد أو نشر Firebase للخدمات السحابية. يشمل ذلك سقفاً شهرياً/سنوياً، حصة يومية، أقصى مدة ودقة، منطقة معالجة، مدة احتفاظ، آلية حذف، ونص موافقة لكل من الفيديو والإلهام ونسخ الصوت.
++
++يحتاج قسم الألعاب أيضاً قراراً واحداً فقط: هل يعود **روبيك 3D** إلى النطاق، أم يبقى التطبيق على شطرنج فقط كما ورد في توجيه سابق؟
++
++## المراجع
++
++[1]: https://developer.android.com/reference/android/provider/Settings#canDrawOverlays(android.content.Context) "Android overlay permission"
++[2]: https://developer.android.com/guide/components/intents-filters "Android intents, sharing and explicit user actions"
+diff --git a/lib/features/feature_hub_screen.dart b/lib/features/feature_hub_screen.dart
+index e10a046..4e1d754 100644
+--- a/lib/features/feature_hub_screen.dart
++++ b/lib/features/feature_hub_screen.dart
+@@ -106,7 +106,7 @@ class _TranslationPanelState extends State<_TranslationPanel> {
+   final _recognitionService = DeviceSpeechRecognitionService();
+   String _selectedLanguage = 'ar';
+   String? _notice;
+-  bool _clearOnNextInput = false;
++  bool _hasCompletedTranslation = false;
+   bool _isTranslating = false;
+   bool _loadedLanguagePreference = false;
+   Timer? _translationDebounce;
+@@ -141,6 +141,16 @@ class _TranslationPanelState extends State<_TranslationPanel> {
+     if (mounted) setState(() {});
+   }
+ 
++  void _beginFreshTranslationIfNeeded() {
++    if (!_hasCompletedTranslation) return;
++    setState(() {
++      _input.clear();
++      _output.clear();
++      _notice = 'بدأت جلسة ترجمة جديدة.';
++      _hasCompletedTranslation = false;
++    });
++  }
++
+   Future<void> _speakTranslation() async {
+     if (_speechService.isSpeaking) {
+       await _speechService.stop();
+@@ -165,15 +175,12 @@ class _TranslationPanelState extends State<_TranslationPanel> {
+     }
+     final sourceLanguage = context.read<LanguagePreferences>().deviceLanguageCode;
+     await _speechService.stop();
++    if (!mounted) return;
++    _beginFreshTranslationIfNeeded();
+     await _recognitionService.start(
+       languageCode: sourceLanguage,
+       onText: (recognizedText) {
+         if (!mounted) return;
+-        if (_clearOnNextInput) {
+-          _input.clear();
+-          _output.clear();
+-          _clearOnNextInput = false;
+-        }
+         _input.text = recognizedText;
+         _queueTranslation(
+           recognizedText,
+@@ -198,13 +205,7 @@ class _TranslationPanelState extends State<_TranslationPanel> {
+     });
+   }
+ 
+-  void _beginNewInput(String action) {
+-    if (_clearOnNextInput) {
+-      _input.clear();
+-      _output.clear();
+-      _notice = null;
+-      _clearOnNextInput = false;
+-    }
++  void _showUnavailableAction(String action) {
+     setState(() => _notice = '$action يحتاج خدمة صوت أو ملفات منفصلة؛ لم يتم إنشاء ناتج بديل.');
+   }
+ 
+@@ -249,6 +250,8 @@ class _TranslationPanelState extends State<_TranslationPanel> {
+       _isTranslating = false;
+       if (result.isSuccess) _output.text = result.text ?? '';
+       if (!result.isSuccess) _output.clear();
++      _hasCompletedTranslation =
++          result.isSuccess && _output.text.trim().isNotEmpty;
+       _notice = result.message;
+     });
+   }
+@@ -271,25 +274,26 @@ Widget build(BuildContext context) {
+ return ListView(
+       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+       children: [
+-        Row(
+-          textDirection: TextDirection.ltr,
+-          children: [
+-            Expanded(
+-              child: _TranslationLanguageMenu(
+-                value: _selectedLanguage,
+-                label: 'لغة الترجمة',
+-                icon: Icons.translate,
+-                onChanged: _selectLanguage,
+-              ),
++        Center(
++          child: ConstrainedBox(
++            constraints: const BoxConstraints(maxWidth: 280),
++            child: _TranslationLanguageMenu(
++              value: _selectedLanguage,
++              label: 'لغة الترجمة',
++              icon: Icons.translate,
++              onChanged: _selectLanguage,
+             ),
+-            const SizedBox(width: 10),
+-            Expanded(
+-              child: _DeviceSpeechLanguageLabel(
+-                languageCode: deviceLanguage,
+-                label: 'لغة المايك — من الجهاز',
+-              ),
++          ),
++        ),
++        const SizedBox(height: 8),
++        Center(
++          child: ConstrainedBox(
++            constraints: const BoxConstraints(maxWidth: 280),
++            child: _DeviceSpeechLanguageLabel(
++              languageCode: deviceLanguage,
++              label: 'لغة المايك — من الجهاز',
+             ),
+-          ],
++          ),
+         ),
+         const SizedBox(height: 10),
+         _TranslationEditor(
+@@ -297,9 +301,7 @@ return ListView(
+           hint: 'ابدأ بالكتابة أو اضغط المايك للتحدث...',
+           readOnly: false,
+           actionsOnRight: false,
+-          onTap: () {
+-            if (_clearOnNextInput) _beginNewInput('جلسة ترجمة جديدة');
+-          },
++          onTap: _beginFreshTranslationIfNeeded,
+           onChanged: (value) => _queueTranslation(
+             value,
+             sourceLanguageCode: deviceLanguage,
+@@ -343,7 +345,7 @@ return ListView(
+           actionsOnRight: true,
+           actions: [
+             _EditorAction(icon: _speechService.isSpeaking ? Icons.stop_circle_outlined : Icons.volume_up, tooltip: _speechService.isSpeaking ? 'إيقاف النطق' : 'نطق الترجمة بصوت النظام', onPressed: _speakTranslation),
+-            _EditorAction(icon: Icons.share, tooltip: 'مشاركة ملف صوت مترجم', onPressed: () => _beginNewInput('مشاركة الترجمة')),
++            _EditorAction(icon: Icons.share, tooltip: 'مشاركة ملف صوت مترجم', onPressed: () => _showUnavailableAction('مشاركة ملف صوت مترجم')),
+             _EditorAction(icon: Icons.copy, tooltip: 'نسخ الترجمة', onPressed: () async {
+               if (_output.text.isEmpty) {
+                 if (context.mounted) {
+@@ -562,6 +564,7 @@ class _DialoguePanelState extends State<_DialoguePanel> {
+   Timer? _translationDebounce;
+   String _leftTargetLanguage = 'en';
+   String? _notice;
++  bool _hasCompletedDialogueTranslation = false;
+   bool _isTranslating = false;
+   bool _loadedLanguagePreferences = false;
+ 
+@@ -586,6 +589,16 @@ class _DialoguePanelState extends State<_DialoguePanel> {
+     if (mounted) setState(() {});
+   }
+ 
++  void _beginFreshDialogueIfNeeded() {
++    if (!_hasCompletedDialogueTranslation) return;
++    setState(() {
++      _source.clear();
++      _translated.clear();
++      _notice = 'بدأت جلسة حوار جديدة.';
++      _hasCompletedDialogueTranslation = false;
++    });
++  }
++
+   Future<void> _selectLeftTargetLanguage(String code) async {
+     final preferences = context.read<LanguagePreferences>();
+     final sourceLanguage = preferences.deviceLanguageCode;
+@@ -609,6 +622,7 @@ class _DialoguePanelState extends State<_DialoguePanel> {
+     final sourceLanguage = context.read<LanguagePreferences>().deviceLanguageCode;
+     await _speechService.stop();
+     if (!mounted) return;
++    _beginFreshDialogueIfNeeded();
+     await _recognitionService.start(
+       languageCode: sourceLanguage,
+       onText: (recognizedText) {
+@@ -665,6 +679,8 @@ class _DialoguePanelState extends State<_DialoguePanel> {
+     setState(() {
+       _isTranslating = false;
+       _translated.text = result.isSuccess ? result.text ?? '' : '';
++      _hasCompletedDialogueTranslation =
++          result.isSuccess && _translated.text.trim().isNotEmpty;
+       _notice = result.message;
+     });
+   }
+@@ -722,6 +738,7 @@ class _DialoguePanelState extends State<_DialoguePanel> {
+               onPressed: _pickDialogueAudioFile,
+             ),
+           ],
++          onTap: _beginFreshDialogueIfNeeded,
+           onChanged: (value) => _queueTranslation(
+             value,
+             sourceLanguageCode: deviceLanguage,
+@@ -859,6 +876,7 @@ class _DialogueEditor extends StatelessWidget {
+     required this.hint,
+     required this.actions,
+     this.readOnly = false,
++    this.onTap,
+     this.onChanged,
+   });
+ 
+@@ -867,12 +885,13 @@ class _DialogueEditor extends StatelessWidget {
+   final String hint;
+   final List<_EditorAction> actions;
+   final bool readOnly;
++  final GestureTapCallback? onTap;
+   final ValueChanged<String>? onChanged;
+ 
+   @override
+   Widget build(BuildContext context) {
+     return Container(
+-      height: 270,
++      height: 300,
+       padding: const EdgeInsets.all(14),
+       decoration: BoxDecoration(
+         color: Colors.white.withValues(alpha: 0.04),
+@@ -899,6 +918,7 @@ class _DialogueEditor extends StatelessWidget {
+                 border: InputBorder.none,
+                 contentPadding: const EdgeInsets.only(bottom: 12),
+               ),
++              onTap: onTap,
+               onChanged: onChanged,
+             ),
+           ),
+@@ -1120,6 +1140,21 @@ class _DocumentsPanelState extends State<_DocumentsPanel> {
+                   Text('الترجمة إلى لغة جهازك: ${TranslationLanguageCatalog.labels[context.read<LanguagePreferences>().deviceLanguageCode] ?? context.read<LanguagePreferences>().deviceLanguageCode}', style: const TextStyle(color: RoyalColors.gold)),
+                   const SizedBox(height: 8),
+                   SelectableText(_translatedText!, style: const TextStyle(height: 1.6)),
++                  const SizedBox(height: 12),
++                  FilledButton.icon(
++                    onPressed: () => Navigator.push(
++                      context,
++                      MaterialPageRoute<void>(
++                        builder: (_) => _TranslatedTextPreviewPage(
++                          originalText: _extractedText ?? '',
++                          translatedText: _translatedText!,
++                          documentName: _selectedDocumentName ?? _selectedFileName ?? 'نص مستخرج',
++                        ),
++                      ),
++                    ),
++                    icon: const Icon(Icons.fullscreen_outlined),
++                    label: const Text('معاينة الترجمة ملء الشاشة'),
++                  ),
+                 ],
+               ),
+             ),
+@@ -1129,6 +1164,161 @@ class _DocumentsPanelState extends State<_DocumentsPanel> {
+   }
+ }
+ 
++class _TranslatedTextPreviewPage extends StatefulWidget {
++  const _TranslatedTextPreviewPage({
++    required this.originalText,
++    required this.translatedText,
++    required this.documentName,
++  });
++
++  final String originalText;
++  final String translatedText;
++  final String documentName;
++
++  @override
++  State<_TranslatedTextPreviewPage> createState() =>
++      _TranslatedTextPreviewPageState();
++}
++
++class _TranslatedTextPreviewPageState
++    extends State<_TranslatedTextPreviewPage> {
++  bool _translationVisible = false;
++  bool _initialDelayComplete = false;
++
++  @override
++  void initState() {
++    super.initState();
++    Future<void>.delayed(const Duration(seconds: 3), () {
++      if (mounted) {
++        setState(() {
++          _initialDelayComplete = true;
++          _translationVisible = true;
++        });
++      }
++    });
++  }
++
++  @override
++  Widget build(BuildContext context) {
++    return Directionality(
++      textDirection: TextDirection.rtl,
++      child: Scaffold(
++        appBar: AppBar(title: Text(widget.documentName)),
++        body: SafeArea(
++          child: Padding(
++            padding: const EdgeInsets.all(16),
++            child: Column(
++              crossAxisAlignment: CrossAxisAlignment.stretch,
++              children: [
++                const Text(
++                  'معاينة نص محلي: ليست ملف PDF جديداً ولا تحفظ أو تشارك ملفاً في هذا الإصدار.',
++                  style: TextStyle(color: RoyalColors.muted, height: 1.45),
++                ),
++                const SizedBox(height: 12),
++                Expanded(
++                  child: GestureDetector(
++                    onLongPressStart: (_) =>
++                        setState(() => _translationVisible = false),
++                    onLongPressEnd: (_) =>
++                        setState(() => _translationVisible = _initialDelayComplete),
++                    child: Stack(
++                      children: [
++                        _PreviewTextSheet(
++                          heading: 'النص الأصلي المستخرج',
++                          text: widget.originalText,
++                          color: const Color(0xFF172334),
++                        ),
++                        if (_translationVisible)
++                          Positioned.fill(
++                            child: _PreviewTextSheet(
++                              heading: 'الترجمة إلى لغة الجهاز',
++                              text: widget.translatedText,
++                              color: const Color(0xFF23364F),
++                              showSignature: true,
++                            ),
++                          )
++                        else
++                          const Positioned.fill(
++                            child: ColoredBox(
++                              color: Color(0x550D1623),
++                              child: Center(child: CircularProgressIndicator()),
++                            ),
++                          ),
++                      ],
++                    ),
++                  ),
++                ),
++                const SizedBox(height: 10),
++                const Text(
++                  'اضغط مطولاً لرؤية النص الأصلي، ثم ارفع إصبعك للعودة إلى الترجمة.',
++                  textAlign: TextAlign.center,
++                  style: TextStyle(color: RoyalColors.gold, height: 1.4),
++                ),
++              ],
++            ),
++          ),
++        ),
++      ),
++    );
++  }
++}
++
++class _PreviewTextSheet extends StatelessWidget {
++  const _PreviewTextSheet({
++    required this.heading,
++    required this.text,
++    required this.color,
++    this.showSignature = false,
++  });
++
++  final String heading;
++  final String text;
++  final Color color;
++  final bool showSignature;
++
++  @override
++  Widget build(BuildContext context) {
++    return Container(
++      padding: const EdgeInsets.all(18),
++      decoration: BoxDecoration(
++        color: color,
++        borderRadius: BorderRadius.circular(20),
++        border: Border.all(color: Colors.white24),
++      ),
++      child: Stack(
++        children: [
++          SingleChildScrollView(
++            child: Column(
++              crossAxisAlignment: CrossAxisAlignment.stretch,
++              children: [
++                Text(heading, style: const TextStyle(color: RoyalColors.gold, fontWeight: FontWeight.w700)),
++                const SizedBox(height: 12),
++                SelectableText(text, style: const TextStyle(fontSize: 17, height: 1.7)),
++              ],
++            ),
++          ),
++          if (showSignature)
++            Center(
++              child: IgnorePointer(
++                child: Transform.rotate(
++                  angle: -0.48,
++                  child: const Opacity(
++                    opacity: 0.16,
++                    child: Text(
++                      'تُرجِم بواسطة ميرور سكربيون',
++                      textAlign: TextAlign.center,
++                      style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
++                    ),
++                  ),
++                ),
++              ),
++            ),
++        ],
++      ),
++    );
++  }
++}
++
+ class _StoriesPanel extends StatefulWidget {
+   const _StoriesPanel();
+ 
+diff --git a/todo.md b/todo.md
+index da8d870..8058b51 100644
+--- a/todo.md
++++ b/todo.md
+@@ -237,6 +237,16 @@
+ - [x] إضافة اختبارات تمنع تشغيل مزود ElevenLabs أو ظهور مفتاحه في Flutter عند غياب تفعيل الخادم.
+ - [x] استبدال مسار Fal النشط بالكامل بعقد Runware معطّل: Firebase فقط، مهمة async، MP4، موافقة، حصة صفرية، ولا اتصال من Flutter.
+ - [x] إضافة بطاقة حدود خدمات صادقة في الإعدادات: الأساسي المحلي وPRO الموقّع وRunware بحد 0 واستوديو الصوت غير المفعّل، بلا دفع أو تجديد تلقائي.
+-- [ ] تطبيق رقعة Runware في Termux ثم اجتياز GitHub Actions للتحليل والاختبارات وبناء APK.
++- [x] تطبيق رقعة Runware في Termux ثم اجتياز GitHub Actions للتحليل والاختبارات وبناء APK؛ التشغيل `32927668624` نجح في 26 أغسطس 2026.
+ - [ ] قبول Android للحالة غير النشطة: بطاقة Runware وموافقتها وزر الجاهزية لا يرسلون محتوى ولا يظهر دفع.
+ - [ ] اعتماد المالك لسقف شهري/سنوي وحصة يومية ومدة ودقة ومنطقة ومدة احتفاظ قبل إنشاء مفتاح أو رصيد أو نشر Firebase.
++- [x] إجراء مراجعة مطابقة شاملة ومحدثة بين الوصف التفصيلي والكروت الستة وحالة Flutter الحالية؛ راجع `docs/requirements-gap-review-2026-08-26.md`.
++- [ ] تنفيذ مشاركة النص المترجم ومخرج صوتي موقّع فقط عند وجود تفريغ وترجمة وصوت محلي فعليين، مع منع الادعاء بتصدير MP3 غير المتاح.
++- [ ] تنفيذ تفريغ وترجمة الملفات الصوتية إلى لغة الجهاز بعد اعتماد خدمة أو نموذج محلي قابل للاختبار وموافقة مناسبة.
++- [ ] تحسين مساحة محرري الحوار والتحقق من ميكروفون المصدر والزرين والتبديل والإخلاء عند جلسة مايك جديدة على Android.
++- [x] تنفيذ إخلاء واضح لمحرري الترجمة والحوار عند بدء جلسة جديدة بعد نتيجة ناجحة، وتوسيط اختيار لغة الهدف وتوسيع محرر الحوار إلى 300px؛ ما زال قبول Android مطلوباً.
++- [ ] رفع قبول المستندات والعدسة: اختيار الملف، OCR، تحديد لغة المصدر، الترجمة إلى لغة الجهاز، حد الصفحات، المعاينة الطويلة، والمشاركة الموقعة.
++- [x] إضافة معاينة محلية ملء الشاشة للنص المترجم: انتظار ثلاث ثوانٍ، ضغط مطول لرؤية الأصل، وختم مرئي؛ لا تصدير PDF أو مشاركة ملف حتى يُنفذ المسار فعلياً.
++- [ ] اختبار الفقاعة الأصلية على APK حقيقي: إذن Overlay وخدمة foreground والمشاركة بنص يحدده المستخدم، من دون Accessibility أو قراءة WhatsApp أو البريد أو الإشعارات تلقائياً.
++- [ ] التحقق من اختلاف أصوات Android المحلية الأربعة (سلمى وسيف وسما وساره) أو عرض الحقيقة للجهاز عند عدم وجود أصوات متوافقة، قبل أي نسخ صوت سحابي.
++- [ ] توسيع القصص والإلهام بأصول مرخصة فقط مع لغة الجهاز وقراءة محلية، ومنع فيديو 10–15 دقيقة أو حصص عامة حتى يعتمد السقف والخصوصية والمزود.
+-- 
+2.43.0
+

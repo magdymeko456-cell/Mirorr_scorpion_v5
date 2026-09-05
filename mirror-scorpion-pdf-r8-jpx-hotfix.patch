@@ -1,0 +1,31 @@
+From 303bb7ca37c048fa2ed375caf1bafa6ad4e5e1ad Mon Sep 17 00:00:00 2001
+From: Manus Patch Builder <patch-builder@users.noreply.github.com>
+Date: Tue, 25 Aug 2026 18:01:27 +0000
+Subject: [PATCH] fix(ci): keep PDF text extraction release-safe
+
+---
+ .github/workflows/build_apk.yml | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/.github/workflows/build_apk.yml b/.github/workflows/build_apk.yml
+index 41f39d1..9417787 100644
+--- a/.github/workflows/build_apk.yml
++++ b/.github/workflows/build_apk.yml
+@@ -102,6 +102,14 @@ jobs:
+           if ! grep -q 'android.speech.RecognitionService' android/app/src/main/AndroidManifest.xml; then
+             sed -i '/<application/i\    <queries><intent><action android:name="android.speech.RecognitionService" /></intent></queries>' android/app/src/main/AndroidManifest.xml
+           fi
++      - name: Configure PDF text extraction R8 rule
++        run: |
++          test -f android/app/proguard-rules.pro || {
++            echo "Expected Flutter Android ProGuard rules were not generated."
++            exit 1
++          }
++          printf '\n# PDFBox references an optional JPX decoder; text extraction does not package it.\n-dontwarn com.gemalto.jp2.**\n' >> android/app/proguard-rules.pro
++          grep -q -- '-dontwarn com.gemalto.jp2.\*\*' android/app/proguard-rules.pro
+       - name: Install dependencies
+         run: flutter pub get
+       - name: Generate scorpion Android launcher icon
+-- 
+2.43.0
+

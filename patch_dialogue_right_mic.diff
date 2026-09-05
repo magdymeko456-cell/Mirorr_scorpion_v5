@@ -1,0 +1,275 @@
+From e666bca72a35d79e83fe388ef5b31a9e30879f26 Mon Sep 17 00:00:00 2001
+From: magdymeko456-cell <2.88837127e+08+magdymeko456-cell@users.noreply.github.com>
+Date: Wed, 2 Sep 2026 11:39:45 +0000
+Subject: [PATCH] fix(dialogue): bind microphone to right-side source language
+
+---
+ lib/features/feature_hub_screen.dart | 144 +++++++++++----------------
+ 1 file changed, 58 insertions(+), 86 deletions(-)
+
+diff --git a/lib/features/feature_hub_screen.dart b/lib/features/feature_hub_screen.dart
+index 5c16d28..36014db 100644
+--- a/lib/features/feature_hub_screen.dart
++++ b/lib/features/feature_hub_screen.dart
+@@ -858,19 +858,15 @@ class _DialoguePanelState extends State<_DialoguePanel> {
+   bool _hasCompletedDialogueTranslation = false;
+   bool _isTranslating = false;
+   bool _loadedLanguagePreferences = false;
+-  bool _sourceUsesDeviceLanguage = true;
++  /// لغة المصدر في الجهة اليمنى؛ لغة الجهاز مجرد قيمة ابتدائية.
++  String _rightSourceLanguage = 'en';
+   bool _isChangingSpeaker = false;
+ 
+   DeviceSpeechRecognitionService get _recognitionService =>
+       widget.recognitionService;
+ 
+-  /// لغة التقاط المايك: لغة الجهاز كافتراضي، أو اللغة المقابلة التي
+-  /// اختارها المستخدم بعد تبديل مصدر الحوار.
+-  String get _dialogueMicLanguageCode {
+-    final deviceLanguage =
+-        context.read<LanguagePreferences>().deviceLanguageCode;
+-    return _sourceUsesDeviceLanguage ? deviceLanguage : _leftTargetLanguage;
+-  }
++  /// المايك يتبع دائماً لغة الجهة اليمنى، ولا يتبع لغة الجهاز بعد التهيئة.
++  String get _dialogueMicLanguageCode => _rightSourceLanguage;
+ 
+   @override
+   void initState() {
+@@ -886,6 +882,7 @@ class _DialoguePanelState extends State<_DialoguePanel> {
+     if (_loadedLanguagePreferences) return;
+     final preferences = context.read<LanguagePreferences>();
+     _leftTargetLanguage = preferences.translationTargetLanguage;
++    _rightSourceLanguage = preferences.deviceLanguageCode;
+     _loadedLanguagePreferences = true;
+   }
+ 
+@@ -904,54 +901,67 @@ class _DialoguePanelState extends State<_DialoguePanel> {
+   }
+ 
+   Future<void> _selectLeftTargetLanguage(String code) async {
+-    final preferences = context.read<LanguagePreferences>();
+-    final sourceLanguage = preferences.deviceLanguageCode;
+-    if (!_sourceUsesDeviceLanguage) {
+-      if (!await _recognitionService.cancelAndWait()) return;
+-    }
+     setState(() => _leftTargetLanguage = code);
+-    await preferences.setTranslationTargetLanguage(code);
++    await context.read<LanguagePreferences>().setTranslationTargetLanguage(code);
+     if (!mounted) return;
+-    _queueTranslation(
+-      _source.text,
+-      sourceLanguageCode:
+-          _sourceUsesDeviceLanguage ? sourceLanguage : code,
+-    );
++    _queueTranslation(_source.text, sourceLanguageCode: _dialogueMicLanguageCode);
++  }
++
++  Future<void> _selectRightSourceLanguage(String code) async {
++    final wasListening = _recognitionService.isListening;
++    if (wasListening && !await _recognitionService.cancelAndWait()) return;
++    if (!mounted) return;
++    setState(() => _rightSourceLanguage = code);
++    if (wasListening) await _startDialogueMicrophone();
+   }
+ 
+   Future<void> _swapDialogueSpeaker() async {
+     if (_isChangingSpeaker) return;
++    final wasListening = _recognitionService.isListening;
+     setState(() {
+       _isChangingSpeaker = true;
+-      _notice = 'جارٍ إنهاء جلسة المايك السابقة قبل تبديل اللغة…';
++      _notice = 'جارٍ تبديل مصدر المايك…';
+     });
+     try {
+-      if (!await _recognitionService.cancelAndWait()) {
+-        if (mounted && _recognitionService.message != null) {
+-          setState(() => _notice = _recognitionService.message);
+-        }
+-        return;
+-      }
++      if (wasListening && !await _recognitionService.cancelAndWait()) return;
+       await _speechService.stop();
+       if (!mounted) return;
+-      final deviceLanguage = context.read<LanguagePreferences>().deviceLanguageCode;
+-      final nextSourceLanguage = _sourceUsesDeviceLanguage
+-          ? _leftTargetLanguage
+-          : deviceLanguage;
++      final oldSource = _rightSourceLanguage;
+       setState(() {
+-        _sourceUsesDeviceLanguage = !_sourceUsesDeviceLanguage;
++        _rightSourceLanguage = _leftTargetLanguage;
++        _leftTargetLanguage = oldSource;
+         _source.clear();
+         _translated.clear();
+         _hasCompletedDialogueTranslation = false;
+         _isTranslating = false;
+         _notice = 'تبدّل المتحدث. لغة المايك الآن: '
+-            '${TranslationLanguageCatalog.labels[nextSourceLanguage] ?? nextSourceLanguage}.';
++            '${TranslationLanguageCatalog.labels[_rightSourceLanguage] ?? _rightSourceLanguage}.';
+       });
++      await context.read<LanguagePreferences>().setTranslationTargetLanguage(_leftTargetLanguage);
++      if (wasListening) await _startDialogueMicrophone();
+     } finally {
+       if (mounted) setState(() => _isChangingSpeaker = false);
+     }
+   }
+ 
++  Future<void> _startDialogueMicrophone() async {
++    if (!mounted) return;
++    final sourceLanguage = _dialogueMicLanguageCode;
++    await _speechService.stop();
++    if (!mounted) return;
++    await _recognitionService.start(
++      languageCode: sourceLanguage,
++      onText: (recognizedText) {
++        if (!mounted) return;
++        _source.text = recognizedText;
++        _queueTranslation(recognizedText, sourceLanguageCode: sourceLanguage);
++      },
++    );
++    if (mounted && _recognitionService.message != null) {
++      setState(() => _notice = _recognitionService.message);
++    }
++  }
++
+   Future<void> _toggleMicrophone() async {
+     if (_isChangingSpeaker) return;
+     if (_recognitionService.isListening) {
+@@ -968,24 +978,8 @@ class _DialoguePanelState extends State<_DialoguePanel> {
+       return;
+     }
+     if (!mounted) return;
+-    final sourceLanguage = _dialogueMicLanguageCode;
+-    await _speechService.stop();
+-    if (!mounted) return;
+     _beginFreshDialogueIfNeeded();
+-    await _recognitionService.start(
+-      languageCode: sourceLanguage,
+-      onText: (recognizedText) {
+-        if (!mounted) return;
+-        _source.text = recognizedText;
+-        _queueTranslation(
+-          recognizedText,
+-          sourceLanguageCode: sourceLanguage,
+-        );
+-      },
+-    );
+-    if (mounted && _recognitionService.message != null) {
+-      setState(() => _notice = _recognitionService.message);
+-    }
++    await _startDialogueMicrophone();
+   }
+ 
+   void _queueTranslation(String value, {String? sourceLanguageCode}) {
+@@ -1008,10 +1002,7 @@ class _DialoguePanelState extends State<_DialoguePanel> {
+     String? sourceLanguageCode,
+   }) async {
+     if (!mounted || value.trim() != _source.text.trim()) return;
+-    final deviceLanguage = context.read<LanguagePreferences>().deviceLanguageCode;
+-    final targetLanguage = _sourceUsesDeviceLanguage
+-        ? _leftTargetLanguage
+-        : deviceLanguage;
++    final targetLanguage = _leftTargetLanguage;
+     setState(() {
+       _isTranslating = true;
+       _notice = 'جارٍ تجهيز ترجمة الحوار المحلية…';
+@@ -1019,11 +1010,7 @@ class _DialoguePanelState extends State<_DialoguePanel> {
+     final result = await _translationService.translate(
+       text: value,
+       targetLanguageCode: targetLanguage,
+-      sourceLanguageCode:
+-          sourceLanguageCode ??
+-              (_sourceUsesDeviceLanguage
+-                  ? deviceLanguage
+-                  : _leftTargetLanguage),
++      sourceLanguageCode: sourceLanguageCode ?? _dialogueMicLanguageCode,
+       onProgress: (progress) {
+         if (mounted && value.trim() == _source.text.trim()) {
+           setState(() => _notice = _translationProgressMessage(progress));
+@@ -1031,10 +1018,7 @@ class _DialoguePanelState extends State<_DialoguePanel> {
+       },
+     );
+     if (!mounted || value.trim() != _source.text.trim()) return;
+-    final currentDeviceLanguage = context.read<LanguagePreferences>().deviceLanguageCode;
+-    final expectedTargetLanguage = _sourceUsesDeviceLanguage
+-        ? _leftTargetLanguage
+-        : currentDeviceLanguage;
++    final expectedTargetLanguage = _leftTargetLanguage;
+     if (targetLanguage != expectedTargetLanguage) {
+       return;
+     }
+@@ -1054,9 +1038,7 @@ class _DialoguePanelState extends State<_DialoguePanel> {
+     }
+     await _speechService.speak(
+       text: _translated.text,
+-      languageCode: _sourceUsesDeviceLanguage
+-          ? _leftTargetLanguage
+-          : context.read<LanguagePreferences>().deviceLanguageCode,
++      languageCode: _leftTargetLanguage,
+     );
+     if (mounted && _speechService.message != null) {
+       setState(() => _notice = _speechService.message);
+@@ -1077,26 +1059,19 @@ class _DialoguePanelState extends State<_DialoguePanel> {
+ 
+   @override
+   Widget build(BuildContext context) {
+-    final deviceLanguage = context.watch<LanguagePreferences>().deviceLanguageCode;
+     return ListView(
+       padding: const EdgeInsets.fromLTRB(18, 10, 18, 18),
+       children: [
+         VoiceProfileBar(ttsService: _speechService),
+         _DialogueEditor(
+           controller: _source,
+-          label: _sourceUsesDeviceLanguage
+-              ? 'المحرر العلوي — المتحدث بلغة الجهاز'
+-              : 'المحرر العلوي — المتحدث باللغة المقابلة',
+-          hint: _sourceUsesDeviceLanguage
+-              ? 'اكتب أو تحدث بلغة جهازك…'
+-              : 'اكتب أو تحدث باللغة المقابلة…',
++          label: 'المحرر العلوي — مصدر المايك (الجهة اليمنى)',
++          hint: 'اكتب أو تحدث بلغة المصدر المحددة يميناً…',
+           actions: const [],
+           onTap: _beginFreshDialogueIfNeeded,
+           onChanged: (value) => _queueTranslation(
+             value,
+-            sourceLanguageCode: _sourceUsesDeviceLanguage
+-                ? deviceLanguage
+-                : _leftTargetLanguage,
++            sourceLanguageCode: _dialogueMicLanguageCode,
+           ),
+         ),
+         const SizedBox(height: 10),
+@@ -1112,25 +1087,22 @@ class _DialoguePanelState extends State<_DialoguePanel> {
+               Row(
+                 children: [
+                   Expanded(
+-                    child: _DeviceSpeechLanguageLabel(
+-                      languageCode: _dialogueMicLanguageCode,
+-                      label: _sourceUsesDeviceLanguage
+-                          ? 'مصدر المايك الآن'
+-                          : 'لغة الترجمة الآن',
++                    child: _DialogueLanguageMenu(
++                      value: _leftTargetLanguage,
++                      label: 'لغة الترجمة (الجهة اليسرى)',
++                      onChanged: _selectLeftTargetLanguage,
+                     ),
+                   ),
+                   IconButton(
+-                    tooltip: 'تبديل المتحدث ولغة المايك',
++                    tooltip: 'تبديل لغة الترجمة ومصدر المايك',
+                     onPressed: _isChangingSpeaker ? null : _swapDialogueSpeaker,
+                     icon: const Icon(Icons.swap_horiz_rounded, color: RoyalColors.gold, size: 28),
+                   ),
+                   Expanded(
+                     child: _DialogueLanguageMenu(
+-                      value: _leftTargetLanguage,
+-                      label: _sourceUsesDeviceLanguage
+-                          ? 'لغة الترجمة الآن'
+-                          : 'مصدر المايك الآن',
+-                      onChanged: _selectLeftTargetLanguage,
++                      value: _rightSourceLanguage,
++                      label: 'مصدر المايك (الجهة اليمنى)',
++                      onChanged: _selectRightSourceLanguage,
+                     ),
+                   ),
+                 ],

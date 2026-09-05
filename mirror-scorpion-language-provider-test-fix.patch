@@ -1,0 +1,85 @@
+From 8cb5612fae97ca1bef5a01db2d540a77f30b2ce8 Mon Sep 17 00:00:00 2001
+From: magdymeko456-cell
+ <2.88837127e+08+magdymeko456-cell@users.noreply.github.com>
+Date: Sun, 23 Aug 2026 15:30:43 +0000
+Subject: [PATCH] fix(app): provide language preferences to widget tests
+
+---
+ lib/app/mirror_scorpion_app.dart              | 25 +++++++++++++------
+ .../localization/language_preferences.dart    |  5 ++--
+ lib/main.dart                                 |  3 +--
+ 3 files changed, 21 insertions(+), 12 deletions(-)
+
+diff --git a/lib/app/mirror_scorpion_app.dart b/lib/app/mirror_scorpion_app.dart
+index 9c89c3c..53161aa 100644
+--- a/lib/app/mirror_scorpion_app.dart
++++ b/lib/app/mirror_scorpion_app.dart
+@@ -6,17 +6,26 @@ import '../features/home/dashboard_screen.dart';
+ import 'royal_dark_theme.dart';
+ 
+ class MirrorScorpionApp extends StatelessWidget {
+-  const MirrorScorpionApp({super.key});
++  const MirrorScorpionApp({this.languagePreferences, super.key});
++
++  final LanguagePreferences? languagePreferences;
+ 
+   @override
+   Widget build(BuildContext context) {
+-    final languagePreferences = context.watch<LanguagePreferences>();
+-    return MaterialApp(
+-      title: 'Mirror Scorpion v4',
+-      debugShowCheckedModeBanner: false,
+-      theme: royalDarkTheme(),
+-      locale: languagePreferences.deviceLocale,
+-      home: const DashboardScreen(),
++    return ChangeNotifierProvider<LanguagePreferences>.value(
++      value: languagePreferences ?? LanguagePreferences(),
++      child: Builder(
++        builder: (context) {
++          final preferences = context.watch<LanguagePreferences>();
++          return MaterialApp(
++            title: 'Mirror Scorpion v4',
++            debugShowCheckedModeBanner: false,
++            theme: royalDarkTheme(),
++            locale: preferences.deviceLocale,
++            home: const DashboardScreen(),
++          );
++        },
++      ),
+     );
+   }
+ }
+diff --git a/lib/core/localization/language_preferences.dart b/lib/core/localization/language_preferences.dart
+index 496a737..160ee46 100644
+--- a/lib/core/localization/language_preferences.dart
++++ b/lib/core/localization/language_preferences.dart
+@@ -14,8 +14,9 @@ class LanguagePreferences extends ChangeNotifier {
+ 
+   final Locale _deviceLocale;
+   late SharedPreferences _preferences;
+-  late String _sourceLanguage;
+-  late String _targetLanguage;
++  late String _sourceLanguage = deviceLanguageCode;
++  late String _targetLanguage =
++      deviceLanguageCode == 'ar' ? 'en' : 'ar';
+ 
+   Locale get deviceLocale => _deviceLocale;
+   String get deviceLanguageCode => _deviceLocale.languageCode.toLowerCase();
+diff --git a/lib/main.dart b/lib/main.dart
+index d433409..a624098 100644
+--- a/lib/main.dart
++++ b/lib/main.dart
+@@ -20,9 +20,8 @@ Future<void> main() async {
+     MultiProvider(
+       providers: [
+         ChangeNotifierProvider.value(value: premiumService),
+-        ChangeNotifierProvider.value(value: languagePreferences),
+       ],
+-      child: const MirrorScorpionApp(),
++      child: MirrorScorpionApp(languagePreferences: languagePreferences),
+     ),
+   );
+ }
+-- 
+2.43.0
+

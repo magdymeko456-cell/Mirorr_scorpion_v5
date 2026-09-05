@@ -1,0 +1,464 @@
+From 7fe5610202bdb32e34879e528a88f7d5904012d2 Mon Sep 17 00:00:00 2001
+From: magdymeko456-cell
+ <2.88837127e+08+magdymeko456-cell@users.noreply.github.com>
+Date: Sun, 23 Aug 2026 20:31:26 +0000
+Subject: [PATCH] feat(content): add offline story package storage
+
+---
+ assets/data/content_manifest.json             |  60 +++++
+ assets/data/starter_original_ar.json          |  18 ++
+ lib/core/content/offline_content_storage.dart |  70 ++++++
+ lib/features/feature_hub_screen.dart          | 212 +++++++++++++++---
+ pubspec.yaml                                  |   1 +
+ 5 files changed, 330 insertions(+), 31 deletions(-)
+ create mode 100644 assets/data/content_manifest.json
+ create mode 100644 assets/data/starter_original_ar.json
+ create mode 100644 lib/core/content/offline_content_storage.dart
+
+diff --git a/assets/data/content_manifest.json b/assets/data/content_manifest.json
+new file mode 100644
+index 0000000..e4df54f
+--- /dev/null
++++ b/assets/data/content_manifest.json
+@@ -0,0 +1,60 @@
++{
++  "schemaVersion": 1,
++  "updatedAt": "2026-08-23",
++  "packages": [
++    {
++      "id": "starter-original-ar",
++      "title": "بداية هادئة",
++      "category": "user_original",
++      "language": "ar",
++      "distribution": "bundled",
++      "license": "original-app-content",
++      "source": "Mirror Scorpion starter content",
++      "asset": "assets/data/starter_original_ar.json"
++    },
++    {
++      "id": "hadith-qudsi-verified",
++      "title": "الحديث القدسي — فهرس موثق",
++      "category": "hadith_qudsi",
++      "language": "ar",
++      "distribution": "downloadable_when_verified",
++      "license": "source-and-rights-required",
++      "source": "لا يُعرض محتوى حتى توثيق النص والإسناد والترخيص",
++      "asset": null
++    },
++    {
++      "id": "quran-narratives-index",
++      "title": "قصص القرآن — فهرس مصدر",
++      "category": "quran_narratives",
++      "language": "ar",
++      "distribution": "downloadable_when_verified",
++      "license": "source-and-rights-required",
++      "source": "لا يُعرض محتوى حتى توثيق الآيات والمراجع والترخيص",
++      "asset": null
++    },
++    {
++      "id": "asbab-al-nuzul-index",
++      "title": "أسباب النزول — فهرس مرتب",
++      "category": "asbab_al_nuzul",
++      "language": "ar",
++      "distribution": "downloadable_when_verified",
++      "license": "source-and-rights-required",
++      "source": "لا يُعرض محتوى حتى تحديد الطبعة والحقوق والمراجع",
++      "asset": null
++    }
++  ],
++  "languagePacks": [
++    {
++      "id": "ar",
++      "title": "العربية",
++      "distribution": "device_or_mlkit",
++      "source": "لغة التطبيق أو نموذج ML Kit بحسب الخدمة"
++    },
++    {
++      "id": "en",
++      "title": "English",
++      "distribution": "device_or_mlkit",
++      "source": "لغة التطبيق أو نموذج ML Kit بحسب الخدمة"
++    }
++  ]
++}
+diff --git a/assets/data/starter_original_ar.json b/assets/data/starter_original_ar.json
+new file mode 100644
+index 0000000..6fbbfa3
+--- /dev/null
++++ b/assets/data/starter_original_ar.json
+@@ -0,0 +1,18 @@
++{
++  "schemaVersion": 1,
++  "packageId": "starter-original-ar",
++  "license": "original-app-content",
++  "stories": [
++    {
++      "id": "quiet-beginning",
++      "title": "بداية هادئة",
++      "category": "user_original",
++      "language": "ar",
++      "summary": "قصة أصلية قصيرة عن تنظيم خطوة صغيرة في يوم مزدحم.",
++      "body": "في صباح مزدحم، اختار سامر أن يبدأ بمهمة واحدة صغيرة بدلاً من مطاردة كل ما ينتظره. كتب المهمة على ورقة، وأبعد الهاتف لدقائق، ثم أنجزها بهدوء. لم يختفِ ضغط اليوم، لكنه صار أوضح وأقل تشتيتاً. بعد ذلك رتّب المهمة التالية وطلب المساعدة حين احتاجها. في المساء لاحظ أن تقدمه لم يأتِ من السرعة، بل من اختيار خطوة يمكن تنفيذها باحترام لنفسه وللآخرين.",
++      "source": "محتوى أصلي مبدئي للتطبيق",
++      "citation": "Mirror Scorpion starter content",
++      "rights": "original-app-content"
++    }
++  ]
++}
+diff --git a/lib/core/content/offline_content_storage.dart b/lib/core/content/offline_content_storage.dart
+new file mode 100644
+index 0000000..e9c2ad3
+--- /dev/null
++++ b/lib/core/content/offline_content_storage.dart
+@@ -0,0 +1,70 @@
++import 'dart:convert';
++import 'dart:io';
++
++import 'package:path_provider/path_provider.dart';
++
++/// مساحة دائمة لحزم المحتوى التي يختار المستخدم تنزيلها أو استيرادها.
++/// لا تقوم هذه الخدمة بتنزيل أي شيء في الخلفية، ولا تُخزّن محتوى دينياً
++/// أو صوتياً من دون إجراء صريح من المستخدم.
++class OfflineContentStorage {
++  const OfflineContentStorage();
++
++  Future<Directory> packagesDirectory() async {
++    final root = await getApplicationSupportDirectory();
++    final directory = Directory('${root.path}/mirror_scorpion/content_packs');
++    if (!await directory.exists()) await directory.create(recursive: true);
++    return directory;
++  }
++
++  Future<List<OfflinePackageRecord>> listPackages() async {
++    final directory = await packagesDirectory();
++    final files = directory
++        .listSync()
++        .whereType<File>()
++        .where((file) => file.path.endsWith('.json'))
++        .toList();
++    final records = <OfflinePackageRecord>[];
++    for (final file in files) {
++      try {
++        final map = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
++        records.add(OfflinePackageRecord.fromJson(map, path: file.path));
++      } on FormatException {
++        // ملف غير متوافق لا يُعرض كحزمة صالحة.
++      }
++    }
++    return records;
++  }
++
++  Future<File> savePackage({
++    required String id,
++    required Map<String, dynamic> content,
++  }) async {
++    if (!RegExp(r'^[a-z0-9-]+$').hasMatch(id)) {
++      throw ArgumentError.value(id, 'id', 'Package ID must be lowercase letters, digits, and hyphens only.');
++    }
++    final directory = await packagesDirectory();
++    final file = File('${directory.path}/$id.json');
++    await file.writeAsString(jsonEncode(content));
++    return file;
++  }
++}
++
++class OfflinePackageRecord {
++  const OfflinePackageRecord({
++    required this.id,
++    required this.title,
++    required this.path,
++  });
++
++  final String id;
++  final String title;
++  final String path;
++
++  factory OfflinePackageRecord.fromJson(Map<String, dynamic> json, {required String path}) {
++    return OfflinePackageRecord(
++      id: json['packageId'] as String? ?? json['id'] as String? ?? 'unknown',
++      title: json['title'] as String? ?? json['packageId'] as String? ?? 'حزمة محتوى',
++      path: path,
++    );
++  }
++}
+diff --git a/lib/features/feature_hub_screen.dart b/lib/features/feature_hub_screen.dart
+index 1ab7ca1..ad2178a 100644
+--- a/lib/features/feature_hub_screen.dart
++++ b/lib/features/feature_hub_screen.dart
+@@ -1,4 +1,5 @@
+ import 'dart:async';
++import 'dart:convert';
+ 
+ import 'package:flutter/material.dart';
+ import 'package:flutter/services.dart';
+@@ -8,6 +9,7 @@ import 'package:provider/provider.dart';
+ 
+ import '../app/royal_dark_theme.dart';
+ import '../core/localization/language_preferences.dart';
++import '../core/content/offline_content_storage.dart';
+ import '../core/mlkit/on_device_ocr_service.dart';
+ import '../core/mlkit/on_device_translation_service.dart';
+ import '../core/pro/premium_verification_service.dart';
+@@ -1073,18 +1075,96 @@ class _StoriesPanel extends StatefulWidget {
+ 
+ class _StoriesPanelState extends State<_StoriesPanel> {
+   final _speechService = SystemTtsService();
++  final _contentStorage = const OfflineContentStorage();
++  late Future<List<_StoryEntry>> _storiesFuture;
++  late Future<List<OfflinePackageRecord>> _packagesFuture;
++  String? _notice;
+ 
+   @override
+   void initState() {
+     super.initState();
+     _speechService.addListener(_onSpeechChanged);
+     _speechService.initialize();
++    _storiesFuture = _loadBundledStories();
++    _packagesFuture = _contentStorage.listPackages();
+   }
+ 
+   void _onSpeechChanged() {
+     if (mounted) setState(() {});
+   }
+ 
++  Future<List<_StoryEntry>> _loadBundledStories() async {
++    final decoded = jsonDecode(
++      await rootBundle.loadString('assets/data/starter_original_ar.json'),
++    ) as Map<String, dynamic>;
++    final stories = decoded['stories'] as List<dynamic>? ?? const [];
++    return stories
++        .whereType<Map<String, dynamic>>()
++        .map(_StoryEntry.fromJson)
++        .toList();
++  }
++
++  Future<void> _importContentPackage() async {
++    final file = await FilePicker.pickFile(
++      type: FileType.custom,
++      allowedExtensions: const ['json'],
++    );
++    if (!mounted || file == null) return;
++    try {
++      final decoded = jsonDecode(utf8.decode(await file.readAsBytes()));
++      if (decoded is! Map<String, dynamic>) {
++        throw const FormatException('Invalid root object');
++      }
++      final packageId = decoded['packageId'] as String?;
++      if (packageId == null || packageId.isEmpty) {
++        throw const FormatException('Missing packageId');
++      }
++      await _contentStorage.savePackage(id: packageId, content: decoded);
++      if (!mounted) return;
++      setState(() {
++        _packagesFuture = _contentStorage.listPackages();
++        _notice = 'تم حفظ حزمة «$packageId» في مساحة المحتوى المحلية. لا تُعرض كمصدر ديني موثوق ما لم تحمل حقول المصدر والحقوق المناسبة.';
++      });
++    } on FormatException {
++      if (mounted) {
++        setState(() => _notice = 'ملف JSON غير صالح كحزمة محتوى. يجب أن يحتوي على packageId وبنية الحزمة المعلنة.');
++      }
++    } catch (_) {
++      if (mounted) {
++        setState(() => _notice = 'تعذر قراءة أو حفظ حزمة المحتوى المختارة.');
++      }
++    }
++  }
++
++  void _openReader(_StoryEntry story) {
++    showModalBottomSheet<void>(
++      context: context,
++      isScrollControlled: true,
++      backgroundColor: const Color(0xFF0D1623),
++      builder: (sheetContext) => Directionality(
++        textDirection: TextDirection.rtl,
++        child: SafeArea(
++          child: Padding(
++            padding: const EdgeInsets.all(20),
++            child: SingleChildScrollView(
++              child: Column(
++                crossAxisAlignment: CrossAxisAlignment.stretch,
++                children: [
++                  Text(story.title, style: Theme.of(sheetContext).textTheme.headlineSmall),
++                  const SizedBox(height: 14),
++                  Text(story.body, style: const TextStyle(height: 1.8, fontSize: 17)),
++                  const SizedBox(height: 18),
++                  Text('المصدر: ${story.source}', style: const TextStyle(color: RoyalColors.muted)),
++                  Text('الإحالة: ${story.citation}', style: const TextStyle(color: RoyalColors.muted)),
++                ],
++              ),
++            ),
++          ),
++        ),
++      ),
++    );
++  }
++
+   @override
+   void dispose() {
+     _speechService.removeListener(_onSpeechChanged);
+@@ -1094,49 +1174,119 @@ class _StoriesPanelState extends State<_StoriesPanel> {
+ 
+   @override
+   Widget build(BuildContext context) {
+-    const stories = [
+-      ('رسالة احترام', 'القصص التي يكتبها المستخدم تُراجع قبل العرض لمنع الكراهية والتنمر والألفاظ البذيئة.'),
+-      ('قصص الأنبياء', 'سيُنقل الفهرس المحلي والمصادر القابلة للتنزيل إلى JSON موثق داخل التطبيق.'),
+-      ('أسباب النزول', 'يعرض القسم المصدر وحالة التنزيل بدلاً من ادعاء توفر نص لم يُحفظ بعد.'),
+-    ];
+     return ListView(
+       padding: const EdgeInsets.all(18),
+       children: [
+-        const _SectionNotice(title: 'قصص وإلهام آمن', detail: 'تبدأ لغة القراءة من لغة الجهاز عند توفر بيانات مترجمة. يمكن تجربة صوت النظام على النصوص الظاهرة؛ أما الأصوات المميزة وسيناريو الفيديو فيتطلبان خدمات منفصلة.'),
++        const _SectionNotice(title: 'قصص وإلهام آمن', detail: 'تبدأ هذه النسخة بحزمة أصلية مرفقة وقارئ داخلي. الفهارس الدينية لا تعرض نصاً حتى يتحقق المصدر والحقوق. يمكن استيراد حزمة JSON محلية إلى مساحة التطبيق؛ أما التنزيل الشبكي وسيناريو الفيديو فيتطلبان خدمات منفصلة.'),
+         const SizedBox(height: 12),
+-        ...stories.map(
+-          (story) => Card(
+-            child: ListTile(
+-              title: Text(story.$1),
+-              subtitle: Text(story.$2),
+-              trailing: Wrap(
+-                crossAxisAlignment: WrapCrossAlignment.center,
+-                children: [
+-                  IconButton(
+-                    tooltip: _speechService.isSpeaking ? 'إيقاف القراءة' : 'قراءة النص بصوت النظام',
+-                    onPressed: () async {
+-                      if (_speechService.isSpeaking) {
+-                        await _speechService.stop();
+-                      } else {
+-                        await _speechService.speak(
+-                          text: '${story.$1}. ${story.$2}',
+-                          languageCode: context.read<LanguagePreferences>().storyLanguageCode,
+-                        );
+-                      }
+-                    },
+-                    icon: Icon(_speechService.isSpeaking ? Icons.stop_circle_outlined : Icons.volume_up, color: RoyalColors.gold),
+-                  ),
+-                  const Text('المزيد', style: TextStyle(color: RoyalColors.purple)),
+-                ],
++        Card(
++          child: ListTile(
++            leading: const Icon(Icons.folder_copy_outlined, color: RoyalColors.gold),
++            title: const Text('استيراد حزمة قصص أو لغة بصيغة JSON'),
++            subtitle: const Text('يحفظ الملف في مساحة التطبيق المحلية بعد اختيارك فقط'),
++            trailing: const Icon(Icons.file_upload_outlined),
++            onTap: _importContentPackage,
++          ),
++        ),
++        FutureBuilder<List<OfflinePackageRecord>>(
++          future: _packagesFuture,
++          builder: (context, snapshot) {
++            final packages = snapshot.data ?? const [];
++            return Padding(
++              padding: const EdgeInsets.only(top: 10),
++              child: Text(
++                packages.isEmpty
++                    ? 'مساحة الحزم المحلية جاهزة؛ لم تُستورد حزمة إضافية بعد.'
++                    : 'الحزم المحلية المستوردة: ${packages.map((item) => item.title).join('، ')}',
++                style: const TextStyle(color: RoyalColors.muted),
+               ),
+-            ),
++            );
++          },
++        ),
++        if (_notice != null)
++          Padding(
++            padding: const EdgeInsets.only(top: 12),
++            child: Text(_notice!, style: const TextStyle(color: RoyalColors.gold, height: 1.5)),
+           ),
++        FutureBuilder<List<_StoryEntry>>(
++          future: _storiesFuture,
++          builder: (context, snapshot) {
++            if (snapshot.hasError) {
++              return const Padding(
++                padding: EdgeInsets.only(top: 16),
++                child: Text('تعذر تحميل حزمة البداية المحلية.', style: TextStyle(color: Colors.redAccent)),
++              );
++            }
++            if (!snapshot.hasData) {
++              return const Padding(
++                padding: EdgeInsets.only(top: 16),
++                child: Center(child: CircularProgressIndicator()),
++              );
++            }
++            return Column(
++              children: snapshot.data!
++                  .map(
++                    (story) => Card(
++                      child: ListTile(
++                        title: Text(story.title),
++                        subtitle: Text(story.summary),
++                        onTap: () => _openReader(story),
++                        trailing: Wrap(
++                          crossAxisAlignment: WrapCrossAlignment.center,
++                          children: [
++                            IconButton(
++                              tooltip: _speechService.isSpeaking ? 'إيقاف القراءة' : 'قراءة النص بصوت النظام',
++                              onPressed: () async {
++                                if (_speechService.isSpeaking) {
++                                  await _speechService.stop();
++                                } else {
++                                  await _speechService.speak(
++                                    text: '${story.title}. ${story.body}',
++                                    languageCode: context.read<LanguagePreferences>().storyLanguageCode,
++                                  );
++                                }
++                              },
++                              icon: Icon(_speechService.isSpeaking ? Icons.stop_circle_outlined : Icons.volume_up, color: RoyalColors.gold),
++                            ),
++                            const Text('المزيد', style: TextStyle(color: RoyalColors.purple)),
++                          ],
++                        ),
++                      ),
++                    ),
++                  )
++                  .toList(),
++            );
++          },
+         ),
+       ],
+     );
+   }
+ }
+ 
++class _StoryEntry {
++  const _StoryEntry({
++    required this.title,
++    required this.summary,
++    required this.body,
++    required this.source,
++    required this.citation,
++  });
++
++  final String title;
++  final String summary;
++  final String body;
++  final String source;
++  final String citation;
++
++  factory _StoryEntry.fromJson(Map<String, dynamic> json) => _StoryEntry(
++        title: json['title'] as String? ?? 'قصة بلا عنوان',
++        summary: json['summary'] as String? ?? '',
++        body: json['body'] as String? ?? '',
++        source: json['source'] as String? ?? 'غير محدد',
++        citation: json['citation'] as String? ?? 'غير محدد',
++      );
++}
++
+ class _GamesPanel extends StatefulWidget {
+   const _GamesPanel();
+ 
+diff --git a/pubspec.yaml b/pubspec.yaml
+index c133ed1..af8e6a4 100644
+--- a/pubspec.yaml
++++ b/pubspec.yaml
+@@ -18,6 +18,7 @@ dependencies:
+   google_mlkit_text_recognition: ^0.17.1
+   image_picker: ^1.2.3
+   file_picker: ^12.0.0
++  path_provider: ^2.1.5
+   flutter_tts: ^4.2.5
+   speech_to_text: ^7.4.0
+ 
+-- 
+2.43.0
+

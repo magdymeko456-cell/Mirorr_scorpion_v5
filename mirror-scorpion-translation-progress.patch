@@ -1,0 +1,154 @@
+From 5eccbb80b7f978c7ec7798d325693a1845ee9cd7 Mon Sep 17 00:00:00 2001
+From: magdymeko456-cell
+ <2.88837127e+08+magdymeko456-cell@users.noreply.github.com>
+Date: Sun, 23 Aug 2026 19:54:43 +0000
+Subject: [PATCH] feat(translation): show model download progress
+
+---
+ .../mlkit/on_device_translation_service.dart  | 32 +++++++++++++++++--
+ lib/features/feature_hub_screen.dart          | 32 +++++++++++++++++--
+ 2 files changed, 60 insertions(+), 4 deletions(-)
+
+diff --git a/lib/core/mlkit/on_device_translation_service.dart b/lib/core/mlkit/on_device_translation_service.dart
+index be82521..aca148b 100644
+--- a/lib/core/mlkit/on_device_translation_service.dart
++++ b/lib/core/mlkit/on_device_translation_service.dart
+@@ -12,6 +12,17 @@ enum OnDeviceTranslationState {
+   failed,
+ }
+ 
++enum OnDeviceTranslationProgress {
++  identifyingLanguage,
++  checkingModels,
++  downloadingModels,
++  translating,
++}
++
++typedef OnDeviceTranslationProgressCallback = void Function(
++  OnDeviceTranslationProgress progress,
++);
++
+ class OnDeviceTranslationResult {
+   const OnDeviceTranslationResult({
+     required this.state,
+@@ -56,6 +67,7 @@ class OnDeviceTranslationService {
+     required String text,
+     required String targetLanguageCode,
+     String? sourceLanguageCode,
++    OnDeviceTranslationProgressCallback? onProgress,
+   }) async {
+     final sourceText = text.trim();
+     if (!isNativePlatform) {
+@@ -74,6 +86,9 @@ class OnDeviceTranslationService {
+     final identifier = LanguageIdentifier(confidenceThreshold: 0.5);
+     try {
+       final requestedSourceCode = sourceLanguageCode?.trim().toLowerCase();
++      if (requestedSourceCode?.isNotEmpty != true) {
++        onProgress?.call(OnDeviceTranslationProgress.identifyingLanguage);
++      }
+       final detectedCode = requestedSourceCode?.isNotEmpty == true
+           ? requestedSourceCode!
+           : await identifier.identifyLanguage(sourceText);
+@@ -104,8 +119,20 @@ class OnDeviceTranslationService {
+       }
+ 
+       final modelManager = OnDeviceTranslatorModelManager();
+-      final sourceReady = await _ensureModel(modelManager, sourceLanguage);
+-      final targetReady = await _ensureModel(modelManager, targetLanguage);
++      onProgress?.call(OnDeviceTranslationProgress.checkingModels);
++      final sourceAlreadyDownloaded =
++          await modelManager.isModelDownloaded(sourceLanguage.bcpCode);
++      final targetAlreadyDownloaded =
++          await modelManager.isModelDownloaded(targetLanguage.bcpCode);
++      if (!sourceAlreadyDownloaded || !targetAlreadyDownloaded) {
++        onProgress?.call(OnDeviceTranslationProgress.downloadingModels);
++      }
++      final readiness = await Future.wait<bool>([
++        _ensureModel(modelManager, sourceLanguage),
++        _ensureModel(modelManager, targetLanguage),
++      ]);
++      final sourceReady = readiness[0];
++      final targetReady = readiness[1];
+       if (!sourceReady || !targetReady) {
+         return OnDeviceTranslationResult(
+           state: OnDeviceTranslationState.modelDownloadFailed,
+@@ -120,6 +147,7 @@ class OnDeviceTranslationService {
+         targetLanguage: targetLanguage,
+       );
+       try {
++        onProgress?.call(OnDeviceTranslationProgress.translating);
+         final translated = await translator.translateText(sourceText);
+         return OnDeviceTranslationResult(
+           state: OnDeviceTranslationState.translated,
+diff --git a/lib/features/feature_hub_screen.dart b/lib/features/feature_hub_screen.dart
+index 647bcab..b62d4d4 100644
+--- a/lib/features/feature_hub_screen.dart
++++ b/lib/features/feature_hub_screen.dart
+@@ -38,6 +38,18 @@ abstract final class TranslationLanguageCatalog {
+   };
+ }
+ 
++String _translationProgressMessage(OnDeviceTranslationProgress progress) =>
++    switch (progress) {
++      OnDeviceTranslationProgress.identifyingLanguage =>
++        'جارٍ تحديد لغة النص…',
++      OnDeviceTranslationProgress.checkingModels =>
++        'جارٍ فحص نماذج اللغة المحلية…',
++      OnDeviceTranslationProgress.downloadingModels =>
++        'يُنزّل التطبيق نموذجَي اللغة لأول مرة؛ قد يستغرق ذلك أكثر من 3 ثوانٍ حسب الشبكة…',
++      OnDeviceTranslationProgress.translating =>
++        'جارٍ إجراء الترجمة على الجهاز…',
++    };
++
+ class FeatureHubScreen extends StatelessWidget {
+   const FeatureHubScreen({required this.kind, super.key});
+ 
+@@ -199,12 +211,19 @@ class _TranslationPanelState extends State<_TranslationPanel> {
+     if (!mounted || value.trim() != _input.text.trim()) return;
+     setState(() {
+       _isTranslating = true;
+-      _notice = 'جارٍ تحديد لغة النص وتجهيز نموذج الترجمة المحلي…';
++      _notice = sourceLanguageCode == null
++          ? 'جارٍ تحديد لغة النص وتجهيز نموذج الترجمة المحلي…'
++          : 'جارٍ تجهيز نموذج الترجمة المحلي للغة الميكروفون…';
+     });
+     final result = await _translationService.translate(
+       text: value,
+       targetLanguageCode: _selectedLanguage,
+       sourceLanguageCode: sourceLanguageCode,
++      onProgress: (progress) {
++        if (mounted && value.trim() == _input.text.trim()) {
++          setState(() => _notice = _translationProgressMessage(progress));
++        }
++      },
+     );
+     if (!mounted || value.trim() != _input.text.trim()) return;
+     if (result.sourceLanguage != null) {
+@@ -490,7 +509,11 @@ class _DocumentsPanelState extends State<_DocumentsPanel> {
+   }
+ 
+   Future<void> _scanImage(ImageSource source) async {
+-    final image = await _picker.pickImage(source: source, imageQuality: 100);
++    final image = await _picker.pickImage(
++      source: source,
++      imageQuality: 90,
++      maxWidth: 1920,
++    );
+     if (image == null) {
+       if (mounted) setState(() => _notice = 'لم يتم اختيار صورة.');
+       return;
+@@ -529,6 +552,11 @@ class _DocumentsPanelState extends State<_DocumentsPanel> {
+     final result = await _translationService.translate(
+       text: text,
+       targetLanguageCode: targetLanguage,
++      onProgress: (progress) {
++        if (mounted && text == _extractedText) {
++          setState(() => _notice = _translationProgressMessage(progress));
++        }
++      },
+     );
+     if (!mounted || text != _extractedText) return;
+     setState(() {
+-- 
+2.43.0
+

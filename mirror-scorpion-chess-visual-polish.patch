@@ -1,0 +1,244 @@
+From 362bc321c71def0bdc6ee9b08bf9bf76cb207ffe Mon Sep 17 00:00:00 2001
+From: magdymeko456-cell
+ <2.88837127e+08+magdymeko456-cell@users.noreply.github.com>
+Date: Wed, 26 Aug 2026 22:33:12 +0000
+Subject: [PATCH] feat(games): polish royal chess board visuals
+
+---
+ lib/features/feature_hub_screen.dart | 137 +++++++++++++++++++--------
+ todo.md                              |   2 +
+ 2 files changed, 100 insertions(+), 39 deletions(-)
+
+diff --git a/lib/features/feature_hub_screen.dart b/lib/features/feature_hub_screen.dart
+index c15f504..b502139 100644
+--- a/lib/features/feature_hub_screen.dart
++++ b/lib/features/feature_hub_screen.dart
+@@ -2018,24 +2018,26 @@ class _GamesPanelState extends State<_GamesPanel> {
+       aspectRatio: 1,
+       child: Container(
+         decoration: BoxDecoration(
+-          borderRadius: BorderRadius.circular(18),
++          borderRadius: BorderRadius.circular(20),
+           gradient: const LinearGradient(
+-            colors: [Color(0xFFDEC075), Color(0xFF5C431C), Color(0xFFE7CD88)],
++            colors: [Color(0xFFF1D889), Color(0xFF714B1D), Color(0xFF251609), Color(0xFFCD9F43)],
+             begin: Alignment.topLeft,
+             end: Alignment.bottomRight,
+           ),
++          border: Border.all(color: const Color(0xFFFFE7A0), width: 1.25),
+           boxShadow: [
+-            BoxShadow(color: Colors.black.withValues(alpha: 0.52), blurRadius: 20, offset: const Offset(0, 10)),
++            BoxShadow(color: Colors.black.withValues(alpha: 0.68), blurRadius: 24, offset: const Offset(0, 12)),
++            BoxShadow(color: const Color(0xFFFFD768).withValues(alpha: 0.12), blurRadius: 24, spreadRadius: 1),
+           ],
+         ),
+         child: Padding(
+-          padding: const EdgeInsets.all(4),
++          padding: const EdgeInsets.all(5),
+           child: ClipRRect(
+-            borderRadius: BorderRadius.circular(14),
++            borderRadius: BorderRadius.circular(15),
+             child: Stack(
+               children: [
+                 Padding(
+-                  padding: const EdgeInsets.fromLTRB(20, 7, 7, 20),
++                  padding: const EdgeInsets.fromLTRB(18, 6, 6, 18),
+                   child: GridView.builder(
+                     physics: const NeverScrollableScrollPhysics(),
+                     itemCount: 64,
+@@ -2054,37 +2056,38 @@ class _GamesPanelState extends State<_GamesPanel> {
+                           duration: const Duration(milliseconds: 130),
+                           decoration: BoxDecoration(
+                             color: isSelected
+-                                ? const Color(0xFFE5B94D)
++                                ? const Color(0xFFE6B948)
+                                 : isTarget
+-                                    ? const Color(0xFF7CB889)
++                                    ? const Color(0xFF77AE80)
+                                     : isLight
+-                                        ? const Color(0xFFCDBB91)
+-                                        : const Color(0xFF263D50),
++                                        ? const Color(0xFFE4D5B4)
++                                        : const Color(0xFF3C5A67),
+                             border: Border.all(
+-                              color: Colors.black.withValues(alpha: isLight ? 0.05 : 0.12),
+-                              width: 0.35,
++                              color: Colors.black.withValues(alpha: isLight ? 0.035 : 0.10),
++                              width: 0.3,
+                             ),
+                           ),
+-                          child: Center(
+-                            child: Text(
+-                              ChessGameController.pieceSymbol(piece),
+-                              style: TextStyle(
+-                                fontSize: 38,
+-                                height: 1,
+-                                color: piece?.color.name == 'WHITE'
+-                                    ? const Color(0xFFFFF9EC)
+-                                    : const Color(0xFF10191F),
+-                                shadows: [
+-                                  Shadow(
+-                                    color: piece?.color.name == 'WHITE'
+-                                        ? const Color(0xFF47371E)
+-                                        : Colors.white.withValues(alpha: 0.18),
+-                                    blurRadius: 2.4,
+-                                    offset: const Offset(1, 1),
++                          child: Stack(
++                            alignment: Alignment.center,
++                            children: [
++                              if (isTarget && piece == null)
++                                Container(
++                                  width: 12,
++                                  height: 12,
++                                  decoration: BoxDecoration(
++                                    color: const Color(0xFF133B2B).withValues(alpha: 0.72),
++                                    shape: BoxShape.circle,
+                                   ),
+-                                ],
++                                ),
++                              AnimatedScale(
++                                duration: const Duration(milliseconds: 130),
++                                scale: isSelected ? 1.08 : 1,
++                                child: _ChessPieceToken(
++                                  symbol: ChessGameController.pieceSymbol(piece),
++                                  isWhite: piece?.color.name == 'WHITE',
++                                ),
+                               ),
+-                            ),
++                            ],
+                           ),
+                         ),
+                       );
+@@ -2093,23 +2096,23 @@ class _GamesPanelState extends State<_GamesPanel> {
+                 ),
+                 Positioned(
+                   left: 3,
+-                  top: 9,
+-                  bottom: 22,
++                  top: 8,
++                  bottom: 20,
+                   child: Column(
+                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                     children: List<Widget>.generate(
+                       8,
+-                      (index) => Text('${8 - index}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF241A0A))),
++                      (index) => Text('${8 - index}', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Color(0xFFFFE2A1))),
+                     ),
+                   ),
+                 ),
+                 Positioned(
+-                  left: 22,
+-                  right: 8,
++                  left: 20,
++                  right: 7,
+                   bottom: 2,
+                   child: Row(
+                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
+-                    children: files.map((file) => Text(file, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF241A0A)))).toList(),
++                    children: files.map((file) => Text(file, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Color(0xFFFFE2A1)))).toList(),
+                   ),
+                 ),
+               ],
+@@ -2123,7 +2126,7 @@ class _GamesPanelState extends State<_GamesPanel> {
+   @override
+   Widget build(BuildContext context) {
+     return ListView(
+-      padding: const EdgeInsets.fromLTRB(10, 12, 10, 24),
++      padding: const EdgeInsets.fromLTRB(4, 12, 4, 24),
+       children: [
+         const _SectionNotice(
+           title: 'الشطرنج الملكي',
+@@ -2132,7 +2135,7 @@ class _GamesPanelState extends State<_GamesPanel> {
+         const SizedBox(height: 10),
+         Card(
+           child: Padding(
+-            padding: const EdgeInsets.all(12),
++            padding: const EdgeInsets.fromLTRB(8, 12, 8, 12),
+             child: Column(
+               children: [
+                 Row(
+@@ -2179,7 +2182,7 @@ class _GamesPanelState extends State<_GamesPanel> {
+                   ),
+                 ],
+                 const SizedBox(height: 14),
+-                Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 410), child: _buildChessBoard())),
++                Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 440), child: _buildChessBoard())),
+                 const SizedBox(height: 12),
+                 Text(_gameNotice, textAlign: TextAlign.center, style: const TextStyle(color: RoyalColors.gold, height: 1.5)),
+                 const SizedBox(height: 10),
+@@ -2195,6 +2198,62 @@ class _GamesPanelState extends State<_GamesPanel> {
+   }
+ }
+ 
++class _ChessPieceToken extends StatelessWidget {
++  const _ChessPieceToken({required this.symbol, required this.isWhite});
++
++  final String symbol;
++  final bool isWhite;
++
++  @override
++  Widget build(BuildContext context) {
++    if (symbol.isEmpty) return const SizedBox.shrink();
++    final colors = isWhite
++        ? const [Color(0xFFFFFFFF), Color(0xFFFFE9A5), Color(0xFFD19D45), Color(0xFFFFF9DD)]
++        : const [Color(0xFF7593A0), Color(0xFF253C48), Color(0xFF081217), Color(0xFF3F6473)];
++    return Stack(
++      alignment: Alignment.center,
++      clipBehavior: Clip.none,
++      children: [
++        Positioned(
++          bottom: -4,
++          child: Container(
++            width: 26,
++            height: 7,
++            decoration: BoxDecoration(
++              color: Colors.black.withValues(alpha: 0.35),
++              borderRadius: BorderRadius.circular(99),
++              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.38), blurRadius: 5, offset: const Offset(0, 2))],
++            ),
++          ),
++        ),
++        ShaderMask(
++          blendMode: BlendMode.srcIn,
++          shaderCallback: (bounds) => LinearGradient(
++            begin: Alignment.topLeft,
++            end: Alignment.bottomRight,
++            colors: colors,
++            stops: const [0, 0.30, 0.72, 1],
++          ).createShader(bounds),
++          child: Text(
++            symbol,
++            textAlign: TextAlign.center,
++            style: TextStyle(
++              color: Colors.white,
++              fontSize: 43,
++              height: 1,
++              fontWeight: FontWeight.w600,
++              shadows: [
++                Shadow(color: Colors.black.withValues(alpha: 0.78), blurRadius: 2.8, offset: const Offset(1.4, 2)),
++                Shadow(color: Colors.white.withValues(alpha: isWhite ? 0.40 : 0.12), blurRadius: 0.7, offset: const Offset(-0.6, -0.8)),
++              ],
++            ),
++          ),
++        ),
++      ],
++    );
++  }
++}
++
+ class _SettingsPanel extends StatelessWidget {
+   const _SettingsPanel();
+ 
+diff --git a/todo.md b/todo.md
+index 26cecc1..a8928e4 100644
+--- a/todo.md
++++ b/todo.md
+@@ -268,3 +268,5 @@
+ - [ ] اختبار الفقاعة الأصلية على APK حقيقي: إذن Overlay وخدمة foreground والمشاركة بنص يحدده المستخدم، من دون Accessibility أو قراءة WhatsApp أو البريد أو الإشعارات تلقائياً.
+ - [ ] التحقق من اختلاف أصوات Android المحلية الأربعة (سلمى وسيف وسما وساره) أو عرض الحقيقة للجهاز عند عدم وجود أصوات متوافقة، قبل أي نسخ صوت سحابي.
+ - [ ] توسيع القصص والإلهام بأصول مرخصة فقط مع لغة الجهاز وقراءة محلية، ومنع فيديو 10–15 دقيقة أو حصص عامة حتى يعتمد السقف والخصوصية والمزود.
++- [x] تكبير رقعة الشطرنج قليلاً وتحسين مظهر القطع بأسلوب شطرنج حديث، مع الحفاظ على وضوحها وقابلية اللمس على الهاتف.
++- [x] إضفاء هوية شطرنج حديثة أصلية عالية الجودة: إطار عميق وقطع أنيقة وتباين وخامات محسّنة، مستوحاة من مستوى تطبيقات الشطرنج المعاصرة دون نسخ علامة أو أصول أي تطبيق آخر.
+-- 
+2.43.0
+

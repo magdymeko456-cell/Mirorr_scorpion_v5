@@ -1,0 +1,95 @@
+From b29a36cd0853c6ba3b7652ebec0c27eb93e93025 Mon Sep 17 00:00:00 2001
+From: magdymeko456-cell
+ <2.88837127e+08+magdymeko456-cell@users.noreply.github.com>
+Date: Sun, 23 Aug 2026 22:06:56 +0000
+Subject: [PATCH] fix(games): render legal chess pieces
+
+---
+ lib/core/games/chess_game_controller.dart | 22 ++++++++++++++++++++++
+ lib/features/feature_hub_screen.dart      | 10 +---------
+ test/chess_game_controller_test.dart      | 10 ++++++++++
+ 3 files changed, 33 insertions(+), 9 deletions(-)
+
+diff --git a/lib/core/games/chess_game_controller.dart b/lib/core/games/chess_game_controller.dart
+index c976a6d..ca1d808 100644
+--- a/lib/core/games/chess_game_controller.dart
++++ b/lib/core/games/chess_game_controller.dart
+@@ -11,6 +11,28 @@ class ChessGameController {
+   final Random _random = Random();
+ 
+   chess.Piece? pieceAt(String square) => _game.get(square);
++  static String pieceSymbol(chess.Piece? piece) {
++    if (piece == null) return '';
++    const white = <String, String>{
++      'p': '♙',
++      'n': '♘',
++      'b': '♗',
++      'r': '♖',
++      'q': '♕',
++      'k': '♔',
++    };
++    const black = <String, String>{
++      'p': '♟',
++      'n': '♞',
++      'b': '♝',
++      'r': '♜',
++      'q': '♛',
++      'k': '♚',
++    };
++    final symbols = piece.color == chess.Color.WHITE ? white : black;
++    return symbols[piece.type.name] ?? '';
++  }
++
+   bool get isWhiteTurn => _game.turn == chess.Color.WHITE;
+   bool get gameOver => _game.game_over;
+   bool get isCheckmate => _game.in_checkmate;
+diff --git a/lib/features/feature_hub_screen.dart b/lib/features/feature_hub_screen.dart
+index 0d87f55..e7cfb0e 100644
+--- a/lib/features/feature_hub_screen.dart
++++ b/lib/features/feature_hub_screen.dart
+@@ -1570,14 +1570,6 @@ class _GamesPanelState extends State<_GamesPanel> {
+     });
+   }
+ 
+-  String _pieceSymbol(dynamic piece) {
+-    if (piece == null) return '';
+-    const white = {'PAWN': '♙', 'KNIGHT': '♘', 'BISHOP': '♗', 'ROOK': '♖', 'QUEEN': '♕', 'KING': '♔'};
+-    const black = {'PAWN': '♟', 'KNIGHT': '♞', 'BISHOP': '♝', 'ROOK': '♜', 'QUEEN': '♛', 'KING': '♚'};
+-    final symbols = piece.color.name == 'WHITE' ? white : black;
+-    return symbols[piece.type.name] ?? '';
+-  }
+-
+   Widget _buildChessBoard() {
+     const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+     return AspectRatio(
+@@ -1615,7 +1607,7 @@ class _GamesPanelState extends State<_GamesPanel> {
+                 ),
+                 child: Center(
+                   child: Text(
+-                    _pieceSymbol(piece),
++                    ChessGameController.pieceSymbol(piece),
+                     style: TextStyle(
+                       fontSize: 31,
+                       height: 1,
+diff --git a/test/chess_game_controller_test.dart b/test/chess_game_controller_test.dart
+index 5d6fddb..cff3761 100644
+--- a/test/chess_game_controller_test.dart
++++ b/test/chess_game_controller_test.dart
+@@ -18,4 +18,14 @@ void main() {
+     expect(game.movePlayer('e2', 'e4'), isTrue);
+     expect(game.movePlayer('d2', 'd4'), isFalse);
+   });
++
++  test('maps starting pieces to visible Unicode chess symbols', () {
++    final game = ChessGameController();
++
++    expect(ChessGameController.pieceSymbol(game.pieceAt('e2')), '♙');
++    expect(ChessGameController.pieceSymbol(game.pieceAt('e7')), '♟');
++    expect(ChessGameController.pieceSymbol(game.pieceAt('d1')), '♕');
++    expect(ChessGameController.pieceSymbol(game.pieceAt('d8')), '♛');
++    expect(ChessGameController.pieceSymbol(game.pieceAt('e4')), isEmpty);
++  });
+ }
+-- 
+2.43.0
+
