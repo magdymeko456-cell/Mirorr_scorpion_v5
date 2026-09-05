@@ -549,19 +549,6 @@ Widget build(BuildContext context) {
 return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       children: [
-        VoiceProfileBar(ttsService: _speechService),
-        Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 280),
-            child: _TranslationLanguageMenu(
-              value: _selectedLanguage,
-              label: 'لغة الترجمة',
-              icon: Icons.translate,
-              onChanged: _selectLanguage,
-            ),
-          ),
-        ),
-        const SizedBox(height: 10),
         _TranslationEditor(
           controller: _input,
           hint: 'ابدأ بالكتابة أو اضغط المايك للتحدث...',
@@ -644,6 +631,22 @@ return ListView(
             }),
           ],
         ),
+        const SizedBox(height: 8),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: _TranslationLanguageMenu(
+                value: _selectedLanguage,
+                label: 'لغة الترجمة',
+                icon: Icons.translate,
+                onChanged: _selectLanguage,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(child: _TranslationVoiceMenu(ttsService: _speechService)),
+          ],
+        ),
       ],
     );
   }
@@ -696,6 +699,56 @@ class _TranslationLanguageMenu extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _TranslationVoiceMenu extends StatelessWidget {
+  const _TranslationVoiceMenu({required this.ttsService});
+
+  final SystemTtsService ttsService;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: ttsService,
+      builder: (context, _) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1B2838),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.4)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.record_voice_over, size: 14, color: Colors.cyanAccent),
+                SizedBox(width: 5),
+                Text('الصوت الناطق', style: TextStyle(color: RoyalColors.muted, fontSize: 11)),
+              ],
+            ),
+            DropdownButtonHideUnderline(
+              child: DropdownButton<SystemVoiceProfile>(
+                value: ttsService.selectedProfile,
+                isExpanded: true,
+                dropdownColor: const Color(0xFF1B2838),
+                icon: const Icon(Icons.keyboard_arrow_down, color: Colors.cyanAccent),
+                items: SystemVoiceProfile.values
+                    .map((profile) => DropdownMenuItem(
+                          value: profile,
+                          child: Text(profile.label, overflow: TextOverflow.ellipsis),
+                        ))
+                    .toList(),
+                onChanged: (profile) {
+                  if (profile != null) ttsService.selectProfile(profile);
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
