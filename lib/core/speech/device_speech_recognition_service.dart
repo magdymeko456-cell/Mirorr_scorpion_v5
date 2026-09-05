@@ -66,7 +66,14 @@ class DeviceSpeechRecognitionService extends ChangeNotifier {
       }
       await _speechToText.listen(
         onResult: _handleResult,
-        listenOptions: stt.SpeechListenOptions(localeId: localeId),
+        // Keep the deprecated argument as an Android compatibility bridge:
+        // some installed speech_to_text/platform combinations ignore the
+        // locale nested only in SpeechListenOptions.
+        localeId: localeId,
+        listenOptions: stt.SpeechListenOptions(
+          localeId: localeId,
+          listenMode: stt.ListenMode.dictation,
+        ),
       );
       _message = 'استمع الآن بلغة الكلام «$languageCode» ($localeId)؛ سيظهر النص المعترف به في محرر المصدر.';
       notifyListeners();
