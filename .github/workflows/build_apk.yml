@@ -1,4 +1,4 @@
-name: Mirror Scorpion v4 Flutter APK
+name: Mirror Scorpion v5 Flutter APK
 on:
   push:
     branches: [main]
@@ -13,16 +13,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: functions/package-lock.json
-      - name: Verify Firebase Functions
-        working-directory: functions
-        run: |
-          npm ci
-          npm run verify
       - name: Verify no embedded ElevenLabs secret in the APK
         run: |
           # يُمنع أي سر مضمّن (مفتاح حرفي). يُسمح بعميل يستخدم مفتاحاً يدخله
@@ -77,122 +67,6 @@ jobs:
           test -f "$WHISPER_GRADLE"
           sed -i 's/compileSdk 34/compileSdk 36/' "$WHISPER_GRADLE"
           grep -q 'compileSdk 36' "$WHISPER_GRADLE"
-      - name: Configure Firebase Android
-        env:
-          ANDROID_GOOGLE_SERVICES_JSON: ${{ secrets.ANDROID_GOOGLE_SERVICES_JSON }}
-        run: |
-          test -n "$ANDROID_GOOGLE_SERVICES_JSON" || {
-            echo "ANDROID_GOOGLE_SERVICES_JSON is required for the Android Firebase build."
-            exit 1
-          }
-          mkdir -p android/app
-          printf '%s' "$ANDROID_GOOGLE_SERVICES_JSON" > android/app/google-services.json
-          grep -q '"package_name": "com.mirror.scorpion.v4"' android/app/google-services.json || {
-            echo "The Firebase Android configuration does not match com.mirror.scorpion.v4."
-            exit 1
-          }
-          if [ -f android/app/build.gradle.kts ]; then
-            sed -i 's/applicationId = "com.example.mirror_scorpion_v4"/applicationId = "com.mirror.scorpion.v4"/' android/app/build.gradle.kts
-            grep -q 'applicationId = "com.mirror.scorpion.v4"' android/app/build.gradle.kts || exit 1
-            grep -q 'com.google.gms.google-services' android/settings.gradle.kts || \
-              sed -i '/id("com.android.application") version/a\    id("com.google.gms.google-services") version "4.5.0" apply false' android/settings.gradle.kts
-            grep -q 'com.google.gms.google-services' android/app/build.gradle.kts || \
-              sed -i '/id("com.android.application")/a\    id("com.google.gms.google-services")' android/app/build.gradle.kts
-          elif [ -f android/app/build.gradle ]; then
-            sed -i 's/applicationId "com.example.mirror_scorpion_v4"/applicationId "com.mirror.scorpion.v4"/' android/app/build.gradle
-            grep -q 'applicationId "com.mirror.scorpion.v4"' android/app/build.gradle || exit 1
-            grep -q 'com.google.gms.google-services' android/build.gradle || \
-              sed -i "/id 'com.android.application' version/a\    id 'com.google.gms.google-services' version '4.5.0' apply false" android/build.gradle
-            grep -q 'com.google.gms.google-services' android/app/build.gradle || \
-              sed -i "/id 'com.android.application'/a\    id 'com.google.gms.google-services'" android/app/build.gradle
-          else
-            echo "Android app Gradle file was not generated."
-            exit 1
-          fi
-          if [ -f android/app/build.gradle.kts ]; then
-            printf '\n%s\n' \
-              'dependencies {' \
-              '    implementation("com.google.mlkit:text-recognition-chinese:16.0.1")' \
-              '    implementation("com.google.mlkit:text-recognition-devanagari:16.0.1")' \
-              '    implementation("com.google.mlkit:text-recognition-japanese:16.0.1")' \
-              '    implementation("com.google.mlkit:text-recognition-korean:16.0.1")' \
-              '}' >> android/app/build.gradle.kts
-          else
-            printf '\n%s\n' \
-              'dependencies {' \
-              "    implementation 'com.google.mlkit:text-recognition-chinese:16.0.1'" \
-              "    implementation 'com.google.mlkit:text-recognition-devanagari:16.0.1'" \
-              "    implementation 'com.google.mlkit:text-recognition-japanese:16.0.1'" \
-              "    implementation 'com.google.mlkit:text-recognition-korean:16.0.1'" \
-              '}' >> android/app/build.gradle
-          fi
-      - name: Configure stable Android release signing
-        env:
-          ANDROID_RELEASE_KEYSTORE_BASE64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
-          ANDROID_RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_STORE_PASSWORD }}
-          ANDROID_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
-          ANDROID_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
-        run: |
-          set -euo pipefail
-          for secret_name in \
-            ANDROID_RELEASE_KEYSTORE_BASE64 \
-            ANDROID_RELEASE_STORE_PASSWORD \
-            ANDROID_RELEASE_KEY_PASSWORD \
-            ANDROID_RELEASE_KEY_ALIAS; do
-            test -n "${!secret_name:-}" || {
-              echo "$secret_name is required to sign the release APK."
-              exit 1
-            }
-          done
-          umask 077
-          KEYSTORE=android/app/mirror-scorpion-release.jks
-          printf '%s' "$ANDROID_RELEASE_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE"
-          keytool -list \
-            -keystore "$KEYSTORE" \
-            -storepass "$ANDROID_RELEASE_STORE_PASSWORD" \
-            -alias "$ANDROID_RELEASE_KEY_ALIAS" > /dev/null
-          if [ -f android/app/build.gradle.kts ]; then
-            cat >> android/app/build.gradle.kts <<'EOF'
-
-          android {
-              signingConfigs {
-                  create("mirrorScorpionRelease") {
-                      storeFile = file("mirror-scorpion-release.jks")
-                      storePassword = System.getenv("ANDROID_RELEASE_STORE_PASSWORD")
-                      keyAlias = System.getenv("ANDROID_RELEASE_KEY_ALIAS")
-                      keyPassword = System.getenv("ANDROID_RELEASE_KEY_PASSWORD")
-                  }
-              }
-              buildTypes {
-                  getByName("release") {
-                      signingConfig = signingConfigs.getByName("mirrorScorpionRelease")
-                  }
-              }
-          }
-          EOF
-          elif [ -f android/app/build.gradle ]; then
-            cat >> android/app/build.gradle <<'EOF'
-
-          android {
-              signingConfigs {
-                  mirrorScorpionRelease {
-                      storeFile file('mirror-scorpion-release.jks')
-                      storePassword System.getenv('ANDROID_RELEASE_STORE_PASSWORD')
-                      keyAlias System.getenv('ANDROID_RELEASE_KEY_ALIAS')
-                      keyPassword System.getenv('ANDROID_RELEASE_KEY_PASSWORD')
-                  }
-              }
-              buildTypes {
-                  release {
-                      signingConfig signingConfigs.mirrorScorpionRelease
-                  }
-              }
-          }
-          EOF
-          else
-            echo "Android app Gradle file was not generated."
-            exit 1
-          fi
       - name: Configure Android speech visibility and microphone permission
         run: |
           if ! grep -q 'android.permission.RECORD_AUDIO' android/app/src/main/AndroidManifest.xml; then
@@ -353,24 +227,10 @@ jobs:
         run: flutter analyze --no-fatal-infos
       - name: Unit and widget tests
         run: flutter test
-      - name: Build release APK
-        env:
-          ANDROID_RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_STORE_PASSWORD }}
-          ANDROID_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
-          ANDROID_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
-        run: flutter build apk --release
-      - name: Verify release APK signature
-        run: |
-          set -euo pipefail
-          APK=build/app/outputs/flutter-apk/app-release.apk
-          APKSIGNER=$(find "${ANDROID_HOME}"/build-tools -type f -name apksigner | sort -V | tail -n 1)
-          test -n "$APKSIGNER" || { echo "apksigner was not found in Android build tools."; exit 1; }
-          "$APKSIGNER" verify --verbose --print-certs "$APK"
-      - name: Remove Firebase Android config
-        if: always()
-        run: rm -f android/app/google-services.json android/app/mirror-scorpion-release.jks
+      - name: Build debug APK
+        run: flutter build apk --debug
       - uses: actions/upload-artifact@v4
         with:
-          name: mirror-scorpion-v4-flutter-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          name: mirror-scorpion-v5-debug-apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
           if-no-files-found: error
