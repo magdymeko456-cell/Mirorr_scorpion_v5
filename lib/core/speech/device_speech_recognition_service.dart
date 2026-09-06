@@ -9,9 +9,6 @@ import 'package:speech_to_text/speech_to_text.dart' as stt;
 /// التطبيق ولا يرفع ملفات صوتية؛ طريقة المعالجة (محلية/عن بُعد) يحددها نظام
 /// التعرف المثبت على الهاتف.
 class DeviceSpeechRecognitionService extends ChangeNotifier {
-  /// `speech_to_text` يحدّث حالة Dart مباشرة بعد إرسال cancel/stop إلى Android،
-  /// بينما ينفذ Android العملية على الـHandler ويؤخر إتلاف recognizer 50ms.
-  /// هذه المهلة القصيرة تمنع بدء لغة ثانية بينما مورد الميكروفون ما زال مشغولاً.
   static const recognizerReleaseSettleTime = Duration(milliseconds: 350);
 
   DeviceSpeechRecognitionService({stt.SpeechToText? speechToText})
@@ -52,24 +49,24 @@ class DeviceSpeechRecognitionService extends ChangeNotifier {
       final installedLocales = await _speechToText.locales();
       final localeId = SpeechLocaleResolver.preferredLocaleId(
         languageCode: languageCode,
-        installedLocaleIds: installedLocales.map((locale) => locale.localeId),
+        installedLocaleIds: installedLocales.map((l) => l.localeId),
       );
       if (localeId == null) {
-        final available = SpeechLocaleResolver.availableLanguageCodes(
-          installedLocales.map((locale) => locale.localeId),
+        final codes = SpeechLocaleResolver.availableLanguageCodes(
+          installedLocales.map((l) => l.localeId),
         );
-        _message = available.isEmpty
+        final available = codes.isEmpty
+            ? 'لا توجد أي لغة تعرف كلام مثبتة.'
+            : codes.join('، ');
+        _message = codes.isEmpty
             ? 'لا توجد أي لغة تعرف كلام مثبتة على الجهاز. افتح إعدادات Android ← إدارة اللغات ← إدخال الصوت (Google) ونزّل حزمة اللغة المطلوبة ثم أعد المحاولة.'
-            : 'لغة المايك «$languageCode» غير مثبتة كخدمة تعرف كلام على هذا الهاتف. اللغات المثبتة: ${available.join('، ')}. ثبّت حزمة اللغة من إعدادات إدخال الصوت (Google) ثم أعد المحاولة — سلسلة الكود سليمة لكن الجهاز يفتقد حزمة اللغة.';
+            : 'لغة المايك «$languageCode» غير مثبتة كخدمة تعرف كلام على هذا الهاتف. اللغات المثبتة: $available. ثبّت حزمة اللغة من إعدادات إدخال الصوت (Google) ثم أعد المحاولة — سلسلة الكود سليمة لكن الجهاز يفتقد حزمة اللغة.';
         notifyListeners();
         return false;
       }
+
       await _speechToText.listen(
         onResult: _handleResult,
-        // Keep the deprecated argument as an Android compatibility bridge:
-        // some installed speech_to_text/platform combinations ignore the
-        // locale nested only in SpeechListenOptions.
-        localeId: localeId,
         listenOptions: stt.SpeechListenOptions(
           localeId: localeId,
           listenMode: stt.ListenMode.dictation,
@@ -98,8 +95,6 @@ class DeviceSpeechRecognitionService extends ChangeNotifier {
     }
   }
 
-  /// يحسم الجلسة القائمة ضمن مهلة صغيرة قبل اختيار locale جديد. لا تبدأ
-  /// الواجهة الاستماع بلغة مقابلة فوق جلسة ما زالت Android توقفها.
   Future<bool> stopAndWait({
     Duration timeout = const Duration(seconds: 2),
   }) async {
@@ -107,9 +102,6 @@ class DeviceSpeechRecognitionService extends ChangeNotifier {
     return _waitUntilStopped(timeout: timeout);
   }
 
-  /// ينهي الجلسة الحالية فوراً قبل بدء لغة مايك مختلفة. نستخدم cancel بدلاً
-  /// من stop عند تبديل المتحدث حتى لا يحاول Android إنهاء تسجيل اللغة السابقة
-  /// بالتوازي مع طلب لغة جديدة.
   Future<bool> cancelAndWait({
     Duration timeout = const Duration(seconds: 2),
   }) async {
@@ -123,8 +115,6 @@ class DeviceSpeechRecognitionService extends ChangeNotifier {
     }
     final stopped = await _waitUntilStopped(timeout: timeout);
     if (!stopped) return false;
-    // قد تكون جلسة Android انتهت تلقائياً قبل أن يضغط المستخدم تبديل اللغة؛
-    // لا يعني ذلك أن recognizer السابق حرّر مورد الميكروفون فعلاً بعد.
     await Future<void>.delayed(recognizerReleaseSettleTime);
     return true;
   }
@@ -177,8 +167,6 @@ class DeviceSpeechRecognitionService extends ChangeNotifier {
   }
 }
 
-/// يطابق لغة المصدر مع لغة تعرف مثبّتة على الهاتف. لا يسمح للواجهة بالرجوع
-/// بصمت إلى لغة النظام عندما لا تتوفر مطابقة صريحة.
 class SpeechLocaleResolver {
   const SpeechLocaleResolver._();
 
@@ -213,8 +201,6 @@ class SpeechLocaleResolver {
   }
 }
 
-/// يمنع تمرير ناتج معروف بأنه تعريب نطقي للإنجليزية إلى مترجم الإنجليزية.
-/// هذا حارس شفاف لحالة القبول المبلغ عنها، وليس كاشف لغة عام أو أداة ذكاء.
 class SpeechRecognitionScriptGuard {
   const SpeechRecognitionScriptGuard._();
 
