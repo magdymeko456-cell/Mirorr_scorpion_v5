@@ -545,7 +545,6 @@ class _TranslationPanelState extends State<_TranslationPanel> {
 
 @override
 Widget build(BuildContext context) {
-    final deviceLanguage = context.watch<LanguagePreferences>().deviceLanguageCode;
 return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       children: [
