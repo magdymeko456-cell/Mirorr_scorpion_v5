@@ -37,3 +37,6 @@ clean_failed_runs.sh
 repo_review_*.txt
 patch2_*.log
 patch2_backup_*/
+
+*.pre_whisper
+*.bak

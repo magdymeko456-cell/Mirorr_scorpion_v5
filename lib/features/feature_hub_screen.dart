@@ -916,11 +916,13 @@ class _DialoguePanelState extends State<_DialoguePanel> {
 
   Future<bool> _finishRecognitionSession() async {
     _sessionId++;
-    final stopped = await _recognitionService.cancelAndWait();
-    if (!stopped && mounted && _recognitionService.message != null) {
-      setState(() => _notice = _recognitionService.message);
+    // المايك الآن عبر Whisper المحلي؛ نوقف تسجيل الحوار الفعلي.
+    final path = await _dialogueCapture.stop();
+    if (path != null) {
+      // وُجد تسجيل جارٍ أثناء تبديل اللغة؛ نُفرّغه بلغة المصدر الحالية كي لا يضيع الكلام.
+      await _finishAndTranscribe();
     }
-    return stopped;
+    return true;
   }
 
   Future<void> _startRecognition() async {
@@ -928,8 +930,11 @@ class _DialoguePanelState extends State<_DialoguePanel> {
     final capture = await _dialogueCapture.start();
     if (mounted) setState(() => _notice = capture.message);
     if (!capture.isSuccess) return;
+    // التسجيل جارٍ الآن؛ الضغطة التالية على المايك تستدعي _finishAndTranscribe.
+  }
 
-    // مسار Whisper المحلي: ينتظر الضغط الثاني لإيقاف التسجيل ثم يفرّغ الملف.
+  Future<void> _finishAndTranscribe() async {
+    final session = _sessionId;
     final stoppedPath = await _dialogueCapture.stop();
     if (!mounted || session != _sessionId) return;
     if (stoppedPath == null) {
@@ -961,11 +966,9 @@ class _DialoguePanelState extends State<_DialoguePanel> {
     if (_isBusy || _speechService.isSpeaking) return;
     setState(() => _isBusy = true);
     try {
-      if (_recognitionService.isListening) {
-        await _finishRecognitionSession();
-        if (mounted && _recognitionService.message != null) {
-          setState(() => _notice = _recognitionService.message);
-        }
+      if (_dialogueCapture.isRecording) {
+        // الضغطة الثانية: إيقاف التسجيل والتفريغ بلغة المصدر.
+        await _finishAndTranscribe();
         return;
       }
       await _speechService.stop();
