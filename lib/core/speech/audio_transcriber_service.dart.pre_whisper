@@ -34,7 +34,6 @@ class AudioTranscriberService {
     required String filePath,
     required File verifiedModelFile,
     AudioTranscriptionProgress? onProgress,
-    String languageCode = 'auto',
   }) async {
     if (_isProcessing) return const AudioFileTranscriptionResult.failure('يوجد تفريغ محلي جارٍ بالفعل. انتظر اكتماله قبل اختيار ملف آخر.');
     final source = File(filePath);
@@ -55,12 +54,7 @@ class AudioTranscriberService {
       await source.copy(workFile.path);
       onProgress?.call(AudioTranscriptionStage.transcribing, 0);
       final response = await Whisper(model: WhisperModel.base).transcribe(
-        transcribeRequest: TranscribeRequest(
-          audio: workFile.path,
-          language: languageCode,
-          isNoTimestamps: true,
-          keepModelLoaded: false,
-        ),
+        transcribeRequest: TranscribeRequest(audio: workFile.path, isNoTimestamps: true, keepModelLoaded: false),
         modelPath: verifiedModelFile.path,
         onProgress: (value) => onProgress?.call(AudioTranscriptionStage.transcribing, value.clamp(0, 100).toInt()),
       );
