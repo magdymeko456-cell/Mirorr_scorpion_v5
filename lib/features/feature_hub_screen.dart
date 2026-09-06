@@ -926,7 +926,6 @@ class _DialoguePanelState extends State<_DialoguePanel> {
   }
 
   Future<void> _startRecognition() async {
-    final session = ++_sessionId;
     final capture = await _dialogueCapture.start();
     if (mounted) setState(() => _notice = capture.message);
     if (!capture.isSuccess) return;
@@ -1130,7 +1129,6 @@ class _DialoguePanelState extends State<_DialoguePanel> {
   void dispose() {
     _dialogueCapture.dispose();
     _whisperInstaller.dispose();
-    _transcriber.._ = _transcriber; // no-op; AudioTranscriberService بلا dispose
     _translationDebounce?.cancel();
     _sessionId++;
     _recognitionService.removeListener(_refresh);
