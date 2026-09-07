@@ -26,6 +26,7 @@ import '../core/platform/shared_text_inbox.dart';
 import '../core/pro/premium_verification_service.dart';
 import '../core/speech/device_speech_recognition_service.dart';
 import '../core/speech/dialogue_voice_capture_service.dart';
+import 'settings/language_downloads_card.dart';
 import '../core/speech/elevenlabs_voice_service.dart';
 import '../core/speech/audio_transcriber_service.dart';
 import '../core/speech/system_tts_service.dart';
@@ -3167,6 +3168,8 @@ class _SettingsPanel extends StatelessWidget {
               ),
             ),
           ),
+          const SizedBox(height: 12),
+          const LanguageDownloadsCard(),
           const SizedBox(height: 12),
           Card(
             child: ListTile(
