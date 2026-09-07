@@ -917,11 +917,14 @@ class _DialoguePanelState extends State<_DialoguePanel> {
 
   Future<bool> _finishRecognitionSession() async {
     _sessionId++;
-    // المايك الآن عبر Whisper المحلي؛ نوقف تسجيل الحوار الفعلي.
+    // نوقف التسجيل فقط عند تبديل اللغة/الإلغاء؛ التفريغ يحدث فقط في _finishAndTranscribe
+    // عبر الضغطة الثانية للمايك. إلغاء الكلام المقروء هنا مقصود: تبديل اللغة = إلغاء.
     final path = await _dialogueCapture.stop();
     if (path != null) {
-      // وُجد تسجيل جارٍ أثناء تبديل اللغة؛ نُفرّغه بلغة المصدر الحالية كي لا يضيع الكلام.
-      await _finishAndTranscribe();
+      try {
+        final f = File(path);
+        if (await f.exists()) await f.delete();
+      } catch (_) {}
     }
     return true;
   }
@@ -980,7 +983,11 @@ class _DialoguePanelState extends State<_DialoguePanel> {
       }
       await _startRecognition();
     } finally {
-      if (mounted) setState(() => _isBusy = false);
+      if (mounted) {
+        setState(() {
+          _isBusy = false;
+        });
+      }
     }
   }
 
