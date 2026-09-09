@@ -764,6 +764,7 @@ class _TranslationEditor extends StatelessWidget {
     required this.readOnly,
     required this.actions,
     required this.actionsOnRight,
+    this.onTap,
     this.onChanged,
   });
 
@@ -772,6 +773,7 @@ class _TranslationEditor extends StatelessWidget {
   final bool readOnly;
   final List<_EditorAction> actions;
   final bool actionsOnRight;
+  final GestureTapCallback? onTap;
   final ValueChanged<String>? onChanged;
 
   @override
@@ -800,7 +802,8 @@ class _TranslationEditor extends StatelessWidget {
               border: InputBorder.none,
               contentPadding: const EdgeInsets.only(bottom: 56),
             ),
-            onChanged: onChanged,
+            onTap: onTap,
+              onChanged: onChanged,
           ),
           Positioned(
             bottom: 0,
@@ -1290,7 +1293,6 @@ class _DialogueEditor extends StatelessWidget {
     required this.hint,
     required this.actions,
     this.readOnly = false,
-    this.onTap,
     this.onChanged,
   });
 
@@ -1299,7 +1301,6 @@ class _DialogueEditor extends StatelessWidget {
   final String hint;
   final List<_EditorAction> actions;
   final bool readOnly;
-  final GestureTapCallback? onTap;
   final ValueChanged<String>? onChanged;
 
   @override
@@ -1332,7 +1333,6 @@ class _DialogueEditor extends StatelessWidget {
                 border: InputBorder.none,
                 contentPadding: const EdgeInsets.only(bottom: 12),
               ),
-              onTap: onTap,
               onChanged: onChanged,
             ),
           ),
