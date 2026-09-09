@@ -1160,7 +1160,6 @@ class _DialoguePanelState extends State<_DialoguePanel> {
           label: AppLocalizations.of(context)!.dialogueTopLabelDevice,
           hint: AppLocalizations.of(context)!.dialogueTopHintDevice,
           actions: const [],
-          onTap: _beginFreshSessionIfNeeded,
           onChanged: _queueTranslation,
         ),
         const SizedBox(height: 10),
