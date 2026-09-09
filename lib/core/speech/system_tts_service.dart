@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'local_voice_calibration_service.dart';
+
 enum SystemSpeechState { idle, speaking, unavailable, failed }
 
 /// ملفات أداء محلية تضبط سرعة وطبقة صوت Android المختار.
@@ -12,13 +14,15 @@ enum SystemVoiceProfile {
   salma,
   saif,
   sama,
-  sara;
+  sara,
+  myVoice;
 
   String get label => switch (this) {
         SystemVoiceProfile.salma => 'سلمى',
         SystemVoiceProfile.saif => 'سيف',
         SystemVoiceProfile.sama => 'سما',
         SystemVoiceProfile.sara => 'سارة',
+        SystemVoiceProfile.myVoice => 'صوتي',
       };
 
   String get styleDescription => switch (this) {
@@ -26,6 +30,7 @@ enum SystemVoiceProfile {
         SystemVoiceProfile.saif => 'أداء جاد ومتزن',
         SystemVoiceProfile.sama => 'أداء نشط وحيوي',
         SystemVoiceProfile.sara => 'أداء مبهج ودافئ',
+        SystemVoiceProfile.myVoice => 'معايرة محلية من تسجيلك — سرعة ونبرة تقريبتان لصوتك',
       };
 
   double get speechRate => switch (this) {
@@ -33,6 +38,7 @@ enum SystemVoiceProfile {
         SystemVoiceProfile.saif => 0.40,
         SystemVoiceProfile.sama => 0.52,
         SystemVoiceProfile.sara => 0.48,
+        SystemVoiceProfile.myVoice => 0.45,
       };
 
   double get pitch => switch (this) {
@@ -40,6 +46,7 @@ enum SystemVoiceProfile {
         SystemVoiceProfile.saif => 0.90,
         SystemVoiceProfile.sama => 1.12,
         SystemVoiceProfile.sara => 1.08,
+        SystemVoiceProfile.myVoice => 1.00,
       };
 }
 
@@ -266,8 +273,17 @@ class SystemTtsService extends ChangeNotifier {
   }
 
   Future<void> _applyProfile() async {
-    await _tts.setSpeechRate(_selectedProfile.speechRate);
-    await _tts.setPitch(_selectedProfile.pitch);
+    var rate = _selectedProfile.speechRate;
+    var pitch = _selectedProfile.pitch;
+    if (_selectedProfile == SystemVoiceProfile.myVoice) {
+      final calibrated = await LocalVoiceCalibrationStore.read();
+      if (calibrated != null) {
+        rate = calibrated.speechRate;
+        pitch = calibrated.pitch;
+      }
+    }
+    await _tts.setSpeechRate(rate);
+    await _tts.setPitch(pitch);
   }
 
   String _localeFor(String languageCode) {
