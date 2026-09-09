@@ -24,26 +24,32 @@ void main() {
     );
   });
 
-  test('defines the four named local voice performance profiles', () {
-    expect(SystemVoiceProfile.values, hasLength(4));
+  test('defines the five named local voice performance profiles', () {
+    expect(SystemVoiceProfile.values, hasLength(5));
     expect(
       SystemVoiceProfile.values.map((profile) => profile.label),
-      <String>['سلمى', 'سيف', 'سما', 'سارة'],
+      <String>['سلمى', 'سيف', 'سما', 'سارة', 'صوتي'],
     );
     expect(SystemVoiceProfile.salma.styleDescription, contains('هادئ'));
     expect(SystemVoiceProfile.saif.styleDescription, contains('جاد'));
     expect(SystemVoiceProfile.sama.styleDescription, contains('نشط'));
     expect(SystemVoiceProfile.sara.styleDescription, contains('مبهج'));
+    expect(SystemVoiceProfile.myVoice.styleDescription, contains('معايرة'));
   });
 
   test('local performance profiles keep distinct rate and pitch settings', () {
-    final profiles = SystemVoiceProfile.values;
-    final rates = profiles.map((profile) => profile.speechRate).toSet();
-    final pitches = profiles.map((profile) => profile.pitch).toSet();
-
+    final namedProfiles = <SystemVoiceProfile>{
+      SystemVoiceProfile.salma, SystemVoiceProfile.saif,
+      SystemVoiceProfile.sama, SystemVoiceProfile.sara,
+    };
+    final rates = namedProfiles.map((p) => p.speechRate).toSet();
+    final pitches = namedProfiles.map((p) => p.pitch).toSet();
     expect(rates, hasLength(4));
     expect(pitches, hasLength(4));
     expect(SystemVoiceProfile.saif.pitch, lessThan(1));
     expect(SystemVoiceProfile.sama.speechRate, greaterThan(0.5));
+    // صوتي (المعاير محلياً) له قيماً داخل نطاق flutter_tts الآمن.
+    expect(SystemVoiceProfile.myVoice.speechRate, inInclusiveRange(0.3, 0.7));
+    expect(SystemVoiceProfile.myVoice.pitch, inInclusiveRange(0.5, 2.0));
   });
 }
