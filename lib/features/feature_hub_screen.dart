@@ -993,7 +993,7 @@ class _DialoguePanelState extends State<_DialoguePanel> {
 
   Future<void> _selectTargetLanguage(String code) async {
     if (_isBusy) return;
-    final wasListening = _recognitionService.isListening;
+    final wasListening = _dialogueCapture.isRecording;
     setState(() => _isBusy = true);
     try {
       if (wasListening && !await _finishRecognitionSession()) return;
@@ -1024,7 +1024,7 @@ class _DialoguePanelState extends State<_DialoguePanel> {
 
   Future<void> _selectSourceLanguage(String code) async {
     if (_isBusy) return;
-    final wasListening = _recognitionService.isListening;
+    final wasListening = _dialogueCapture.isRecording;
     setState(() => _isBusy = true);
     try {
       if (wasListening && !await _finishRecognitionSession()) return;
@@ -1041,7 +1041,7 @@ class _DialoguePanelState extends State<_DialoguePanel> {
 
   Future<void> _swapLanguages() async {
     if (_isBusy) return;
-    final wasListening = _recognitionService.isListening;
+    final wasListening = _dialogueCapture.isRecording;
     setState(() => _isBusy = true);
     try {
       if (wasListening && !await _finishRecognitionSession()) return;

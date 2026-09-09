@@ -17,8 +17,11 @@ class DialogueVoiceCaptureResult {
 /// يسجّل صوت الحوار محلياً إلى WAV أحادي القناة بمعدل 16kHz
 /// بما يناسب محرك Whisper مباشرة دون أي خدمة سحابية.
 class DialogueVoiceCaptureService {
-  final AudioRecorder _recorder = AudioRecorder();
+  // مسجّل جديد لكل جلسة: يتجنب علل إعادة الاستخدام في record على بعض الأجهزة.
+  AudioRecorder? _recorder;
   String? _activePath;
+
+  AudioRecorder get _current => _recorder ??= AudioRecorder();
 
   bool get isRecording => _activePath != null;
 
@@ -27,14 +30,14 @@ class DialogueVoiceCaptureService {
       return const DialogueVoiceCaptureResult.failure('يوجد تسجيل جارٍ بالفعل. اضغط المايك مرة أخرى لإنهائه.');
     }
     try {
-      if (!await _recorder.hasPermission()) {
+      if (!await _current.hasPermission()) {
         return const DialogueVoiceCaptureResult.failure('رُفض إذن الميكروفون. امنح التطبيق الإذن من إعدادات الجهاز.');
       }
       final temp = await getTemporaryDirectory();
       final directory = Directory('${temp.path}/mirror_scorpion/dialogue');
       if (!await directory.exists()) await directory.create(recursive: true);
       final path = '${directory.path}/dialogue_${DateTime.now().microsecondsSinceEpoch}.wav';
-      await _recorder.start(
+      await _current.start(
         const RecordConfig(encoder: AudioEncoder.wav, sampleRate: 16000, numChannels: 1),
         path: path,
       );
@@ -51,19 +54,22 @@ class DialogueVoiceCaptureService {
     final path = _activePath;
     _activePath = null;
     if (path == null) return null;
+    final recorder = _recorder;
+    _recorder = null; // مسجّل جديد للجلسة القادمة
     try {
-      final stoppedPath = await _recorder.stop();
+      final stoppedPath = await recorder?.stop();
+      try { await recorder?.dispose(); } catch (_) {}
       return stoppedPath ?? (await File(path).exists() ? path : null);
     } catch (_) {
+      try { await recorder?.dispose(); } catch (_) {}
       return null;
     }
   }
 
   Future<void> dispose() async {
-    if (_activePath != null) {
-      try { await _recorder.stop(); } catch (_) {}
-      _activePath = null;
-    }
-    try { await _recorder.dispose(); } catch (_) {}
+    _activePath = null;
+    try { await _recorder?.stop(); } catch (_) {}
+    try { await _recorder?.dispose(); } catch (_) {}
+    _recorder = null;
   }
 }
