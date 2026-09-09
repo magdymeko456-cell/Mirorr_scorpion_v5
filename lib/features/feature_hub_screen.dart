@@ -764,7 +764,6 @@ class _TranslationEditor extends StatelessWidget {
     required this.readOnly,
     required this.actions,
     required this.actionsOnRight,
-    this.onTap,
     this.onChanged,
   });
 
@@ -773,7 +772,6 @@ class _TranslationEditor extends StatelessWidget {
   final bool readOnly;
   final List<_EditorAction> actions;
   final bool actionsOnRight;
-  final VoidCallback? onTap;
   final ValueChanged<String>? onChanged;
 
   @override
@@ -802,7 +800,6 @@ class _TranslationEditor extends StatelessWidget {
               border: InputBorder.none,
               contentPadding: const EdgeInsets.only(bottom: 56),
             ),
-            onTap: onTap,
             onChanged: onChanged,
           ),
           Positioned(
@@ -1069,15 +1066,6 @@ class _DialoguePanelState extends State<_DialoguePanel> {
     }
   }
 
-  void _beginFreshSessionIfNeeded() {
-    if (!_hasCompletedTranslation) return;
-    setState(() {
-      _source.clear();
-      _translated.clear();
-      _hasCompletedTranslation = false;
-      _notice = 'بدأت جلسة حوار جديدة.';
-    });
-  }
 
   void _queueTranslation(String value) {
     _translationDebounce?.cancel();
