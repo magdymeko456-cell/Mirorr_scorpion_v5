@@ -863,6 +863,7 @@ class _DialoguePanelState extends State<_DialoguePanel> {
   String _targetLanguage = 'ar';
   String? _notice;
   bool _isBusy = false;
+  bool _isTranscribing = false;
   bool _isTranslating = false;
   bool _hasCompletedTranslation = false;
   bool _loadedTarget = false;
@@ -949,12 +950,22 @@ class _DialoguePanelState extends State<_DialoguePanel> {
           'نموذج التفريغ المحلي غير مثبّت بعد. افتح شاشة تجهيز نموذج التفريغ لتنزيله مرة واحدة (حجمه حوالي 148MB) ثم استخدم المايك.');
       return;
     }
-    setState(() => _notice = 'جارٍ تفريغ الصوت محلياً بلغة «$_sourceLanguage»…');
+    setState(() {
+      _isTranscribing = true;
+      _notice = 'جارٍ تفريغ الصوت محلياً بلغة «$_sourceLanguage»…';
+    });
     final result = await _transcriber.transcribeAudioFile(
       filePath: stoppedPath,
       verifiedModelFile: _whisperModelFile!,
       languageCode: _sourceLanguage,
+      onProgress: (progress) {
+        if (mounted) {
+          setState(() => _notice =
+              'جارٍ تفريغ الصوت محلياً… ${progress.toStringAsFixed(0)}%');
+        }
+      },
     );
+    if (mounted) setState(() => _isTranscribing = false);
     if (!mounted || session != _sessionId) return;
     if (!result.isSuccess) {
       setState(() => _notice = result.message);
@@ -966,14 +977,17 @@ class _DialoguePanelState extends State<_DialoguePanel> {
   }
 
   Future<void> _toggleMicrophone() async {
-    if (_isBusy || _speechService.isSpeaking) return;
+    if (_isBusy || _isTranscribing) return;
+    if (_speechService.isSpeaking) {
+      await _speechService.stop();
+    }
+    if (_dialogueCapture.isRecording) {
+      // الضغطة الثانية: إيقاف التسجيل والتفريغ — دون قفل _isBusy حتى لا يعلق الزر أثناء التفريغ الطويل.
+      await _finishAndTranscribe();
+      return;
+    }
     setState(() => _isBusy = true);
     try {
-      if (_dialogueCapture.isRecording) {
-        // الضغطة الثانية: إيقاف التسجيل والتفريغ بلغة المصدر.
-        await _finishAndTranscribe();
-        return;
-      }
       await _speechService.stop();
       if (!mounted) return;
       if (_hasCompletedTranslation) {
