@@ -958,10 +958,10 @@ class _DialoguePanelState extends State<_DialoguePanel> {
       filePath: stoppedPath,
       verifiedModelFile: _whisperModelFile!,
       languageCode: _sourceLanguage,
-      onProgress: (progress) {
+      onProgress: (stage) {
         if (mounted) {
           setState(() => _notice =
-              'جارٍ تفريغ الصوت محلياً… ${progress.toStringAsFixed(0)}%');
+              'جارٍ تفريغ الصوت محلياً بلغة «$_sourceLanguage»… (${stage.name})');
         }
       },
     );
