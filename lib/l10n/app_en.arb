@@ -32,6 +32,11 @@
   "speakInCurrentSource": "Speak in the current source language",
   "dialogueBottomLabel": "Bottom editor — target translation",
   "dialogueBottomHint": "Local dialogue translation will appear here…",
+  "dialogueStageRecording": "Recording",
+  "dialogueStageTranscribing": "Transcribing",
+  "dialogueStageTranslating": "Translating",
+  "dialogueStageSpeaking": "Speaking",
+  "cancelLocalProcessing": "Cancel processing",
   "stopSpeaking": "Stop speaking",
   "speakDialogueTranslation": "Speak dialogue translation",
   "copyDialogueTranslation": "Copy dialogue translation"

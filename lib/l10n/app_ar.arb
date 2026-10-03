@@ -32,6 +32,11 @@
   "speakInCurrentSource": "تحدث بلغة المصدر الحالية",
   "dialogueBottomLabel": "المحرر السفلي — ترجمة الهدف",
   "dialogueBottomHint": "ستظهر ترجمة الحوار المحلية هنا…",
+  "dialogueStageRecording": "التسجيل",
+  "dialogueStageTranscribing": "التفريغ",
+  "dialogueStageTranslating": "الترجمة",
+  "dialogueStageSpeaking": "النطق",
+  "cancelLocalProcessing": "إلغاء المعالجة",
   "stopSpeaking": "إيقاف النطق",
   "speakDialogueTranslation": "نطق ترجمة الحوار",
   "copyDialogueTranslation": "نسخ ترجمة الحوار"

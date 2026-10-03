@@ -836,6 +836,84 @@ class _EditorAction {
   final VoidCallback onPressed;
 }
 
+class _DialogueProcessingControls extends StatelessWidget {
+  const _DialogueProcessingControls({
+    required this.isRecording,
+    required this.isTranscribing,
+    required this.isTranslating,
+    required this.isSpeaking,
+    required this.percent,
+    required this.onCancel,
+  });
+
+  final bool isRecording;
+  final bool isTranscribing;
+  final bool isTranslating;
+  final bool isSpeaking;
+  final int? percent;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final active = isRecording || isTranscribing || isTranslating || isSpeaking;
+    final current = isRecording
+        ? 0
+        : isTranscribing
+            ? 1
+            : isTranslating
+                ? 2
+                : isSpeaking
+                    ? 3
+                    : -1;
+    if (!active) return const SizedBox.shrink();
+    final labels = <String>[
+      l10n.dialogueStageRecording,
+      l10n.dialogueStageTranscribing,
+      l10n.dialogueStageTranslating,
+      l10n.dialogueStageSpeaking,
+    ];
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              for (var i = 0; i < labels.length; i++) ...[
+                Expanded(
+                  child: Text(
+                    labels[i],
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: i == current ? Colors.cyanAccent : Colors.white38,
+                      fontWeight: i == current ? FontWeight.bold : FontWeight.normal,
+                    ),
+                  ),
+                ),
+                if (i < labels.length - 1) const Icon(Icons.chevron_right, size: 14, color: Colors.white24),
+              ],
+            ],
+          ),
+          if (isTranscribing) ...[
+            const SizedBox(height: 6),
+            LinearProgressIndicator(value: percent == null ? null : percent! / 100),
+          ],
+          if (isTranscribing || isTranslating)
+            Align(
+              alignment: AlignmentDirectional.centerEnd,
+              child: TextButton.icon(
+                onPressed: onCancel,
+                icon: const Icon(Icons.cancel_outlined, size: 18),
+                label: Text(l10n.cancelLocalProcessing),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _DialoguePanel extends StatefulWidget {
   const _DialoguePanel({required this.recognitionService});
 
@@ -866,6 +944,7 @@ class _DialoguePanelState extends State<_DialoguePanel> {
   bool _isTranscribing = false;
   bool _isTranslating = false;
   bool _hasCompletedTranslation = false;
+  int? _transcriptionPercent;
   bool _loadedTarget = false;
   bool _loadedSource = false;
   int _sessionId = 0;
@@ -986,6 +1065,7 @@ class _DialoguePanelState extends State<_DialoguePanel> {
     }
     setState(() {
       _isTranscribing = true;
+      _transcriptionPercent = null;
       _notice = 'جارٍ تفريغ الصوت محلياً بلغة «$_sourceLanguage»…';
     });
     final result = await _transcriber.transcribeAudioFile(
@@ -995,12 +1075,19 @@ class _DialoguePanelState extends State<_DialoguePanel> {
       onProgress: (stage, percent) {
         if (!mounted) return;
         final percentPart = percent == null ? '' : ' $percent%';
-        setState(() => _notice =
-            'جارٍ تفريغ الصوت محلياً بلغة «$_sourceLanguage»… (${stage.name}$percentPart)');
+        setState(() {
+          _transcriptionPercent = percent;
+          _notice = 'جارٍ تفريغ الصوت محلياً بلغة «$_sourceLanguage»… (${stage.name}$percentPart)';
+        });
       },
     );
     await _deleteTemporaryRecording(stoppedPath);
-    if (mounted) setState(() => _isTranscribing = false);
+    if (mounted) {
+      setState(() {
+        _isTranscribing = false;
+        _transcriptionPercent = null;
+      });
+    }
     if (!mounted || session != _sessionId) return;
     if (!result.isSuccess) {
       setState(() => _notice = result.message);
@@ -1009,6 +1096,21 @@ class _DialoguePanelState extends State<_DialoguePanel> {
     _source.text = result.text!;
     _queueTranslation(result.text!);
     setState(() => _notice = 'اكتمل التفريغ بلغة «$_sourceLanguage». راجع النص ثم عدّله إن لزم.');
+  }
+
+  void _cancelLocalProcessing() {
+    if (!_isTranscribing && !_isTranslating) return;
+    _sessionId++;
+    _transcriber.cancelCurrent();
+    _translationDebounce?.cancel();
+    if (mounted) {
+      setState(() {
+        _isTranscribing = false;
+        _isTranslating = false;
+        _transcriptionPercent = null;
+        _notice = 'تم إلغاء المعالجة المحلية. لم تُحفظ نتيجة جزئية.';
+      });
+    }
   }
 
   Future<void> _deleteTemporaryRecording(String path) async {
@@ -1143,6 +1245,7 @@ class _DialoguePanelState extends State<_DialoguePanel> {
 
   Future<void> _translate(String value) async {
     if (!mounted || value.trim() != _source.text.trim()) return;
+    final session = _sessionId;
     final sourceLanguage = _sourceLanguage;
     final targetLanguage = _targetLanguage;
     setState(() {
@@ -1159,7 +1262,7 @@ class _DialoguePanelState extends State<_DialoguePanel> {
         }
       },
     );
-    if (!mounted || value.trim() != _source.text.trim()) return;
+    if (!mounted || session != _sessionId || value.trim() != _source.text.trim()) return;
     if (sourceLanguage != _sourceLanguage || targetLanguage != _targetLanguage) return;
     setState(() {
       _isTranslating = false;
@@ -1264,6 +1367,14 @@ class _DialoguePanelState extends State<_DialoguePanel> {
                     style: const TextStyle(fontWeight: FontWeight.w800),
                   ),
                 ),
+              ),
+              _DialogueProcessingControls(
+                isRecording: listening,
+                isTranscribing: _isTranscribing,
+                isTranslating: _isTranslating,
+                isSpeaking: _speechService.isSpeaking,
+                percent: _transcriptionPercent,
+                onCancel: _cancelLocalProcessing,
               ),
             ],
           ),

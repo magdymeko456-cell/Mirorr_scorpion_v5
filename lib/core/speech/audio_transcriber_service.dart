@@ -19,9 +19,16 @@ class AudioFileTranscriptionResult {
 
 class AudioTranscriberService {
   bool _isProcessing = false;
+  bool _cancelRequested = false;
   static const int maxInputBytes = 128 * 1024 * 1024;
   static const Set<String> supportedExtensions = <String>{'mp3', 'm4a', 'wav', 'ogg', 'aac', 'flac'};
   bool get isProcessing => _isProcessing;
+
+  /// Requests cancellation of the active transcription. The native Whisper
+  /// call may finish its current decoding pass, but its result is discarded.
+  void cancelCurrent() {
+    if (_isProcessing) _cancelRequested = true;
+  }
 
   static bool supportsPath(String path) {
     final name = path.split('/').last;
@@ -44,6 +51,7 @@ class AudioTranscriberService {
     if (!await verifiedModelFile.exists()) return const AudioFileTranscriptionResult.failure('نموذج التفريغ المحلي غير موجود أو لم يكتمل التحقق منه.');
 
     _isProcessing = true;
+    _cancelRequested = false;
     Directory? jobDirectory;
     try {
       onProgress?.call(AudioTranscriptionStage.preparing, null);
@@ -64,6 +72,9 @@ class AudioTranscriberService {
         modelPath: verifiedModelFile.path,
         onProgress: (value) => onProgress?.call(AudioTranscriptionStage.transcribing, value.clamp(0, 100).toInt()),
       );
+      if (_cancelRequested) {
+        return const AudioFileTranscriptionResult.failure('تم إلغاء التفريغ المحلي بناءً على طلبك.');
+      }
       final text = response.text.trim();
       return text.isEmpty
           ? const AudioFileTranscriptionResult.failure('لم يعثر محرك التفريغ على كلام واضح داخل الملف. جرب تسجيلاً أوضح.')
