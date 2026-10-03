@@ -45,6 +45,10 @@ class DialogueVoiceCaptureService {
       return DialogueVoiceCaptureResult.success(path);
     } catch (_) {
       _activePath = null;
+      try {
+        await _recorder?.dispose();
+      } catch (_) {}
+      _recorder = null;
       return const DialogueVoiceCaptureResult.failure('تعذر بدء تسجيل الصوت. أغلق تطبيقات تستخدم المايك ثم أعد المحاولة.');
     }
   }

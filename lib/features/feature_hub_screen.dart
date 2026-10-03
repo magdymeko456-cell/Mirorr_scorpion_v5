@@ -940,7 +940,10 @@ class _DialoguePanelState extends State<_DialoguePanel> {
   Future<void> _finishAndTranscribe() async {
     final session = _sessionId;
     final stoppedPath = await _dialogueCapture.stop();
-    if (!mounted || session != _sessionId) return;
+    if (!mounted || session != _sessionId) {
+      if (stoppedPath != null) await _deleteTemporaryRecording(stoppedPath);
+      return;
+    }
     if (stoppedPath == null) {
       setState(() => _notice = 'لم يُحفظ التسجيل. أعد المحاولة.');
       return;
@@ -948,6 +951,7 @@ class _DialoguePanelState extends State<_DialoguePanel> {
     if (_whisperModelFile == null) {
       setState(() => _notice =
           'نموذج التفريغ المحلي غير مثبّت بعد. افتح شاشة تجهيز نموذج التفريغ لتنزيله مرة واحدة (حجمه حوالي 148MB) ثم استخدم المايك.');
+      await _deleteTemporaryRecording(stoppedPath);
       return;
     }
     setState(() {
@@ -965,6 +969,7 @@ class _DialoguePanelState extends State<_DialoguePanel> {
             'جارٍ تفريغ الصوت محلياً بلغة «$_sourceLanguage»… (${stage.name}$percentPart)');
       },
     );
+    await _deleteTemporaryRecording(stoppedPath);
     if (mounted) setState(() => _isTranscribing = false);
     if (!mounted || session != _sessionId) return;
     if (!result.isSuccess) {
@@ -974,6 +979,13 @@ class _DialoguePanelState extends State<_DialoguePanel> {
     _source.text = result.text!;
     _queueTranslation(result.text!);
     setState(() => _notice = 'اكتمل التفريغ بلغة «$_sourceLanguage». راجع النص ثم عدّله إن لزم.');
+  }
+
+  Future<void> _deleteTemporaryRecording(String path) async {
+    try {
+      final file = File(path);
+      if (await file.exists()) await file.delete();
+    } catch (_) {}
   }
 
   Future<void> _toggleMicrophone() async {
@@ -1155,7 +1167,10 @@ class _DialoguePanelState extends State<_DialoguePanel> {
 
   @override
   Widget build(BuildContext context) {
-    final listening = _recognitionService.isListening;
+    // The dialogue path now records locally and transcribes with Whisper;
+    // DeviceSpeechRecognitionService is no longer the source of truth for
+    // the button state.
+    final listening = _dialogueCapture.isRecording;
     return ListView(
       padding: const EdgeInsets.fromLTRB(18, 10, 18, 18),
       children: [
