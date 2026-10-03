@@ -916,6 +916,35 @@ class _DialoguePanelState extends State<_DialoguePanel> {
     if (mounted) setState(() {});
   }
 
+  /// Re-checks the model at the exact moment recording starts. The file may
+  /// have been removed or corrupted after initState loaded it.
+  Future<bool> _ensureWhisperModelReady() async {
+    try {
+      final verified = await _whisperInstaller.verifiedInstalledModel(
+        WhisperModelDescriptor.baseMultilingual,
+      );
+      if (!mounted) return false;
+      if (verified == null) {
+        setState(() {
+          _whisperModelFile = null;
+          _notice =
+              'نموذج Whisper المحلي غير مثبت أو تالف. افتح إعدادات التطبيق ونزّله قبل تسجيل الحوار.';
+        });
+        return false;
+      }
+      _whisperModelFile = verified;
+      return true;
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _whisperModelFile = null;
+          _notice = 'تعذر التحقق من نموذج Whisper المحلي. تحقق من مساحة التخزين ثم أعد المحاولة.';
+        });
+      }
+      return false;
+    }
+  }
+
   Future<bool> _finishRecognitionSession() async {
     _sessionId++;
     // نوقف التسجيل فقط عند تبديل اللغة/الإلغاء؛ التفريغ يحدث فقط في _finishAndTranscribe
@@ -931,6 +960,7 @@ class _DialoguePanelState extends State<_DialoguePanel> {
   }
 
   Future<void> _startRecognition() async {
+    if (!await _ensureWhisperModelReady()) return;
     final capture = await _dialogueCapture.start();
     if (mounted) setState(() => _notice = capture.message);
     if (!capture.isSuccess) return;
