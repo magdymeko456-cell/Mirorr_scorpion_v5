@@ -4,9 +4,8 @@ import 'package:flutter/material.dart';
 
 import '../../core/speech/whisper_model_installer.dart';
 
-/// كارت إعدادات "تنزيل اللغات (أوفلاين)": يعرض حالة نموذج التفريغ متعدد
-/// اللغات، ويتيح تنزيله بموافقة صريحة مع مؤشر تقدم، أو حذفه لتحرير المساحة.
-/// النموذج الواحد يخدم جميع اللغات المدعومة لذلك لا تُعرض قائمة لغات هنا.
+/// مدير حزم النماذج المحلية. يعرض ما هو متاح فعلياً للتنزيل وما سيُربط
+/// بمحركاته لاحقاً، حتى لا تظهر للمستخدم أزرار تنزيل لا تعمل بعد.
 class LanguageDownloadsCard extends StatefulWidget {
   const LanguageDownloadsCard({super.key, this.installer});
 
@@ -17,16 +16,45 @@ class LanguageDownloadsCard extends StatefulWidget {
 }
 
 class _LanguageDownloadsCardState extends State<LanguageDownloadsCard> {
-  late final WhisperModelInstaller _installer =
-      widget.installer ?? WhisperModelInstaller();
+  late final WhisperModelInstaller _installer = widget.installer ?? WhisperModelInstaller();
+  static final _whisperDescriptor = WhisperModelDescriptor.baseMultilingual;
 
   bool _checking = true;
-  bool _downloading = false;
-  bool _installed = false;
-  double? _progress;
+  bool _whisperInstalled = false;
+  bool _downloadingWhisper = false;
+  double? _whisperProgress;
   String? _notice;
 
-  static final _descriptor = WhisperModelDescriptor.baseMultilingual;
+  static const _packages = <_PackageSpec>[
+    _PackageSpec(
+      title: 'التعرف على الكلام — Whisper',
+      subtitle: 'يسجل ويفرغ الكلام محلياً بالعربية والإنجليزية ولغات متعددة.',
+      size: '~141 MB',
+      icon: Icons.mic_none,
+      available: true,
+    ),
+    _PackageSpec(
+      title: 'أصوات النطق المحلية',
+      subtitle: 'حزم TTS مستقلة لكل لغة، بدلاً من الاعتماد على صوت النظام.',
+      size: 'حسب اللغة',
+      icon: Icons.record_voice_over_outlined,
+      available: false,
+    ),
+    _PackageSpec(
+      title: 'الترجمة العصبية المحلية',
+      subtitle: 'نموذج ترجمة محلي يُنزّل فقط لزوج اللغات الذي تختاره.',
+      size: 'حسب زوج اللغات',
+      icon: Icons.translate,
+      available: false,
+    ),
+    _PackageSpec(
+      title: 'ذكاء القصص المحلي',
+      subtitle: 'نموذج قصص اختياري كبير، يُثبّت عند طلب ميزة القصص فقط.',
+      size: 'سيظهر لاحقاً',
+      icon: Icons.auto_stories_outlined,
+      available: false,
+    ),
+  ];
 
   @override
   void initState() {
@@ -41,80 +69,68 @@ class _LanguageDownloadsCardState extends State<LanguageDownloadsCard> {
   }
 
   Future<void> _refreshInstallState() async {
-    setState(() => _checking = true);
     try {
-      final file = await _installer.verifiedInstalledModel(_descriptor);
+      final file = await _installer.verifiedInstalledModel(_whisperDescriptor);
       if (!mounted) return;
       setState(() {
-        _installed = file != null;
+        _whisperInstalled = file != null;
         _checking = false;
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _installed = false;
+        _whisperInstalled = false;
         _checking = false;
       });
     }
   }
 
-  Future<void> _download() async {
+  Future<void> _downloadWhisper() async {
     setState(() {
-      _downloading = true;
-      _progress = null;
+      _downloadingWhisper = true;
+      _whisperProgress = null;
       _notice = null;
     });
     final result = await _installer.downloadAfterUserApproval(
-      descriptor: _descriptor,
+      descriptor: _whisperDescriptor,
       onProgress: (received, expected) {
         if (!mounted) return;
-        setState(() => _progress = expected <= 0 ? null : received / expected);
+        setState(() => _whisperProgress = expected <= 0 ? null : received / expected);
       },
     );
     if (!mounted) return;
     setState(() {
-      _downloading = false;
-      _progress = null;
+      _downloadingWhisper = false;
+      _whisperProgress = null;
       _notice = result.message;
-      _installed = result.isSuccess;
+      _whisperInstalled = result.isSuccess;
     });
   }
 
-  Future<void> _delete() async {
+  Future<void> _deleteWhisper() async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('حذف نموذج الأوفلاين؟'),
-        content: const Text(
-          'سيُحذف نموذج التفريغ المحلي وستعود حاجة ترجمة الصوت إلى خدمة '
-          'الجهاز عبر الإنترنت. المساحة المستعادة: ~141 ميجابايت.',
-        ),
+        title: const Text('حذف حزمة Whisper؟'),
+        content: const Text('سيُحذف نموذج التعرف على الكلام وتتحرر مساحة تقارب 141 ميجابايت.'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('إلغاء'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('حذف'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('إلغاء')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('حذف')),
         ],
       ),
     );
     if (confirmed != true) return;
     try {
-      final file = await _installer.modelFile(_descriptor);
+      final file = await _installer.modelFile(_whisperDescriptor);
       if (await file.exists()) await file.delete();
-    } on FileSystemException {
       if (!mounted) return;
-      setState(() => _notice = 'تعذر حذف النموذج. أغلق المايك وأعد المحاولة.');
-      return;
+      setState(() {
+        _whisperInstalled = false;
+        _notice = 'تم حذف حزمة Whisper وتحرير المساحة.';
+      });
+    } on FileSystemException {
+      if (mounted) setState(() => _notice = 'تعذر حذف الحزمة. أغلق أي جلسة صوتية ثم أعد المحاولة.');
     }
-    if (!mounted) return;
-    setState(() {
-      _installed = false;
-      _notice = 'تم حذف النموذج وتحرير المساحة.';
-    });
   }
 
   @override
@@ -128,24 +144,18 @@ class _LanguageDownloadsCardState extends State<LanguageDownloadsCard> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
-                  _installed ? Icons.download_done : Icons.cloud_download_outlined,
-                  color: _installed ? Colors.green : null,
-                ),
+                const Icon(Icons.language, color: Colors.cyanAccent, size: 28),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('تنزيل اللغات (أوفلاين)', style: theme.textTheme.titleMedium),
+                      Text('حزم اللغات والصوت عند الطلب', style: theme.textTheme.titleMedium),
                       const SizedBox(height: 4),
                       Text(
-                        _checking
-                            ? 'جارٍ فحص الحالة...'
-                            : _installed
-                                ? 'النموذج المحلي مثبّت — المايك يعمل بلا إنترنت بكل اللغات المدعومة.'
-                                : 'النموذج غير مثبّت — المايك يستخدم خدمة الجهاز عبر الإنترنت.',
+                        'نزّل الوظيفة واللغة التي تحتاجها فقط. كل حزمة تتحقق من الحجم وSHA-256 قبل تفعيلها.',
                         style: theme.textTheme.bodySmall,
                       ),
                     ],
@@ -153,41 +163,130 @@ class _LanguageDownloadsCardState extends State<LanguageDownloadsCard> {
                 ),
               ],
             ),
-            if (_downloading) ...[
-              const SizedBox(height: 12),
-              LinearProgressIndicator(value: _progress),
-              const SizedBox(height: 4),
-              Text(
-                _progress == null
-                    ? 'جارٍ التنزيل...'
-                    : 'جارٍ التنزيل: ${(_progress! * 100).toStringAsFixed(0)}%',
-                style: theme.textTheme.bodySmall,
-              ),
-            ],
+            const SizedBox(height: 14),
+            ..._packages.map((package) => _PackageTile(
+                  spec: package,
+                  installed: package.available && _whisperInstalled,
+                  checking: package.available && _checking,
+                  downloading: package.available && _downloadingWhisper,
+                  progress: package.available ? _whisperProgress : null,
+                  onDownload: package.available ? _downloadWhisper : null,
+                  onDelete: package.available && _whisperInstalled ? _deleteWhisper : null,
+                )),
             if (_notice != null) ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               Text(_notice!, style: theme.textTheme.bodySmall),
             ],
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                if (_installed)
-                  TextButton(
-                    onPressed: _downloading ? null : _delete,
-                    child: const Text('حذف النموذج'),
-                  )
-                else
-                  FilledButton.icon(
-                    onPressed: _checking || _downloading ? null : _download,
-                    icon: const Icon(Icons.download),
-                    label: const Text('تنزيل (~141 ميجابايت)'),
-                  ),
-              ],
+            const SizedBox(height: 8),
+            Text(
+              'المساحة المطلوبة تُحسب قبل التفعيل، ويمكن حذف أي حزمة لاحقاً من هذه الشاشة.',
+              style: theme.textTheme.labelSmall,
             ),
           ],
         ),
       ),
     );
   }
+}
+
+class _PackageTile extends StatelessWidget {
+  const _PackageTile({
+    required this.spec,
+    required this.installed,
+    required this.checking,
+    required this.downloading,
+    required this.progress,
+    required this.onDownload,
+    required this.onDelete,
+  });
+
+  final _PackageSpec spec;
+  final bool installed;
+  final bool checking;
+  final bool downloading;
+  final double? progress;
+  final VoidCallback? onDownload;
+  final VoidCallback? onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final enabled = spec.available;
+    final status = checking
+        ? 'جارٍ فحص الحزمة…'
+        : downloading
+            ? 'جارٍ التنزيل…'
+            : installed
+                ? 'مثبّتة ومتحقق منها'
+                : enabled
+                    ? 'غير مثبّتة'
+                    : 'متاحة قريباً';
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
+        border: Border.all(color: installed ? Colors.green.withValues(alpha: 0.55) : Colors.white12),
+      ),
+      child: Column(
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(spec.icon, color: installed ? Colors.greenAccent : enabled ? Colors.cyanAccent : Colors.white38),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(spec.title, style: const TextStyle(fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 3),
+                    Text(spec.subtitle, style: theme.textTheme.bodySmall),
+                    const SizedBox(height: 5),
+                    Wrap(
+                      spacing: 10,
+                      children: [
+                        Text('المساحة: ${spec.size}', style: theme.textTheme.labelSmall),
+                        Text(status, style: TextStyle(color: installed ? Colors.greenAccent : enabled ? Colors.amberAccent : Colors.white54, fontSize: 12)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              if (installed)
+                IconButton(tooltip: 'حذف الحزمة', onPressed: onDelete, icon: const Icon(Icons.delete_outline))
+              else if (enabled)
+                FilledButton.tonalIcon(
+                  onPressed: checking || downloading ? null : onDownload,
+                  icon: const Icon(Icons.download, size: 18),
+                  label: const Text('تنزيل'),
+                )
+              else
+                const Chip(label: Text('قريباً')),
+            ],
+          ),
+          if (downloading) ...[
+            const SizedBox(height: 10),
+            LinearProgressIndicator(value: progress),
+            const SizedBox(height: 4),
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: Text(progress == null ? 'جارٍ تجهيز التنزيل…' : '${(progress! * 100).toStringAsFixed(0)}%', style: theme.textTheme.labelSmall),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _PackageSpec {
+  const _PackageSpec({required this.title, required this.subtitle, required this.size, required this.icon, required this.available});
+
+  final String title;
+  final String subtitle;
+  final String size;
+  final IconData icon;
+  final bool available;
 }
