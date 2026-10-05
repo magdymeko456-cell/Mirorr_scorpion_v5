@@ -25,8 +25,9 @@ class AndroidOverlayResult {
   bool get isStarted => state == AndroidOverlayState.started;
 }
 
-/// طبقة Android فقط لفقاعة ظاهرة يطلبها المستخدم صراحة. لا تطلب
-/// Accessibility أو Notification Listener، ولا تقرأ نصوص تطبيقات أخرى.
+/// طبقة Android فقط لفقاعة ظاهرة يطلبها المستخدم صراحة. القراءة المباشرة
+/// للنصوص لا تعمل إلا عبر Accessibility opt-in وقائمة تطبيقات مسموحة؛ لا
+/// نستخدم Notification Listener ولا نقرأ التطبيقات خارج القائمة.
 class AndroidOverlayService extends ChangeNotifier {
   bool _isVisible = false;
   StreamSubscription<dynamic>? _overlayEvents;
@@ -97,7 +98,7 @@ class AndroidOverlayService extends ChangeNotifier {
       }
       return const AndroidOverlayResult(
         AndroidOverlayState.started,
-        'ظهرت الفقاعة القابلة للسحب مع إشعار foreground. تترجم فقط النص الذي تكتبه أو تلصقه بنفسك.',
+        'ظهرت الفقاعة مع إشعار foreground. الإدخال اليدوي متاح، والترجمة فوق نص التطبيقات تتطلب إذن Accessibility وقائمة سماح صريحة.',
       );
     } catch (_) {
       return const AndroidOverlayResult(
@@ -189,9 +190,20 @@ class _MirrorScorpionOverlayScreenState
   bool _isTranslating = false;
   String? _translatedText;
   String? _notice;
+  Timer? _directPoller;
+  int _lastDirectGeneration = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _directPoller = Timer.periodic(const Duration(milliseconds: 700), (_) {
+      unawaited(_readDirectText());
+    });
+  }
 
   @override
   void dispose() {
+    _directPoller?.cancel();
     _input.dispose();
     super.dispose();
   }
@@ -200,7 +212,6 @@ class _MirrorScorpionOverlayScreenState
     await FlutterOverlayWindow.updateFlag(OverlayFlag.focusPointer);
     await FlutterOverlayWindow.resizeOverlay(344, 350, false);
     if (mounted) setState(() => _expanded = true);
-
     unawaited(_centerExpandedPanel());
   }
 
@@ -218,8 +229,24 @@ class _MirrorScorpionOverlayScreenState
   }
 
   Future<void> _close() async {
+    try {
+      await _clipboardBridge.invokeMethod<void>('disableDirectCapture');
+    } catch (_) {}
     await FlutterOverlayWindow.shareData(<String, String>{'event': 'closed'});
     await FlutterOverlayWindow.closeOverlay();
+  }
+
+  Future<void> _readDirectText() async {
+    if (_isTranslating) return;
+    try {
+      final data = await _clipboardBridge.invokeMethod<Map<dynamic, dynamic>>('readDirectCapture');
+      final generation = (data?['generation'] as num?)?.toInt() ?? 0;
+      final text = (data?['text'] as String?)?.trim() ?? '';
+      if (generation <= _lastDirectGeneration || text.length < 3) return;
+      _lastDirectGeneration = generation;
+      _input.text = text.length > 1800 ? text.substring(0, 1800) : text;
+      await _translate(isDirectCapture: true);
+    } catch (_) {}
   }
 
   Future<void> _pasteText() async {
@@ -250,7 +277,7 @@ class _MirrorScorpionOverlayScreenState
     });
   }
 
-  Future<void> _translate() async {
+  Future<void> _translate({bool isDirectCapture = false}) async {
     final text = _input.text.trim();
     if (text.length < 3) {
       setState(() => _notice = 'اكتب أو الصق نصاً أطول قليلاً للترجمة.');
@@ -289,6 +316,14 @@ class _MirrorScorpionOverlayScreenState
       _translatedText = result.isSuccess ? result.text : null;
       _notice = result.message ?? 'انتهت محاولة الترجمة.';
     });
+    if (isDirectCapture && result.isSuccess) {
+      try {
+        await _clipboardBridge.invokeMethod<void>('writeDirectTranslation', <String, Object>{
+          'text': result.text ?? '',
+          'generation': _lastDirectGeneration,
+        });
+      } catch (_) {}
+    }
   }
 
   @override

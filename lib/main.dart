@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'app/mirror_scorpion_app.dart';
 import 'core/localization/language_preferences.dart';
 import 'core/platform/android_overlay_service.dart';
+import 'core/platform/direct_translation_accessibility_service.dart';
 import 'core/platform/shared_text_inbox.dart';
 import 'core/pro/premium_verification_service.dart';
 
@@ -17,10 +18,13 @@ Future<void> main() async {
   await sharedTextInbox.initialize();
   final androidOverlayService = AndroidOverlayService();
   await androidOverlayService.initialize();
+  final directTranslationService = DirectTranslationAccessibilityService();
+  await directTranslationService.refresh();
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider.value(value: premiumService),
+        ChangeNotifierProvider.value(value: directTranslationService),
       ],
       child: MirrorScorpionApp(
         languagePreferences: languagePreferences,

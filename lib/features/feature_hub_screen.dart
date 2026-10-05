@@ -21,6 +21,7 @@ import '../core/documents/translated_document_export_service.dart';
 import '../core/mlkit/on_device_ocr_service.dart';
 import '../core/mlkit/on_device_translation_service.dart';
 import '../core/platform/android_overlay_service.dart';
+import '../core/platform/direct_translation_accessibility_service.dart';
 import '../core/platform/device_capability_service.dart';
 import '../core/platform/shared_text_inbox.dart';
 import '../core/pro/premium_verification_service.dart';
@@ -3847,9 +3848,41 @@ class _BubblePrivacyPage extends StatefulWidget {
   State<_BubblePrivacyPage> createState() => _BubblePrivacyPageState();
 }
 
-class _BubblePrivacyPageState extends State<_BubblePrivacyPage> {
+class _BubblePrivacyPageState extends State<_BubblePrivacyPage> with WidgetsBindingObserver {
   String? _notice;
   bool _isWorking = false;
+  static const _allowedAppChoices = <String, String>{
+    'com.whatsapp': 'WhatsApp',
+    'org.telegram.messenger': 'Telegram',
+    'com.facebook.orca': 'Messenger',
+    'com.google.android.gm': 'Gmail',
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    context.read<DirectTranslationAccessibilityService>().refresh();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      context.read<DirectTranslationAccessibilityService>().refresh();
+    }
+  }
+
+  Future<void> _openAccessibilitySettings() async {
+    final service = context.read<DirectTranslationAccessibilityService>();
+    await service.openAndroidSettings();
+    if (mounted) setState(() => _notice = 'فعّل خدمة Mirror Scorpion من شاشة إمكانية الوصول ثم عُد إلى التطبيق.');
+  }
 
   Future<void> _startBubble() async {
     setState(() => _isWorking = true);
@@ -3863,6 +3896,7 @@ class _BubblePrivacyPageState extends State<_BubblePrivacyPage> {
 
   Future<void> _stopBubble() async {
     setState(() => _isWorking = true);
+    await context.read<DirectTranslationAccessibilityService>().disableDirectCapture();
     final result = await context.read<AndroidOverlayService>().closeBubble();
     if (!mounted) return;
     setState(() {
@@ -3881,11 +3915,50 @@ class _BubblePrivacyPageState extends State<_BubblePrivacyPage> {
           padding: const EdgeInsets.all(18),
           children: [
             const _SectionNotice(
-              title: 'حدود الفقاعة',
-              detail: 'فقاعة Android قابلة للسحب تظهر فقط بعد إذنك وتحت إشعار foreground. تترجم النص الذي تكتبه داخلها أو تلصقه بنفسك؛ ولا تقرأ التطبيقات الأخرى أو الحافظة تلقائياً.',
+              title: 'الترجمة المباشرة فوق النص',
+              detail: 'تقرأ الخدمة النص المرئي فقط من التطبيقات التي تختارها، ثم تضع الترجمة فوق موضعه. لا تعمل قبل منح إذن الظهور وإذن إمكانية الوصول واختيار التطبيقات.',
             ),
             const SizedBox(height: 12),
-            const Card(child: ListTile(leading: Icon(Icons.block_outlined, color: Colors.redAccent), title: Text('غير مسموح'), subtitle: Text('لا خدمة Accessibility، ولا Notification Listener، ولا قراءة تلقائية لرسائل WhatsApp أو البريد أو Messenger.'))),
+            Consumer<DirectTranslationAccessibilityService>(
+              builder: (context, direct, _) => Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(Icons.accessibility_new, color: direct.isEnabled ? Colors.greenAccent : Colors.orangeAccent),
+                        title: Text(direct.isEnabled ? 'إذن إمكانية الوصول مفعّل' : 'إذن إمكانية الوصول غير مفعّل'),
+                        subtitle: const Text('مطلوب لقراءة النص الظاهر فقط ووضع الترجمة فوقه.'),
+                        trailing: TextButton(onPressed: _openAccessibilitySettings, child: const Text('إعداد')),
+                      ),
+                      const Divider(),
+                      const Text('التطبيقات المسموح ترجمتها:', style: TextStyle(fontWeight: FontWeight.w700)),
+                      ..._allowedAppChoices.entries.map(
+                        (entry) => CheckboxListTile(
+                          contentPadding: EdgeInsets.zero,
+                          value: direct.allowedPackages.contains(entry.key),
+                          title: Text(entry.value),
+                          subtitle: Text(entry.key, style: const TextStyle(fontSize: 11)),
+                          onChanged: direct.isEnabled
+                              ? (value) {
+                                  final next = {...direct.allowedPackages};
+                                  value == true ? next.add(entry.key) : next.remove(entry.key);
+                                  direct.setAllowedPackages(next);
+                                }
+                              : null,
+                        ),
+                      ),
+                      Text(
+                        direct.allowedPackages.isEmpty ? 'لم تختر أي تطبيق بعد.' : 'سيتم تجاهل أي تطبيق غير محدد هنا.',
+                        style: const TextStyle(color: Colors.white60, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
             const SizedBox(height: 12),
             Card(
               child: ListTile(

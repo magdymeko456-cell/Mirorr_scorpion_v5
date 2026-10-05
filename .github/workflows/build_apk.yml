@@ -29,8 +29,8 @@ jobs:
           fi
       - name: Verify shared-text privacy boundary
         run: |
-          if grep -R -nE 'addPrimaryClipChangedListener|AccessibilityService|NotificationListenerService|BIND_ACCESSIBILITY_SERVICE|BIND_NOTIFICATION_LISTENER_SERVICE' lib test; then
-            echo "Shared text must not monitor the clipboard or read other applications."
+          if grep -R -nE 'addPrimaryClipChangedListener|NotificationListenerService|BIND_NOTIFICATION_LISTENER_SERVICE' lib test; then
+            echo "Shared text must not monitor the clipboard or notification stream."
             exit 1
           fi
       - uses: subosito/flutter-action@v2
@@ -208,6 +208,8 @@ jobs:
         run: bash scripts/patch_device_capabilities_bridge.sh
       - name: Add user-triggered overlay clipboard bridge
         run: bash scripts/patch_overlay_clipboard_bridge.sh
+      - name: Add explicit direct-translation accessibility bridge
+        run: bash scripts/patch_direct_translation_accessibility.sh
       - name: Align shared text plugin JVM target
         run: |
           PLUGIN_DIR=$(find "${PUB_CACHE:-$HOME/.pub-cache}/hosted/pub.dev" -maxdepth 1 -type d -name 'receive_sharing_intent-1.8.1' -print -quit)
