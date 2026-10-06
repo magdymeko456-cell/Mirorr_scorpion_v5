@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:chess/chess.dart' as chess;
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../core/games/chess_game_controller.dart';
+import '../core/games/chess_sound_service.dart';
 import '../l10n/generated/app_localizations.dart';
 
 /// رموز بصرية أصلية للوحة حديثة سهلة القراءة على الهاتف. تستلهم وضوح
@@ -27,6 +30,7 @@ class ChessClubScreen extends StatefulWidget {
 
 class _ChessClubScreenState extends State<ChessClubScreen> {
   final ChessGameController _chess = ChessGameController();
+  final ChessSoundService _sound = ChessSoundService();
 
   bool _playAgainstComputer = true;
   ChessComputerLevel _computerLevel = ChessComputerLevel.medium;
@@ -37,6 +41,22 @@ class _ChessClubScreenState extends State<ChessClubScreen> {
   String? _suggestedHint;
 
   bool get _computerTurn => _playAgainstComputer && !_chess.isWhiteTurn;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_sound.initialize());
+  }
+
+  void _playLastMoveSound() {
+    final move = _chess.lastMove;
+    if (move == null) return;
+    unawaited(_sound.playMove(
+      capture: move.isCapture,
+      check: _chess.inCheck,
+      checkmate: _chess.inCheckmate,
+    ));
+  }
 
   String _levelLabel(AppLocalizations l10n, ChessComputerLevel level) => switch (level) {
         ChessComputerLevel.normal => l10n.chessLevelNormal,
@@ -82,6 +102,7 @@ class _ChessClubScreenState extends State<ChessClubScreen> {
         return;
       }
       if (_chess.moveComputer(level: _activeComputerLevel)) {
+        _playLastMoveSound();
         setState(() {
           _computerThinking = false;
           _selectedSquare = null;
@@ -110,6 +131,7 @@ class _ChessClubScreenState extends State<ChessClubScreen> {
     for (var index = 0; index < undoCount; index++) {
       if (_chess.undoLastMove() == null) break;
     }
+    unawaited(_sound.playUndo());
     setState(() {
       _selectedSquare = null;
       _legalTargets = const [];
@@ -141,6 +163,7 @@ class _ChessClubScreenState extends State<ChessClubScreen> {
   void _tryMove(String from, String to) {
     final success = _chess.makeMove(from, to);
     if (success) {
+      _playLastMoveSound();
       setState(() {
         _selectedSquare = null;
         _legalTargets = const [];
@@ -184,6 +207,14 @@ class _ChessClubScreenState extends State<ChessClubScreen> {
             icon: const Icon(Icons.refresh),
             tooltip: l10n.chessResetTooltip,
             onPressed: _resetGame,
+          ),
+          IconButton(
+            icon: Icon(_sound.isMuted ? Icons.volume_off : Icons.volume_up, color: Colors.amber),
+            tooltip: _sound.isMuted ? l10n.chessSoundOff : l10n.chessSoundOn,
+            onPressed: () async {
+              await _sound.setMuted(!_sound.isMuted);
+              if (mounted) setState(() {});
+            },
           ),
         ],
       ),

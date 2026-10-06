@@ -69,5 +69,7 @@
   "chessLocalPlayers": "Pass the device between White and Black",
   "chessPgnTitle": "Move history (PGN)",
   "chessPgnEmpty": "Moves will appear here when the game starts.",
-  "chessPieceLabel": "Chess piece"
+  "chessPieceLabel": "Chess piece",
+  "chessSoundOn": "Mute chess effects",
+  "chessSoundOff": "Enable chess effects"
 }

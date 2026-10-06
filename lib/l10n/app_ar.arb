@@ -69,5 +69,7 @@
   "chessLocalPlayers": "تناوب الجهاز بين اللاعب الأبيض والأسود",
   "chessPgnTitle": "سجل النقلات PGN",
   "chessPgnEmpty": "ستظهر النقلات هنا بعد بدء المباراة.",
-  "chessPieceLabel": "قطعة شطرنج"
+  "chessPieceLabel": "قطعة شطرنج",
+  "chessSoundOn": "كتم مؤثرات الشطرنج",
+  "chessSoundOff": "تشغيل مؤثرات الشطرنج"
 }
