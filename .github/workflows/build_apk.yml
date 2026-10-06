@@ -45,28 +45,29 @@ jobs:
         run: flutter create --platforms=android --project-name mirror_scorpion_v4 .
       - name: Configure whisper Android SDK and NDK
         run: |
+          NDK_VERSION="28.2.13676358"
           SDKMANAGER="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
           if [ ! -x "$SDKMANAGER" ]; then
             SDKMANAGER=$(find "${ANDROID_HOME}/cmdline-tools" -type f -name sdkmanager -perm -111 | sort -V | tail -n 1)
           fi
           test -n "$SDKMANAGER" && test -x "$SDKMANAGER"
           yes | "$SDKMANAGER" --licenses >/dev/null
-          "$SDKMANAGER" --install "platforms;android-36" "ndk;29.0.13113456"
-          test -d "${ANDROID_HOME}/ndk/29.0.13113456"
+          "$SDKMANAGER" --install "platforms;android-35" "ndk;${NDK_VERSION}"
+          test -d "${ANDROID_HOME}/ndk/${NDK_VERSION}"
           if [ -f android/app/build.gradle.kts ]; then
-            sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 36/' android/app/build.gradle.kts
-            sed -i '/android {/a\    ndkVersion = "29.0.13113456"' android/app/build.gradle.kts
+            sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 35/' android/app/build.gradle.kts
+            sed -i "/android {/a\\    ndkVersion = \"${NDK_VERSION}\"" android/app/build.gradle.kts
           elif [ -f android/app/build.gradle ]; then
-            sed -i 's/compileSdk flutter.compileSdkVersion/compileSdk 36/' android/app/build.gradle
-            sed -i '/android {/a\    ndkVersion "29.0.13113456"' android/app/build.gradle
+            sed -i 's/compileSdk flutter.compileSdkVersion/compileSdk 35/' android/app/build.gradle
+            sed -i "/android {/a\\    ndkVersion \"${NDK_VERSION}\"" android/app/build.gradle
           else
             echo "Android app Gradle file was not generated."
             exit 1
           fi
           WHISPER_GRADLE="${PUB_CACHE}/hosted/pub.dev/whisper_ggml-2.6.0/android/build.gradle"
           test -f "$WHISPER_GRADLE"
-          sed -i 's/compileSdk 34/compileSdk 36/' "$WHISPER_GRADLE"
-          grep -q 'compileSdk 36' "$WHISPER_GRADLE"
+          sed -i 's/compileSdk 34/compileSdk 35/' "$WHISPER_GRADLE"
+          grep -q 'compileSdk 35' "$WHISPER_GRADLE"
       - name: Configure Android speech visibility and microphone permission
         run: |
           if ! grep -q 'android.permission.RECORD_AUDIO' android/app/src/main/AndroidManifest.xml; then

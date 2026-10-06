@@ -9,6 +9,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../app/royal_dark_theme.dart';
 import '../core/localization/language_preferences.dart';
@@ -2741,14 +2742,13 @@ class _GamesPanelState extends State<_GamesPanel> {
   bool _computerThinking = false;
   bool _playAgainstComputer = true;
   ChessComputerLevel _computerLevel = ChessComputerLevel.normal;
-  String _gameNotice = 'اختر وضع اللعب ثم انقل قطعة بيضاء لبدء المباراة.';
-  final _capturedByWhite = <String>[];
-  final _capturedByBlack = <String>[];
+  String _gameNotice = '';
 
   @override
   void initState() {
     super.initState();
     SystemChrome.setPreferredOrientations(const [DeviceOrientation.portraitUp]);
+    _gameNotice = 'اختر وضع اللعب ثم انقل قطعة بيضاء لبدء المباراة.';
   }
 
   @override
@@ -2757,12 +2757,11 @@ class _GamesPanelState extends State<_GamesPanel> {
     super.dispose();
   }
 
-  void _recordLastCapture() {
-    final move = _chess.lastMove;
-    if (move == null || !move.isCapture) return;
-    (move.movedByWhite ? _capturedByWhite : _capturedByBlack)
-        .add(move.capturedSymbol);
-  }
+  String _levelLabel(AppLocalizations l10n, ChessComputerLevel level) => switch (level) {
+        ChessComputerLevel.normal => l10n.chessLevelNormal,
+        ChessComputerLevel.medium => l10n.chessLevelMedium,
+        ChessComputerLevel.skilled => l10n.chessLevelSkilled,
+      };
 
   Future<void> _tapSquare(String square) async {
     if (_computerThinking || _chess.gameOver) return;
@@ -2774,7 +2773,9 @@ class _GamesPanelState extends State<_GamesPanel> {
       setState(() {
         _selectedSquare = square;
         _legalTargets = _chess.legalMovesFrom(square);
-        _gameNotice = _legalTargets.isEmpty ? 'لا توجد حركة قانونية لهذه القطعة.' : 'اختر مربعاً مميزاً للحركة.';
+        _gameNotice = _legalTargets.isEmpty
+            ? AppLocalizations.of(context)!.chessNoLegalMove
+            : AppLocalizations.of(context)!.chessSelectTarget;
       });
       return;
     }
@@ -2798,7 +2799,6 @@ class _GamesPanelState extends State<_GamesPanel> {
 
     final moved = _chess.moveHuman(_selectedSquare!, square);
     if (!moved) return;
-    _recordLastCapture();
     if (_chess.gameOver) {
       setState(() {
         _selectedSquare = null;
@@ -2816,12 +2816,18 @@ class _GamesPanelState extends State<_GamesPanel> {
     if (!_playAgainstComputer) return;
     setState(() {
       _computerThinking = true;
-      _gameNotice = 'الكمبيوتر يفكر بالمستوى ${_computerLevel.label}…';
+      final l10n = AppLocalizations.of(context)!;
+      final activeLevel = _computerLevel == ChessComputerLevel.normal
+          ? _chess.adaptiveLevel
+          : _computerLevel;
+      _gameNotice = '${l10n.chessLevelLabel}: ${_levelLabel(l10n, activeLevel)}…';
     });
     await Future<void>.delayed(const Duration(milliseconds: 450));
     if (!mounted) return;
-    final computerMoved = _chess.moveComputer(level: _computerLevel);
-    if (computerMoved) _recordLastCapture();
+    final activeLevel = _computerLevel == ChessComputerLevel.normal
+        ? _chess.adaptiveLevel
+        : _computerLevel;
+    _chess.moveComputer(level: activeLevel);
     if (!mounted) return;
     setState(() {
       _computerThinking = false;
@@ -2830,12 +2836,12 @@ class _GamesPanelState extends State<_GamesPanel> {
   }
 
   String _outcomeMessage() {
-    if (_chess.isCheckmate) return 'كش مات. انتهت المباراة.';
-    if (_chess.isDraw) return 'تعادل وفق قواعد الشطرنج.';
-    if (_chess.isWhiteTurn) return 'دور الأبيض. اختر قطعة ثم مربعاً مميزاً للحركة.';
+    if (_chess.isCheckmate) return AppLocalizations.of(context)!.chessCheckmate;
+    if (_chess.isDraw) return AppLocalizations.of(context)!.chessDraw;
+    if (_chess.isWhiteTurn) return AppLocalizations.of(context)!.chessTurnWhite;
     return _playAgainstComputer
-        ? 'دور الكمبيوتر الأسود.'
-        : 'دور الأسود. اختر قطعة ثم مربعاً مميزاً للحركة.';
+        ? '${AppLocalizations.of(context)!.chessTurnBlack} — ${AppLocalizations.of(context)!.chessAgainstComputer}'
+        : AppLocalizations.of(context)!.chessTurnBlack;
   }
 
   void _resetGame() {
@@ -2844,9 +2850,7 @@ class _GamesPanelState extends State<_GamesPanel> {
       _selectedSquare = null;
       _legalTargets = const [];
       _computerThinking = false;
-      _capturedByWhite.clear();
-      _capturedByBlack.clear();
-      _gameNotice = 'بدأت مباراة جديدة. دور الأبيض.';
+      _gameNotice = AppLocalizations.of(context)!.chessNewGame;
     });
   }
 
@@ -2857,11 +2861,9 @@ class _GamesPanelState extends State<_GamesPanel> {
       _selectedSquare = null;
       _legalTargets = const [];
       _computerThinking = false;
-      _capturedByWhite.clear();
-      _capturedByBlack.clear();
       _gameNotice = againstComputer
-          ? 'وضع لاعب واحد: أنت بالأبيض والكمبيوتر بالأسود.'
-          : 'وضع لاعبين محليين: يتبادل اللاعبان الجهاز.';
+          ? AppLocalizations.of(context)!.chessPlayerComputer
+          : AppLocalizations.of(context)!.chessLocalPlayers;
     });
   }
 
@@ -2872,28 +2874,27 @@ class _GamesPanelState extends State<_GamesPanel> {
       _selectedSquare = null;
       _legalTargets = const [];
       _computerThinking = false;
-      _capturedByWhite.clear();
-      _capturedByBlack.clear();
-      _gameNotice = 'مستوى الكمبيوتر: ${level.label}. بدأت مباراة جديدة.';
+      final l10n = AppLocalizations.of(context)!;
+      _gameNotice = '${l10n.chessLevelLabel}: ${_levelLabel(l10n, level)}';
     });
   }
 
   Widget _buildMatchStatus() {
     final isWhiteTurn = _chess.isWhiteTurn;
     final title = _chess.isCheckmate
-        ? 'كش مات — فاز ${isWhiteTurn ? 'الأسود' : 'الأبيض'}'
+        ? AppLocalizations.of(context)!.chessCheckmate
         : _chess.isDraw
-            ? 'تعادل وفق قواعد الشطرنج'
+            ? AppLocalizations.of(context)!.chessDraw
             : _computerThinking
-                ? 'الكمبيوتر يفكر — ${_computerLevel.label}'
+                ? '${AppLocalizations.of(context)!.chessLevelLabel}: ${_levelLabel(AppLocalizations.of(context)!, _computerLevel)}'
                 : isWhiteTurn
-                    ? 'دور الأبيض'
+                    ? AppLocalizations.of(context)!.chessTurnWhite
                     : _playAgainstComputer
-                        ? 'دور الكمبيوتر الأسود'
-                        : 'دور الأسود';
+                        ? '${AppLocalizations.of(context)!.chessTurnBlack} — ${AppLocalizations.of(context)!.chessAgainstComputer}'
+                        : AppLocalizations.of(context)!.chessTurnBlack;
     final subtitle = _playAgainstComputer
-        ? 'أنت بالأبيض • الكمبيوتر بالأسود'
-        : 'تناوب الجهاز بين اللاعب الأبيض والأسود';
+        ? AppLocalizations.of(context)!.chessAgainstComputer
+        : AppLocalizations.of(context)!.chessTwoPlayers;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
       decoration: BoxDecoration(
@@ -2935,9 +2936,9 @@ class _GamesPanelState extends State<_GamesPanel> {
   Widget _buildCapturedPieces() {
     return Row(
       children: [
-        Expanded(child: _CapturedPiecesPane(label: 'أسر الأبيض', symbols: _capturedByWhite, isWhiteSide: true)),
+        Expanded(child: _CapturedPiecesPane(label: AppLocalizations.of(context)!.chessCapturedByWhite, assets: _chess.whiteCaptures, isWhiteSide: true)),
         const SizedBox(width: 8),
-        Expanded(child: _CapturedPiecesPane(label: 'أسر الأسود', symbols: _capturedByBlack, isWhiteSide: false)),
+        Expanded(child: _CapturedPiecesPane(label: AppLocalizations.of(context)!.chessCapturedByBlack, assets: _chess.blackCaptures, isWhiteSide: false)),
       ],
     );
   }
@@ -3028,6 +3029,7 @@ class _GamesPanelState extends State<_GamesPanel> {
                                 child: _ChessPieceToken(
                                   symbol: ChessGameController.pieceSymbol(piece),
                                   isWhite: piece?.color.name == 'WHITE',
+                                  assetPath: ChessGameController.pieceAssetPath(piece),
                                 ),
                               ),
                             ],
@@ -3075,7 +3077,7 @@ class _GamesPanelState extends State<_GamesPanel> {
           Row(
             children: [
               IconButton(
-                tooltip: 'رجوع',
+                tooltip: MaterialLocalizations.of(context).backButtonTooltip,
                 onPressed: () => Navigator.maybePop(context),
                 icon: const Icon(Icons.arrow_forward_ios_rounded, color: RoyalColors.gold, size: 20),
               ),
@@ -3085,12 +3087,12 @@ class _GamesPanelState extends State<_GamesPanel> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(AppLocalizations.of(context)!.featureGames, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
-                    Text('مباراة سريعة في وضع عمودي', style: TextStyle(fontSize: 12, color: RoyalColors.muted)),
+                    Text(AppLocalizations.of(context)!.chessAdaptiveLabel, style: TextStyle(fontSize: 12, color: RoyalColors.muted)),
                   ],
                 ),
               ),
               IconButton(
-                tooltip: 'مباراة جديدة',
+                tooltip: AppLocalizations.of(context)!.chessResetTooltip,
                 onPressed: _resetGame,
                 icon: const Icon(Icons.restart_alt, color: RoyalColors.gold),
               ),
@@ -3103,12 +3105,12 @@ class _GamesPanelState extends State<_GamesPanel> {
             alignment: WrapAlignment.center,
             children: [
               ChoiceChip(
-                label: const Text('ضد الكمبيوتر'),
+                label: Text(AppLocalizations.of(context)!.chessAgainstComputer),
                 selected: _playAgainstComputer,
                 onSelected: (selected) { if (selected) _setPlayMode(true); },
               ),
               ChoiceChip(
-                label: const Text('لاعبان محلياً'),
+                label: Text(AppLocalizations.of(context)!.chessTwoPlayers),
                 selected: !_playAgainstComputer,
                 onSelected: (selected) { if (selected) _setPlayMode(false); },
               ),
@@ -3121,7 +3123,7 @@ class _GamesPanelState extends State<_GamesPanel> {
               runSpacing: 5,
               alignment: WrapAlignment.center,
               children: ChessComputerLevel.values.map((level) => ChoiceChip(
-                label: Text(level.label),
+                label: Text(_levelLabel(AppLocalizations.of(context)!, level)),
                 selected: _computerLevel == level,
                 onSelected: (selected) { if (selected) _setComputerLevel(level); },
               )).toList(),
@@ -3129,6 +3131,13 @@ class _GamesPanelState extends State<_GamesPanel> {
           ],
           const SizedBox(height: 9),
           _buildMatchStatus(),
+          const SizedBox(height: 6),
+          Center(
+            child: Text(
+              AppLocalizations.of(context)!.chessPerformance(_chess.performanceRating),
+              style: const TextStyle(color: RoyalColors.muted, fontSize: 11),
+            ),
+          ),
           const SizedBox(height: 10),
           Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 520), child: _buildChessBoard())),
           const SizedBox(height: 9),
@@ -3145,7 +3154,7 @@ class _GamesPanelState extends State<_GamesPanel> {
                 ),
               ),
               IconButton(
-                tooltip: 'مباراة جديدة',
+                tooltip: AppLocalizations.of(context)!.chessResetTooltip,
                 onPressed: _resetGame,
                 icon: const Icon(Icons.refresh_rounded, color: RoyalColors.gold),
               ),
@@ -3155,12 +3164,12 @@ class _GamesPanelState extends State<_GamesPanel> {
             data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
             child: ExpansionTile(
               tilePadding: const EdgeInsets.symmetric(horizontal: 6),
-              title: const Text('سجل النقلات PGN', style: TextStyle(color: RoyalColors.muted, fontSize: 12)),
+              title: Text(AppLocalizations.of(context)!.chessPgnTitle, style: const TextStyle(color: RoyalColors.muted, fontSize: 12)),
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
                   child: SelectableText(
-                    _chess.pgn.isEmpty ? 'ستظهر النقلات هنا بعد بدء المباراة.' : _chess.pgn,
+                    _chess.pgn.isEmpty ? AppLocalizations.of(context)!.chessPgnEmpty : _chess.pgn,
                     textDirection: TextDirection.ltr,
                     style: const TextStyle(color: RoyalColors.muted, fontSize: 11),
                   ),
@@ -3175,13 +3184,20 @@ class _GamesPanelState extends State<_GamesPanel> {
 }
 
 class _ChessPieceToken extends StatelessWidget {
-  const _ChessPieceToken({required this.symbol, required this.isWhite});
+  const _ChessPieceToken({required this.symbol, required this.isWhite, this.assetPath});
 
   final String symbol;
   final bool isWhite;
+  final String? assetPath;
 
   @override
   Widget build(BuildContext context) {
+    if (assetPath != null) {
+      return Padding(
+        padding: const EdgeInsets.all(2),
+        child: SvgPicture.asset(assetPath!, fit: BoxFit.contain),
+      );
+    }
     if (symbol.isEmpty) return const SizedBox.shrink();
     final colors = isWhite
         ? const [Color(0xFFFFFFFF), Color(0xFFFFE9A5), Color(0xFFD19D45), Color(0xFFFFF9DD)]
@@ -3236,12 +3252,12 @@ class _ChessPieceToken extends StatelessWidget {
 class _CapturedPiecesPane extends StatelessWidget {
   const _CapturedPiecesPane({
     required this.label,
-    required this.symbols,
+    required this.assets,
     required this.isWhiteSide,
   });
 
   final String label;
-  final List<String> symbols;
+  final List<String> assets;
   final bool isWhiteSide;
 
   @override
@@ -3259,17 +3275,23 @@ class _CapturedPiecesPane extends StatelessWidget {
         children: [
           Text(label, style: const TextStyle(fontSize: 11, color: RoyalColors.muted, fontWeight: FontWeight.w700)),
           const SizedBox(height: 3),
-          Text(
-            symbols.isEmpty ? '—' : symbols.join(' '),
-            textDirection: TextDirection.ltr,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 18,
-              height: 1,
-              color: isWhiteSide ? const Color(0xFFFFF1C9) : const Color(0xFF9DB9C5),
-              shadows: [Shadow(color: Colors.black.withValues(alpha: 0.58), blurRadius: 2, offset: const Offset(1, 1))],
-            ),
+          SizedBox(
+            height: 25,
+            child: assets.isEmpty
+                ? const Align(alignment: Alignment.centerLeft, child: Text('—', style: TextStyle(color: RoyalColors.muted)))
+                : ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: assets.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 2),
+                    itemBuilder: (_, index) => SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: Opacity(
+                        opacity: isWhiteSide ? 1 : 0.86,
+                        child: SvgPicture.asset(assets[index], fit: BoxFit.contain),
+                      ),
+                    ),
+                  ),
           ),
         ],
       ),

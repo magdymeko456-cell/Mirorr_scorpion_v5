@@ -87,4 +87,26 @@ void main() {
     expect(game.pieceAt('e4'), isNull);
     expect(game.isWhiteTurn, isTrue);
   });
+
+  test('keeps captured local SVG assets for both sides and removes them on undo', () {
+    final game = ChessGameController();
+
+    expect(game.moveHuman('e2', 'e4'), isTrue);
+    expect(game.moveHuman('d7', 'd5'), isTrue);
+    expect(game.moveHuman('e4', 'd5'), isTrue);
+
+    expect(game.whiteCaptures, contains('assets/images/chess/meridian_shaded/bp.svg'));
+    expect(game.blackCaptures, isEmpty);
+    expect(game.undoLastMove(), isNotNull);
+    expect(game.whiteCaptures, isEmpty);
+  });
+
+  test('raises the adaptive tier after a useful capture', () {
+    final game = ChessGameController();
+    expect(game.adaptiveLevel, ChessComputerLevel.normal);
+    expect(game.moveHuman('e2', 'e4'), isTrue);
+    expect(game.moveHuman('d7', 'd5'), isTrue);
+    expect(game.moveHuman('e4', 'd5'), isTrue);
+    expect(game.performanceRating, greaterThan(1000));
+  });
 }

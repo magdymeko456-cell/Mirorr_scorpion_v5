@@ -17,12 +17,14 @@ class ChessMoveSummary {
     required this.to,
     required this.movedByWhite,
     this.capturedSymbol = '',
+    this.capturedAssetPath,
   });
 
   final String from;
   final String to;
   final bool movedByWhite;
   final String capturedSymbol;
+  final String? capturedAssetPath;
 
   bool get isCapture => capturedSymbol.isNotEmpty;
 }
@@ -34,6 +36,9 @@ class ChessGameController {
   final Random _random = Random();
   ChessMoveSummary? _lastMove;
   final List<ChessMoveSummary> _moveHistory = <ChessMoveSummary>[];
+  final List<String> _whiteCaptures = <String>[];
+  final List<String> _blackCaptures = <String>[];
+  int _performanceRating = 1000;
 
   chess.Piece? pieceAt(String square) => _game.get(square);
 
@@ -87,6 +92,14 @@ class ChessGameController {
   String get pgn => _game.pgn();
   ChessMoveSummary? get lastMove => _lastMove;
   bool get canUndo => _moveHistory.isNotEmpty;
+  List<String> get whiteCaptures => List.unmodifiable(_whiteCaptures);
+  List<String> get blackCaptures => List.unmodifiable(_blackCaptures);
+  int get performanceRating => _performanceRating;
+  ChessComputerLevel get adaptiveLevel {
+    if (_performanceRating >= 1180) return ChessComputerLevel.skilled;
+    if (_performanceRating >= 1080) return ChessComputerLevel.medium;
+    return ChessComputerLevel.normal;
+  }
 
   List<String> legalMovesFrom(String square) {
     final legalTargets = <String>[];
@@ -175,6 +188,10 @@ class ChessGameController {
     if (_moveHistory.isEmpty || _game.history.isEmpty) return null;
     _game.undo_move();
     final undone = _moveHistory.removeLast();
+    if (undone.isCapture) {
+      final captures = undone.movedByWhite ? _whiteCaptures : _blackCaptures;
+      if (captures.isNotEmpty) captures.removeLast();
+    }
     _lastMove = _moveHistory.isEmpty ? null : _moveHistory.last;
     return undone;
   }
@@ -212,14 +229,24 @@ class ChessGameController {
       capturedPiece = _game.get('${to.substring(0, 1)}${from.substring(1, 2)}');
     }
     final movedByWhite = isWhiteTurn;
+    final beforeScore = _materialScore(_game);
     if (!_applyMoveTo(_game, move)) return false;
+    final capturedAsset = pieceAssetPath(capturedPiece);
     _lastMove = ChessMoveSummary(
       from: from,
       to: to,
       movedByWhite: movedByWhite,
       capturedSymbol: pieceSymbol(capturedPiece),
+      capturedAssetPath: capturedAsset,
     );
     _moveHistory.add(_lastMove!);
+    if (capturedAsset != null) {
+      (movedByWhite ? _whiteCaptures : _blackCaptures).add(capturedAsset);
+    }
+    if (movedByWhite) {
+      final swing = (_materialScore(_game) - beforeScore) ~/ 20;
+      _performanceRating = (_performanceRating + swing + (capturedPiece == null ? 0 : 8)).clamp(800, 1600).toInt();
+    }
     return true;
   }
 
@@ -235,6 +262,9 @@ class ChessGameController {
     _game = chess.Chess();
     _lastMove = null;
     _moveHistory.clear();
+    _whiteCaptures.clear();
+    _blackCaptures.clear();
+    _performanceRating = 1000;
   }
 
   int _materialScore(chess.Chess position) {
