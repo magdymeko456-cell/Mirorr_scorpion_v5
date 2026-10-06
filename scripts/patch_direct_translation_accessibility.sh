@@ -31,6 +31,7 @@ import android.accessibilityservice.AccessibilityService;
 import android.graphics.Color;
 import android.graphics.Rect;
 import android.graphics.PixelFormat;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.Gravity;
@@ -49,10 +50,12 @@ public class MirrorAccessibilityService extends AccessibilityService {
     private int lastGeneration = 0;
     private String lastCapturedText = "";
     private String lastCapturedPackage = "";
+    private String lastAllowedSignature = "";
 
     @Override public void onServiceConnected() {
         super.onServiceConnected();
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
+        refreshAllowedPackages();
         handler.post(pollTranslation);
     }
 
@@ -60,13 +63,15 @@ public class MirrorAccessibilityService extends AccessibilityService {
         if (event == null) return;
         final String packageName = event.getPackageName() == null ? "" : event.getPackageName().toString();
         Set<String> allowed = allowedPackages();
-        if (packageName.isEmpty() || !allowed.contains(packageName)) return;
-        AccessibilityNodeInfo root = getRootInActiveWindow();
+        refreshAllowedPackages();
+        if (packageName.isEmpty() || !allowed.contains(packageName)) { clearTranslationState(); return; }
+        AccessibilityNodeInfo root = event.getSource();
+        if (root == null) root = getRootInActiveWindow();
         if (root == null) return;
         AccessibilityNodeInfo candidate = findReadableText(root);
-        if (candidate == null) return;
+        if (candidate == null) { clearTranslationState(); return; }
         String text = candidate.getText() == null ? "" : candidate.getText().toString().trim();
-        if (text.length() < 3 || text.length() > 1800 || candidate.isPassword()) return;
+        if (text.length() < 3 || text.length() > 1800 || candidate.isPassword()) { clearTranslationState(); return; }
         if (text.equals(lastCapturedText) && packageName.equals(lastCapturedPackage)) return;
         lastCapturedText = text;
         lastCapturedPackage = packageName;
@@ -101,19 +106,38 @@ public class MirrorAccessibilityService extends AccessibilityService {
         return result;
     }
 
+    private void refreshAllowedPackages() {
+        android.accessibilityservice.AccessibilityServiceInfo info = getServiceInfo();
+        if (info == null) return;
+        Set<String> allowed = allowedPackages();
+        String signature = allowed.toString();
+        if (signature.equals(lastAllowedSignature)) return;
+        lastAllowedSignature = signature;
+        info.packageNames = allowed.toArray(new String[0]);
+        setServiceInfo(info);
+    }
+
+    private void clearTranslationState() {
+        removeTranslation();
+        lastCapturedText = "";
+        lastCapturedPackage = "";
+        getSharedPreferences(PREFS, MODE_PRIVATE).edit().remove("text").remove("translation").apply();
+    }
+
     private final Runnable pollTranslation = new Runnable() {
         @Override public void run() {
             android.content.SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
             int generation = prefs.getInt("translationGeneration", 0);
             String translation = prefs.getString("translation", "");
             if (generation == lastGeneration || translation == null || translation.trim().isEmpty()) {
-                handler.postDelayed(this, 450);
+                if (translation == null || translation.trim().isEmpty()) removeTranslation();
+                handler.postDelayed(this, 250);
                 return;
             }
             lastGeneration = generation;
             Rect bounds = new Rect(prefs.getInt("left", 20), prefs.getInt("top", 120), prefs.getInt("right", 320), prefs.getInt("bottom", 180));
             showTranslation(translation, bounds);
-            handler.postDelayed(this, 450);
+            handler.postDelayed(this, 250);
         }
     };
 
@@ -125,7 +149,14 @@ public class MirrorAccessibilityService extends AccessibilityService {
             translationView.setTextSize(14);
             translationView.setGravity(Gravity.CENTER);
             translationView.setPadding(14, 8, 14, 8);
-            translationView.setBackgroundColor(Color.rgb(16, 40, 64));
+            translationView.setMaxLines(4);
+            translationView.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            translationView.setIncludeFontPadding(false);
+            GradientDrawable background = new GradientDrawable();
+            background.setColor(Color.rgb(16, 40, 64));
+            background.setCornerRadius(18);
+            background.setStroke(1, Color.rgb(82, 215, 236));
+            translationView.setBackground(background);
         }
         translationView.setText(text);
         WindowManager.LayoutParams params = new WindowManager.LayoutParams(
@@ -134,7 +165,9 @@ public class MirrorAccessibilityService extends AccessibilityService {
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
             PixelFormat.TRANSLUCENT);
         params.gravity = Gravity.TOP | Gravity.LEFT;
-        params.x = Math.max(0, bounds.left);
+        android.util.DisplayMetrics metrics = getResources().getDisplayMetrics();
+        int maxX = Math.max(0, metrics.widthPixels - params.width);
+        params.x = Math.min(Math.max(0, bounds.left), maxX);
         params.y = Math.max(0, bounds.top - 90);
         try {
             if (translationView.getWindowToken() == null) windowManager.addView(translationView, params);

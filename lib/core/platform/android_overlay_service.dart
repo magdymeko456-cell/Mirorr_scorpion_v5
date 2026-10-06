@@ -78,8 +78,8 @@ class AndroidOverlayService extends ChangeNotifier {
       }
       if (!await FlutterOverlayWindow.isActive()) {
         await FlutterOverlayWindow.showOverlay(
-          height: 84,
-          width: 84,
+          height: 76,
+          width: 76,
           alignment: OverlayAlignment.centerRight,
           enableDrag: true,
           flag: OverlayFlag.defaultFlag,
@@ -196,7 +196,7 @@ class _MirrorScorpionOverlayScreenState
   @override
   void initState() {
     super.initState();
-    _directPoller = Timer.periodic(const Duration(milliseconds: 700), (_) {
+    _directPoller = Timer.periodic(const Duration(milliseconds: 350), (_) {
       unawaited(_readDirectText());
     });
   }
@@ -278,6 +278,7 @@ class _MirrorScorpionOverlayScreenState
   }
 
   Future<void> _translate({bool isDirectCapture = false}) async {
+    if (!mounted) return;
     final text = _input.text.trim();
     if (text.length < 3) {
       setState(() => _notice = 'اكتب أو الصق نصاً أطول قليلاً للترجمة.');
