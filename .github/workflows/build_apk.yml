@@ -45,7 +45,7 @@ jobs:
         run: flutter create --platforms=android --project-name mirror_scorpion_v4 .
       - name: Configure whisper Android SDK and NDK
         run: |
-          NDK_VERSION="28.2.13676358"
+          NDK_VERSION="27.2.12479018"
           SDKMANAGER="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
           if [ ! -x "$SDKMANAGER" ]; then
             SDKMANAGER=$(find "${ANDROID_HOME}/cmdline-tools" -type f -name sdkmanager -perm -111 | sort -V | tail -n 1)
