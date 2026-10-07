@@ -32,4 +32,12 @@ Locale resolveMirrorScorpionLocale({
 const List<Locale> kTranslatedMirrorScorpionLocales = <Locale>[
   Locale('en'),
   Locale('ar'),
+  Locale('de'),
+  Locale('es'),
+  Locale('fr'),
+  Locale('hi'),
+  Locale('ja'),
+  Locale('pt'),
+  Locale('tr'),
+  Locale('zh'),
 ];

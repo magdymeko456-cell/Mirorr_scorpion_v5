@@ -21,8 +21,8 @@ The policy is implemented in `lib/core/localization/app_locale_policy.dart` and 
 
 ## Current coverage
 
-- English: available.
-- Arabic: available.
+- English, Arabic, French, Spanish, German, Turkish, Portuguese, Simplified
+  Chinese, Japanese, and Hindi: available in the local ARB bundle.
 - Other device languages: English fallback until their ARB resources are added.
 
-This fallback is intentional: it prevents a device set to an unsupported language from receiving a partially Arabic interface.
+This fallback is intentional: it prevents a device set to an unsupported language from receiving a partially translated interface.
