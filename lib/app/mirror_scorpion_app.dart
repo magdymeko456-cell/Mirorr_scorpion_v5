@@ -9,6 +9,7 @@ import '../core/platform/android_overlay_service.dart';
 import '../core/platform/shared_text_inbox.dart';
 import '../core/speech/device_speech_recognition_service.dart';
 import '../core/speech/elevenlabs_voice_service.dart';
+import '../core/speech/local_tts_service.dart';
 import '../features/home/dashboard_screen.dart';
 import 'royal_dark_theme.dart';
 
@@ -32,6 +33,7 @@ class MirrorScorpionApp extends StatelessWidget {
           value: languagePreferences ?? LanguagePreferences(),
         ),
         ChangeNotifierProvider(create: (_) => ElevenLabsVoiceService()),
+        ChangeNotifierProvider(create: (_) => LocalTtsService()),
         ChangeNotifierProvider(create: (_) => RunwareVideoService()),
         ChangeNotifierProvider(create: (_) => DeviceSpeechRecognitionService()),
         ChangeNotifierProvider<AndroidOverlayService>.value(
