@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import '../l10n/generated/app_localizations.dart';
 import 'package:provider/provider.dart';
 
+import '../core/localization/app_locale_policy.dart';
 import '../core/localization/language_preferences.dart';
-import '../core/localization/supported_app_locales.dart';
 import '../core/media/runware_video_service.dart';
 import '../core/platform/android_overlay_service.dart';
 import '../core/platform/shared_text_inbox.dart';
@@ -47,15 +47,18 @@ class MirrorScorpionApp extends StatelessWidget {
         builder: (context) {
           final preferences = context.watch<LanguagePreferences>();
           return MaterialApp(
-            title: 'Mirror Scorpion v4',
+            onGenerateTitle: (context) =>
+                AppLocalizations.of(context)?.appTitle ?? 'Mirror Scorpion',
             debugShowCheckedModeBanner: false,
             theme: royalDarkTheme(),
             locale: preferences.deviceLocale,
             localizationsDelegates: AppLocalizations.localizationsDelegates,
-            supportedLocales: {
-              ...kMirrorScorpionSupportedLocales,
-              ...AppLocalizations.supportedLocales,
-            }.toList(growable: false),
+            supportedLocales: kTranslatedMirrorScorpionLocales,
+            localeResolutionCallback: (requested, supported) =>
+                resolveMirrorScorpionLocale(
+              requested: requested,
+              supported: supported,
+            ),
             home: const DashboardScreen(),
           );
         },

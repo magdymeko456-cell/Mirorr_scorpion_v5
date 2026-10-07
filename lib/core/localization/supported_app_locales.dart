@@ -1,9 +1,10 @@
 import 'dart:ui';
 
-/// اللغات التي يدعمها flutter_localizations رسمياً. يعتمد إطار Flutter
-/// (basicLocaleListResolution) هذه القائمة لاختيار لغة الجهاز تلقائياً،
-/// فيفتح التطبيق بالهندية لمستخدم الجهاز الهندي والعربية للمصري وهكذا.
-/// واجهة الميزات نفسها تتلوّن تدريجياً بدفعات لاحقة على هذا الأساس.
+/// قائمة مرجعية للغات التي يمكن لمحركات Flutter التعامل معها.
+///
+/// ليست قائمة لغات واجهة التطبيق. واجهة التطبيق تستخدم فقط الموارد المولدة
+/// في [app_locale_policy.dart] حتى لا تظهر واجهة نصف مترجمة أو نص عربي ثابت
+/// لمستخدم جهاز بلغة غير متاحة. أُبقيت هذه القائمة لعقود محركات الترجمة القديمة.
 const List<Locale> kMirrorScorpionSupportedLocales = <Locale>[
   Locale('af'), Locale('am'), Locale('ar'), Locale('as'), Locale('az'),
   Locale('be'), Locale('bg'), Locale('bn'), Locale('bs'), Locale('ca'),
