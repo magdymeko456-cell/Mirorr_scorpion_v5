@@ -21,4 +21,15 @@ void main() {
     inbox.acceptUserSharedText('a' * (SharedTextInbox.maxTextLength + 20));
     expect(inbox.pendingText, hasLength(SharedTextInbox.maxTextLength));
   });
-}
+
+  test('explicitly shared audio stays in memory until the translation card consumes it', () {
+    final inbox = SharedTextInbox();
+
+    inbox.acceptUserSharedAudio('/cache/voice-note.m4a', fileName: 'voice-note.m4a');
+
+    expect(inbox.pendingAudio?.path, '/cache/voice-note.m4a');
+    expect(inbox.pendingAudio?.fileName, 'voice-note.m4a');
+    expect(inbox.takePendingAudio()?.path, '/cache/voice-note.m4a');
+    expect(inbox.pendingAudio, isNull);
+  });
+});

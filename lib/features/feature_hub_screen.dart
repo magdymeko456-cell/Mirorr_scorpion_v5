@@ -80,11 +80,15 @@ class FeatureHubScreen extends StatelessWidget {
   const FeatureHubScreen({
     required this.kind,
     this.initialTranslationText,
+    this.initialAudioPath,
+    this.initialAudioName,
     super.key,
   });
 
   final FeatureKind kind;
   final String? initialTranslationText;
+  final String? initialAudioPath;
+  final String? initialAudioName;
 
   @override
   Widget build(BuildContext context) {
@@ -92,6 +96,8 @@ class FeatureHubScreen extends StatelessWidget {
       FeatureKind.translation =>
         _TranslationPanel(
           initialText: initialTranslationText,
+          initialAudioPath: initialAudioPath,
+          initialAudioName: initialAudioName,
           recognitionService: context.read<DeviceSpeechRecognitionService>(),
         ),
       FeatureKind.dialogue => _DialoguePanel(
@@ -127,9 +133,16 @@ class FeatureHubScreen extends StatelessWidget {
 }
 
 class _TranslationPanel extends StatefulWidget {
-  const _TranslationPanel({this.initialText, required this.recognitionService});
+  const _TranslationPanel({
+    this.initialText,
+    this.initialAudioPath,
+    this.initialAudioName,
+    required this.recognitionService,
+  });
 
   final String? initialText;
+  final String? initialAudioPath;
+  final String? initialAudioName;
   final DeviceSpeechRecognitionService recognitionService;
 
   @override
@@ -157,6 +170,7 @@ class _TranslationPanelState extends State<_TranslationPanel> {
   int? _audioTranscriptionPercent;
   bool _loadedLanguagePreference = false;
   bool _processedInitialText = false;
+  bool _processedInitialAudio = false;
   Timer? _translationDebounce;
 
   DeviceSpeechRecognitionService get _recognitionService =>
@@ -186,6 +200,35 @@ class _TranslationPanelState extends State<_TranslationPanel> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _processSharedText(widget.initialText!.trim());
       });
+    }
+    if (!_processedInitialAudio && widget.initialAudioPath?.trim().isNotEmpty == true) {
+      _processedInitialAudio = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _processSharedAudio(widget.initialAudioPath!);
+      });
+    }
+  }
+
+  Future<void> _processSharedAudio(String path) async {
+    final file = File(path);
+    if (!await file.exists() || !mounted) {
+      if (mounted) setState(() => _notice = 'ملف الصوت المشترك لم يعد متاحاً على الجهاز.');
+      return;
+    }
+    final size = await file.length();
+    if (!AudioTranscriberService.allowsFileSize(size)) {
+      setState(() => _notice = 'حجم الملف المشترك يتجاوز 128 MB.');
+      return;
+    }
+    final accepted = await _confirmLocalAudioTranscription(
+      PlatformFile(
+        name: widget.initialAudioName ?? file.path.split('/').last,
+        path: path,
+        size: size,
+      ),
+    );
+    if (accepted == true && mounted) {
+      await _transcribeAndTranslateLocalAudio(path);
     }
   }
 

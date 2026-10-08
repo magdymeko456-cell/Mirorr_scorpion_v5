@@ -119,6 +119,7 @@ jobs:
                 print "                <action android:name=\"android.intent.action.SEND\" />"
                 print "                <category android:name=\"android.intent.category.DEFAULT\" />"
                 print "                <data android:mimeType=\"text/*\" />"
+                print "                <data android:mimeType=\"audio/*\" />"
                 print "            </intent-filter>"
               }
               { print }

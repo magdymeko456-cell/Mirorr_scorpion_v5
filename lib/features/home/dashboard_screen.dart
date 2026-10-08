@@ -58,6 +58,29 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   void _openPendingSharedText() {
     if (!mounted || _openingSharedText) return;
     final inbox = _sharedTextInbox;
+    final sharedAudio = inbox?.pendingAudio;
+    if (sharedAudio != null) {
+      _openingSharedText = true;
+      inbox!.takePendingAudio();
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        await Navigator.push(
+          context,
+          MaterialPageRoute<void>(
+            builder: (_) => FeatureHubScreen(
+              kind: FeatureKind.translation,
+              initialAudioPath: sharedAudio.path,
+              initialAudioName: sharedAudio.fileName,
+            ),
+          ),
+        );
+        if (mounted) {
+          _openingSharedText = false;
+          _openPendingSharedText();
+        }
+      });
+      return;
+    }
     if (inbox?.pendingText == null) return;
     _openingSharedText = true;
     final text = inbox!.takePendingText();
