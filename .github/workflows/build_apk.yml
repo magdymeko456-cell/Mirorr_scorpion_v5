@@ -47,14 +47,29 @@ jobs:
         run: flutter create --platforms=android --project-name mirror_scorpion_v4 .
       - name: Configure whisper Android SDK and NDK
         run: |
-          NDK_VERSION="27.2.12479018"
+          NDK_VERSION="29.0.13113456"
           SDKMANAGER="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
           if [ ! -x "$SDKMANAGER" ]; then
             SDKMANAGER=$(find "${ANDROID_HOME}/cmdline-tools" -type f -name sdkmanager -perm -111 | sort -V | tail -n 1)
           fi
           test -n "$SDKMANAGER" && test -x "$SDKMANAGER"
-          yes | "$SDKMANAGER" --licenses >/dev/null
-          "$SDKMANAGER" --install "platforms;android-35" "ndk;${NDK_VERSION}"
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" --install "platforms;android-35"
+          installed=false
+          for attempt in 1 2 3; do
+            if [ -f "${ANDROID_HOME}/ndk/${NDK_VERSION}/source.properties" ]; then
+              installed=true
+              break
+            fi
+            rm -rf "${ANDROID_HOME}/ndk/${NDK_VERSION}"
+            echo "Installing NDK ${NDK_VERSION} (attempt ${attempt}/3)..."
+            if "$SDKMANAGER" --install "ndk;${NDK_VERSION}" && [ -f "${ANDROID_HOME}/ndk/${NDK_VERSION}/source.properties" ]; then
+              installed=true
+              break
+            fi
+            sleep 5
+          done
+          test "$installed" = true
           test -d "${ANDROID_HOME}/ndk/${NDK_VERSION}"
           if [ -f android/app/build.gradle.kts ]; then
             sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 35/' android/app/build.gradle.kts
@@ -68,6 +83,7 @@ jobs:
           fi
           WHISPER_GRADLE="${PUB_CACHE}/hosted/pub.dev/whisper_ggml-2.6.0/android/build.gradle"
           test -f "$WHISPER_GRADLE"
+          grep -q "ndkVersion.*${NDK_VERSION}" "$WHISPER_GRADLE"
           sed -i 's/compileSdk 34/compileSdk 35/' "$WHISPER_GRADLE"
           grep -q 'compileSdk 35' "$WHISPER_GRADLE"
       - name: Configure Android speech visibility and microphone permission
