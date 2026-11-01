@@ -126,6 +126,19 @@ jobs:
             ' "$MANIFEST" > "$MANIFEST.tmp"
             mv "$MANIFEST.tmp" "$MANIFEST"
           fi
+          if ! grep -q 'android:mimeType="audio/\*"' "$MANIFEST"; then
+            awk '
+              /<\/activity>/ {
+                print "            <intent-filter>"
+                print "                <action android:name=\"android.intent.action.SEND\" />"
+                print "                <category android:name=\"android.intent.category.DEFAULT\" />"
+                print "                <data android:mimeType=\"audio/*\" />"
+                print "            </intent-filter>"
+              }
+              { print }
+            ' "$MANIFEST" > "$MANIFEST.tmp"
+            mv "$MANIFEST.tmp" "$MANIFEST"
+          fi
       - name: Configure PDF text extraction R8 rule
         run: |
           cat > android/app/mirror-scorpion-pdf-r8.pro <<'EOF'

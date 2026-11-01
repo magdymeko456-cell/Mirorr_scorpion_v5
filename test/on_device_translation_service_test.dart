@@ -28,4 +28,10 @@ void main() {
     expect(result.state, OnDeviceModelPreparationState.unsupportedPlatform);
     expect(result.isSuccess, isFalse);
   });
+
+  test('exposes only language codes understood by ML Kit', () {
+    expect(OnDeviceTranslationService.isSupportedLanguageCode('ar'), isTrue);
+    expect(OnDeviceTranslationService.isSupportedLanguageCode('en'), isTrue);
+    expect(OnDeviceTranslationService.isSupportedLanguageCode('xx'), isFalse);
+  });
 }

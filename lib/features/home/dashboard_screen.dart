@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../core/platform/android_overlay_service.dart';
 import '../../core/platform/shared_text_inbox.dart';
 import '../feature_hub_screen.dart';
+import '../../l10n/generated/app_localizations.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -15,12 +16,12 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProviderStateMixin {
   static const _features = <_FeatureSpec>[
-    _FeatureSpec(FeatureKind.translation, 'ترجمة نصية', 'ترجمة محلية + مايك', Icons.translate, Colors.blueAccent),
-    _FeatureSpec(FeatureKind.dialogue, 'حوار مترجم', 'محرران + مايك الجهاز', Icons.forum, Colors.cyanAccent),
-    _FeatureSpec(FeatureKind.documents, 'مستندات وعدسة', 'OCR صور + PDF وTXT محلي', Icons.document_scanner, Colors.tealAccent),
-    _FeatureSpec(FeatureKind.stories, 'قصص وإلهام', 'قصص وإلهام محلي', Icons.auto_stories, Colors.orangeAccent),
-    _FeatureSpec(FeatureKind.games, 'الشطرنج', 'لعب محلي أو ضد الكمبيوتر', Icons.castle, Colors.purpleAccent),
-    _FeatureSpec(FeatureKind.settings, 'الإعدادات', 'خصوصية وحزم وPRO', Icons.settings, Colors.blueGrey),
+    _FeatureSpec(FeatureKind.translation, Icons.translate, Colors.blueAccent),
+    _FeatureSpec(FeatureKind.dialogue, Icons.forum, Colors.cyanAccent),
+    _FeatureSpec(FeatureKind.documents, Icons.document_scanner, Colors.tealAccent),
+    _FeatureSpec(FeatureKind.stories, Icons.auto_stories, Colors.orangeAccent),
+    _FeatureSpec(FeatureKind.games, Icons.castle, Colors.purpleAccent),
+    _FeatureSpec(FeatureKind.settings, Icons.settings, Colors.blueGrey),
   ];
 
   late final AnimationController _pulseController;
@@ -118,6 +119,24 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     Navigator.push(context, MaterialPageRoute<void>(builder: (_) => FeatureHubScreen(kind: kind)));
   }
 
+  String _featureTitle(BuildContext context, FeatureKind kind) => switch (kind) {
+        FeatureKind.translation => AppLocalizations.of(context)!.featureTranslation,
+        FeatureKind.dialogue => AppLocalizations.of(context)!.featureDialogue,
+        FeatureKind.documents => AppLocalizations.of(context)!.featureDocuments,
+        FeatureKind.stories => AppLocalizations.of(context)!.featureStories,
+        FeatureKind.games => AppLocalizations.of(context)!.featureGames,
+        FeatureKind.settings => AppLocalizations.of(context)!.featureSettings,
+      };
+
+  String _featureSubtitle(BuildContext context, FeatureKind kind) => switch (kind) {
+        FeatureKind.translation => AppLocalizations.of(context)!.featureTranslationSubtitle,
+        FeatureKind.dialogue => AppLocalizations.of(context)!.featureDialogueSubtitle,
+        FeatureKind.documents => AppLocalizations.of(context)!.featureDocumentsSubtitle,
+        FeatureKind.stories => AppLocalizations.of(context)!.featureStoriesSubtitle,
+        FeatureKind.games => AppLocalizations.of(context)!.featureGamesSubtitle,
+        FeatureKind.settings => AppLocalizations.of(context)!.featureSettingsSubtitle,
+      };
+
   Future<void> _toggleOverlay(bool enabled) async {
     setState(() => _changingOverlay = true);
     final overlay = context.read<AndroidOverlayService>();
@@ -133,7 +152,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   Widget build(BuildContext context) {
     final overlay = context.watch<AndroidOverlayService>();
     return Directionality(
-      textDirection: TextDirection.rtl,
+      textDirection: Directionality.of(context),
       child: Scaffold(
         body: Container(
           decoration: const BoxDecoration(
@@ -159,6 +178,8 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                     delegate: SliverChildBuilderDelegate(
                       (context, index) => _FeatureCard(
                         feature: _features[index],
+                        title: _featureTitle(context, _features[index].kind),
+                        subtitle: _featureSubtitle(context, _features[index].kind),
                         onTap: () => _openFeature(_features[index].kind),
                       ),
                       childCount: _features.length,
@@ -271,9 +292,11 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
 }
 
 class _FeatureCard extends StatelessWidget {
-  const _FeatureCard({required this.feature, required this.onTap});
+  const _FeatureCard({required this.feature, required this.title, required this.subtitle, required this.onTap});
 
   final _FeatureSpec feature;
+  final String title;
+  final String subtitle;
   final VoidCallback onTap;
 
   @override
@@ -292,9 +315,9 @@ class _FeatureCard extends StatelessWidget {
             children: [
               Icon(feature.icon, color: feature.color, size: 42),
               const SizedBox(height: 14),
-              Text(feature.title, textAlign: TextAlign.center, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+              Text(title, textAlign: TextAlign.center, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
               const SizedBox(height: 6),
-              Text(feature.subtitle, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12, color: Colors.white54, height: 1.35)),
+              Text(subtitle, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12, color: Colors.white54, height: 1.35)),
             ],
           ),
         ),
@@ -316,11 +339,9 @@ class _Footer extends StatelessWidget {
 }
 
 class _FeatureSpec {
-  const _FeatureSpec(this.kind, this.title, this.subtitle, this.icon, this.color);
+  const _FeatureSpec(this.kind, this.icon, this.color);
 
   final FeatureKind kind;
-  final String title;
-  final String subtitle;
   final IconData icon;
   final Color color;
 }

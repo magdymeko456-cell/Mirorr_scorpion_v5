@@ -15,6 +15,13 @@
   "featureStories": "Stories & Inspiration",
   "featureGames": "Royal Chess",
   "featureSettings": "Settings & PRO",
+  "translationTargetLabel": "Translation language",
+  "featureTranslationSubtitle": "Local text and audio translation",
+  "featureDialogueSubtitle": "Two editors with two-language mic",
+  "featureDocumentsSubtitle": "Local OCR for images and documents",
+  "featureStoriesSubtitle": "Stories, inspiration, and local sources",
+  "featureGamesSubtitle": "Play locally or against the computer",
+  "featureSettingsSubtitle": "Privacy, packages, and PRO",
 
   "dialogueSessionStarted": "New dialogue session started.",
   "dialogueEndingPrevSession": "Ending previous mic session before switching language…",

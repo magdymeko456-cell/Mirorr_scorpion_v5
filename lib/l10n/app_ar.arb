@@ -15,6 +15,13 @@
   "featureStories": "القصص والإلهام",
   "featureGames": "الشطرنج الملكي",
   "featureSettings": "الإعدادات وPRO",
+  "translationTargetLabel": "لغة الترجمة",
+  "featureTranslationSubtitle": "ترجمة النصوص والصوت محلياً",
+  "featureDialogueSubtitle": "محرران وميكروفون بلغتين",
+  "featureDocumentsSubtitle": "OCR للصور والمستندات محلياً",
+  "featureStoriesSubtitle": "قصص وإلهام ومصادر محلية",
+  "featureGamesSubtitle": "لعب محلي أو ضد الكمبيوتر",
+  "featureSettingsSubtitle": "الخصوصية والحزم وPRO",
 
   "dialogueSessionStarted": "بدأت جلسة حوار جديدة.",
   "dialogueEndingPrevSession": "جارٍ إنهاء جلسة المايك السابقة قبل تبديل اللغة…",

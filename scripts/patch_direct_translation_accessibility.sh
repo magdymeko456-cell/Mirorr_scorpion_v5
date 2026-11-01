@@ -110,6 +110,14 @@ public class MirrorAccessibilityService extends AccessibilityService {
         android.accessibilityservice.AccessibilityServiceInfo info = getServiceInfo();
         if (info == null) return;
         Set<String> allowed = allowedPackages();
+        if (allowed.isEmpty()) {
+            info.packageNames = new String[] { "__mirror_scorpion_no_allowlist__" };
+            if (!"[]".equals(lastAllowedSignature)) {
+                lastAllowedSignature = "[]";
+                setServiceInfo(info);
+            }
+            return;
+        }
         String signature = allowed.toString();
         if (signature.equals(lastAllowedSignature)) return;
         lastAllowedSignature = signature;

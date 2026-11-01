@@ -73,6 +73,16 @@ class OnDeviceTranslationService {
     'iw': 'he',
   };
 
+  /// Returns whether ML Kit can create a translator for this BCP-47 code.
+  /// UI language menus should use this instead of advertising catalog entries
+  /// that the native engine will reject later.
+  static bool isSupportedLanguageCode(String code) {
+    final normalized = _aliases[code.toLowerCase()] ?? code.toLowerCase();
+    return TranslateLanguage.values.any(
+      (language) => language.bcpCode.toLowerCase() == normalized,
+    );
+  }
+
   static TranslateLanguage? languageForCode(String code) {
     final normalized = _aliases[code.toLowerCase()] ?? code.toLowerCase();
     for (final language in TranslateLanguage.values) {

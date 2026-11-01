@@ -41,6 +41,18 @@ import '../l10n/generated/app_localizations.dart';
 
 enum FeatureKind { translation, dialogue, documents, stories, games, settings }
 
+/// The visible language list is the intersection of the app catalog and the
+/// native ML Kit engine, so a selected language can be translated locally.
+final Map<String, String> kMlKitTranslationLabels = () {
+  final labels = <String, String>{};
+  TranslationLanguageCatalog.labels.forEach((code, label) {
+    if (OnDeviceTranslationService.isSupportedLanguageCode(code)) {
+      labels[code] = label;
+    }
+  });
+  return labels;
+}();
+
 abstract final class TranslationLanguageCatalog {
   static const labels = <String, String>{
     'af': 'Afrikaans', 'sq': 'Shqip', 'am': 'አማርኛ', 'ar': 'العربية', 'hy': 'Հայերեն', 'az': 'Azərbaycan',
@@ -111,10 +123,10 @@ class FeatureHubScreen extends StatelessWidget {
       FeatureKind.settings => const _SettingsPanel(),
     };
     if (kind == FeatureKind.games) {
-      return Directionality(textDirection: TextDirection.rtl, child: child);
+      return Directionality(textDirection: Directionality.of(context), child: child);
     }
     return Directionality(
-      textDirection: TextDirection.rtl,
+      textDirection: Directionality.of(context),
       child: Scaffold(
         appBar: kind == FeatureKind.games ? null : AppBar(title: Text(_titleFor(context, kind))),
         body: child,
@@ -158,8 +170,8 @@ class _TranslationPanelState extends State<_TranslationPanel> {
   final _modelInstaller = WhisperModelInstaller();
   final _audioTranscriber = AudioTranscriberService();
   final _audioExporter = TranslatedAudioExportService();
-  String _selectedLanguage = 'ar';
-  String _lastOutputLanguage = 'ar';
+  String _selectedLanguage = 'en';
+  String _lastOutputLanguage = 'en';
   String? _notice;
   TranslatedAudioFile? _translatedAudioFile;
   bool _hasCompletedTranslation = false;
@@ -192,7 +204,10 @@ class _TranslationPanelState extends State<_TranslationPanel> {
       final savedTarget = preferences.translationTargetLanguage;
       if (TranslationLanguageCatalog.labels.containsKey(savedTarget)) {
         _selectedLanguage = savedTarget;
+      } else if (kMlKitTranslationLabels.containsKey(preferences.deviceLanguageCode)) {
+        _selectedLanguage = preferences.deviceLanguageCode;
       }
+      _lastOutputLanguage = _selectedLanguage;
       _loadedLanguagePreference = true;
     }
     if (!_processedInitialText && widget.initialText?.trim().isNotEmpty == true) {
@@ -686,7 +701,7 @@ return ListView(
             Expanded(
               child: _TranslationLanguageMenu(
                 value: _selectedLanguage,
-                label: 'لغة الترجمة',
+                label: AppLocalizations.of(context)!.translationTargetLabel,
                 icon: Icons.translate,
                 onChanged: _selectLanguage,
               ),
@@ -738,7 +753,7 @@ class _TranslationLanguageMenu extends StatelessWidget {
               isExpanded: true,
               dropdownColor: const Color(0xFF1B2838),
               icon: const Icon(Icons.keyboard_arrow_down, color: Colors.cyanAccent),
-              items: TranslationLanguageCatalog.labels.entries
+              items: kMlKitTranslationLabels.entries
                   .map((entry) => DropdownMenuItem(value: entry.key, child: Text(entry.value, overflow: TextOverflow.ellipsis)))
                   .toList(),
               onChanged: (code) {
@@ -983,7 +998,7 @@ class _DialoguePanelState extends State<_DialoguePanel> {
   // متغيراً مستقلاً يختاره المستخدم. المايك يلتقط بلغة المصدر دائماً،
   // وليس بلغة الجهاز.
   String _sourceLanguage = 'en';
-  String _targetLanguage = 'ar';
+  String _targetLanguage = 'en';
   String? _notice;
   bool _isBusy = false;
   bool _isTranscribing = false;
@@ -1024,13 +1039,17 @@ class _DialoguePanelState extends State<_DialoguePanel> {
     if (_loadedTarget && _loadedSource) return;
     final preferences = context.read<LanguagePreferences>();
     if (!_loadedSource) {
-      _sourceLanguage = preferences.deviceLanguageCode;
+      _sourceLanguage = kMlKitTranslationLabels.containsKey(preferences.deviceLanguageCode)
+          ? preferences.deviceLanguageCode
+          : 'en';
       _loadedSource = true;
     }
     if (!_loadedTarget) {
       _targetLanguage = preferences.translationTargetLanguage;
-      if (!TranslationLanguageCatalog.labels.containsKey(_targetLanguage)) {
-        _targetLanguage = 'ar';
+      if (!kMlKitTranslationLabels.containsKey(_targetLanguage)) {
+        _targetLanguage = kMlKitTranslationLabels.containsKey(
+          preferences.deviceLanguageCode,
+        ) ? preferences.deviceLanguageCode : 'en';
       }
       _loadedTarget = true;
     }
@@ -1216,7 +1235,7 @@ class _DialoguePanelState extends State<_DialoguePanel> {
       final s = prefs.getString('dialogue_source_lang');
       if (s != null &&
           s != _sourceLanguage &&
-          TranslationLanguageCatalog.labels.containsKey(s)) {
+          kMlKitTranslationLabels.containsKey(s)) {
         _sourceLanguage = s;
         if (mounted) setState(() {});
       }
@@ -1375,7 +1394,7 @@ class _DialoguePanelState extends State<_DialoguePanel> {
                   Expanded(
                     child: _DialogueLanguageMenu(
                       value: _sourceLanguage,
-                      label: 'لغة المصدر (المايك)',
+                      label: AppLocalizations.of(context)!.micSourceNow,
                       onChanged: _selectSourceLanguage,
                     ),
                   ),
@@ -1387,7 +1406,7 @@ class _DialoguePanelState extends State<_DialoguePanel> {
                   Expanded(
                     child: _DialogueLanguageMenu(
                       value: _targetLanguage,
-                      label: 'لغة الترجمة',
+                      label: AppLocalizations.of(context)!.translationLangNow,
                       onChanged: _selectTargetLanguage,
                     ),
                   ),
@@ -1488,7 +1507,7 @@ class _DialogueLanguageMenu extends StatelessWidget {
             value: value,
             isExpanded: true,
             dropdownColor: const Color(0xFF1B2838),
-            items: TranslationLanguageCatalog.labels.entries
+            items: kMlKitTranslationLabels.entries
                 .map((entry) => DropdownMenuItem(value: entry.key, child: Text(entry.value, overflow: TextOverflow.ellipsis)))
                 .toList(),
             onChanged: (code) {
@@ -1906,7 +1925,7 @@ class _TranslatedTextPreviewPageState
   @override
   Widget build(BuildContext context) {
     return Directionality(
-      textDirection: TextDirection.rtl,
+      textDirection: Directionality.of(context),
       child: Scaffold(
         appBar: AppBar(title: Text(widget.documentName)),
         body: SafeArea(
