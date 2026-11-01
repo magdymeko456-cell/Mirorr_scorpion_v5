@@ -3980,8 +3980,11 @@ class _BubblePrivacyPageState extends State<_BubblePrivacyPage> with WidgetsBind
 
   Future<void> _stopBubble() async {
     setState(() => _isWorking = true);
-    await context.read<DirectTranslationAccessibilityService>().disableDirectCapture();
-    final result = await context.read<AndroidOverlayService>().closeBubble();
+    final accessibilityService = context.read<DirectTranslationAccessibilityService>();
+    final overlayService = context.read<AndroidOverlayService>();
+    await accessibilityService.disableDirectCapture();
+    if (!mounted) return;
+    final result = await overlayService.closeBubble();
     if (!mounted) return;
     setState(() {
       _isWorking = false;
