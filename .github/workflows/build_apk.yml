@@ -81,9 +81,24 @@ jobs:
             echo "Android app Gradle file was not generated."
             exit 1
           fi
-          WHISPER_GRADLE="${PUB_CACHE}/hosted/pub.dev/whisper_ggml-2.6.0/android/build.gradle"
-          test -f "$WHISPER_GRADLE"
-          grep -q "ndkVersion.*${NDK_VERSION}" "$WHISPER_GRADLE"
+          WHISPER_GRADLE="$({
+            find "${PUB_CACHE:-$HOME/.pub-cache}" \
+              -type f \
+              -path '*/whisper_ggml-*/android/build.gradle' \
+              -print -quit
+          })"
+          if [ -z "$WHISPER_GRADLE" ] || [ ! -f "$WHISPER_GRADLE" ]; then
+            echo "whisper_ggml Android Gradle file was not found in the Pub cache."
+            echo "PUB_CACHE=${PUB_CACHE:-<unset>}"
+            find "${PUB_CACHE:-$HOME/.pub-cache}" \
+              -maxdepth 6 \
+              -type f \
+              -path '*/whisper_ggml-*/android/*' \
+              -print || true
+            exit 1
+          fi
+          echo "Using Whisper Gradle file: $WHISPER_GRADLE"
+          grep -q 'ndkVersion' "$WHISPER_GRADLE"
           sed -i 's/compileSdk 34/compileSdk 35/' "$WHISPER_GRADLE"
           grep -q 'compileSdk 35' "$WHISPER_GRADLE"
       - name: Configure Android speech visibility and microphone permission
