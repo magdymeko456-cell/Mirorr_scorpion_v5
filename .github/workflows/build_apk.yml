@@ -99,8 +99,8 @@ jobs:
           fi
           echo "Using Whisper Gradle file: $WHISPER_GRADLE"
           grep -q 'ndkVersion' "$WHISPER_GRADLE"
-          sed -i 's/compileSdk 34/compileSdk 35/' "$WHISPER_GRADLE"
-          grep -q 'compileSdk 35' "$WHISPER_GRADLE"
+          grep -q 'ndkVersion "29.0.13113456"' "$WHISPER_GRADLE"
+          grep -Eq 'compileSdk[[:space:]]+(35|36)' "$WHISPER_GRADLE"
       - name: Configure Android speech visibility and microphone permission
         run: |
           if ! grep -q 'android.permission.RECORD_AUDIO' android/app/src/main/AndroidManifest.xml; then
