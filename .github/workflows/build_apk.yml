@@ -54,7 +54,7 @@ jobs:
           fi
           test -n "$SDKMANAGER" && test -x "$SDKMANAGER"
           yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
-          "$SDKMANAGER" --install "platforms;android-35"
+          "$SDKMANAGER" --install "platforms;android-35" "platforms;android-36"
           installed=false
           for attempt in 1 2 3; do
             if [ -f "${ANDROID_HOME}/ndk/${NDK_VERSION}/source.properties" ]; then
@@ -63,7 +63,8 @@ jobs:
             fi
             rm -rf "${ANDROID_HOME}/ndk/${NDK_VERSION}"
             echo "Installing NDK ${NDK_VERSION} (attempt ${attempt}/3)..."
-            if "$SDKMANAGER" --install "ndk;${NDK_VERSION}" && [ -f "${ANDROID_HOME}/ndk/${NDK_VERSION}/source.properties" ]; then
+            "$SDKMANAGER" --install "ndk;${NDK_VERSION}" || true
+            if [ -f "${ANDROID_HOME}/ndk/${NDK_VERSION}/source.properties" ]; then
               installed=true
               break
             fi
@@ -72,10 +73,10 @@ jobs:
           test "$installed" = true
           test -d "${ANDROID_HOME}/ndk/${NDK_VERSION}"
           if [ -f android/app/build.gradle.kts ]; then
-            sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 35/' android/app/build.gradle.kts
+            sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 36/' android/app/build.gradle.kts
             sed -i "/android {/a\\    ndkVersion = \"${NDK_VERSION}\"" android/app/build.gradle.kts
           elif [ -f android/app/build.gradle ]; then
-            sed -i 's/compileSdk flutter.compileSdkVersion/compileSdk 35/' android/app/build.gradle
+            sed -i 's/compileSdk flutter.compileSdkVersion/compileSdk 36/' android/app/build.gradle
             sed -i "/android {/a\\    ndkVersion \"${NDK_VERSION}\"" android/app/build.gradle
           else
             echo "Android app Gradle file was not generated."
