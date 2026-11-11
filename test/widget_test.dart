@@ -12,7 +12,9 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    // The home dashboard owns a repeating pulse animation; wait for a
+    // bounded frame instead of waiting for an impossible settled state.
+    await tester.pump(const Duration(milliseconds: 100));
 
     expect(find.text('ميرور سكربيون'), findsOneWidget);
     expect(find.text('حيث تُصنع البدايات'), findsOneWidget);

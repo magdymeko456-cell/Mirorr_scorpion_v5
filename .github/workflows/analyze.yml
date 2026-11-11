@@ -4,9 +4,17 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+permissions:
+  contents: read
+
+concurrency:
+  group: mirror-scorpion-analyze-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   analyze:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -16,4 +24,5 @@ jobs:
       - run: flutter pub get
       - run: flutter gen-l10n
       - run: flutter analyze --no-fatal-infos
-      - run: flutter test --reporter expanded
+      - name: Run Flutter tests
+        run: flutter test --reporter expanded --timeout 1m

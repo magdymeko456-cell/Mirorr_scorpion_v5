@@ -12,7 +12,10 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    // Dashboard has an intentionally repeating pulse animation, so it never
+    // reaches the settled state required by pumpAndSettle(). Pump a bounded
+    // frame instead and keep the test deterministic.
+    await tester.pump(const Duration(milliseconds: 100));
 
     expect(find.text('ميرور سكربيون'), findsOneWidget);
     expect(find.text('حيث تُصنع البدايات'), findsOneWidget);
