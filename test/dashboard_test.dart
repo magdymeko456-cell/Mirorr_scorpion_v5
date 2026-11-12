@@ -20,21 +20,21 @@ void main() {
     expect(find.text('ميرور سكربيون'), findsOneWidget);
     expect(find.text('حيث تُصنع البدايات'), findsOneWidget);
     expect(find.text('الفقاعة فوق التطبيقات: متوقفة'), findsOneWidget);
-    expect(find.text('ترجمة نصية'), findsOneWidget);
-    expect(find.text('ترجمة محلية + مايك'), findsOneWidget);
-    expect(find.text('حوار مترجم'), findsOneWidget);
+    expect(find.text('الترجمة النصية'), findsOneWidget);
+    expect(find.text('ترجمة النصوص والصوت محلياً'), findsOneWidget);
+    expect(find.text('الحوار المترجم'), findsOneWidget);
 
-    await tester.scrollUntilVisible(find.text('مستندات وعدسة'), 300);
-    expect(find.text('مستندات وعدسة'), findsOneWidget);
-    expect(find.text('OCR صور + PDF وTXT محلي'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('المستندات والعدسة'), 300);
+    expect(find.text('المستندات والعدسة'), findsOneWidget);
+    expect(find.text('OCR للصور والمستندات محلياً'), findsOneWidget);
     expect(find.text('OCR صور + PDF قيد الإعداد'), findsNothing);
-    expect(find.text('قصص وإلهام'), findsOneWidget);
+    expect(find.text('القصص والإلهام'), findsOneWidget);
 
-    await tester.scrollUntilVisible(find.text('الشطرنج'), 300);
-    expect(find.text('الشطرنج'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('الشطرنج الملكي'), 300);
+    expect(find.text('الشطرنج الملكي'), findsOneWidget);
     expect(find.text('لعب محلي أو ضد الكمبيوتر'), findsOneWidget);
     expect(find.text('ألعاب 3D'), findsNothing);
-    await tester.scrollUntilVisible(find.text('الإعدادات'), 300);
-    expect(find.text('الإعدادات'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('الإعدادات وPRO'), 300);
+    expect(find.text('الإعدادات وPRO'), findsOneWidget);
   });
 }
