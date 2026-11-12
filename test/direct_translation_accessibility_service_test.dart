@@ -10,5 +10,7 @@ void main() {
     expect(source, contains('allowed.isEmpty()'));
     expect(source, contains('__mirror_scorpion_no_allowlist__'));
     expect(source, contains('BIND_ACCESSIBILITY_SERVICE'));
+    expect(source, contains('android:description="@string/mirror_accessibility_description"'));
+    expect(source, contains('mirror_scorpion_strings.xml'));
   });
 }

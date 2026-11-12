@@ -11,7 +11,14 @@ PACKAGE_NAME=$(sed -n 's/^package[[:space:]]\+//p' "$MAIN_ACTIVITY" | head -n 1)
 test -n "$PACKAGE_NAME" || { echo 'MainActivity.kt has no package declaration.'; exit 1; }
 PACKAGE_PATH=${PACKAGE_NAME//./\/}
 JAVA_DIR="android/app/src/main/java/$PACKAGE_PATH"
-mkdir -p "$JAVA_DIR" android/app/src/main/res/xml
+mkdir -p "$JAVA_DIR" android/app/src/main/res/xml android/app/src/main/res/values
+
+cat > android/app/src/main/res/values/mirror_scorpion_strings.xml <<'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="mirror_accessibility_description">يقرأ النص الظاهر فقط من التطبيقات التي يختارها المستخدم لوضع الترجمة فوقه.</string>
+</resources>
+EOF
 
 cat > android/app/src/main/res/xml/mirror_scorpion_accessibility_service.xml <<'EOF'
 <?xml version="1.0" encoding="utf-8"?>
@@ -20,7 +27,7 @@ cat > android/app/src/main/res/xml/mirror_scorpion_accessibility_service.xml <<'
     android:accessibilityFeedbackType="feedbackGeneric"
     android:notificationTimeout="100"
     android:canRetrieveWindowContent="true"
-    android:description="يقرأ النص الظاهر فقط من التطبيقات التي يختارها المستخدم لوضع الترجمة فوقه."
+    android:description="@string/mirror_accessibility_description"
     android:accessibilityFlags="flagReportViewIds|flagRetrieveInteractiveWindows" />
 EOF
 
