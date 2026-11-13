@@ -3970,7 +3970,32 @@ class _BubblePrivacyPageState extends State<_BubblePrivacyPage> with WidgetsBind
 
   Future<void> _startBubble() async {
     setState(() => _isWorking = true);
+    final accessibilityService = context.read<DirectTranslationAccessibilityService>();
+    await accessibilityService.refresh();
+    if (!accessibilityService.isEnabled || accessibilityService.allowedPackages.isEmpty) {
+      if (!mounted) return;
+      setState(() {
+        _isWorking = false;
+        _notice = 'فعّل Accessibility واختر تطبيقاً مسموحاً واحداً على الأقل قبل تشغيل الترجمة المباشرة.';
+      });
+      return;
+    }
+    final deviceLanguage = context.read<LanguagePreferences>().deviceLanguageCode;
+    await accessibilityService.setTargetLanguage(deviceLanguage);
     final result = await context.read<AndroidOverlayService>().showBubble();
+    if (result.isStarted) {
+      try {
+        await accessibilityService.enableDirectCapture();
+      } catch (_) {
+        await context.read<AndroidOverlayService>().closeBubble();
+        if (!mounted) return;
+        setState(() {
+          _isWorking = false;
+          _notice = 'تعذر تفعيل التقاط النص. لم تبدأ الترجمة المباشرة.';
+        });
+        return;
+      }
+    }
     if (!mounted) return;
     setState(() {
       _isWorking = false;

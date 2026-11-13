@@ -29,6 +29,9 @@ class AndroidOverlayResult {
 /// للنصوص لا تعمل إلا عبر Accessibility opt-in وقائمة تطبيقات مسموحة؛ لا
 /// نستخدم Notification Listener ولا نقرأ التطبيقات خارج القائمة.
 class AndroidOverlayService extends ChangeNotifier {
+  static const _directTranslationChannel = MethodChannel(
+    'mirror_scorpion/direct_translation',
+  );
   bool _isVisible = false;
   StreamSubscription<dynamic>? _overlayEvents;
 
@@ -41,6 +44,7 @@ class AndroidOverlayService extends ChangeNotifier {
     _overlayEvents ??= FlutterOverlayWindow.overlayListener.listen((event) {
       if (event is Map && event['event'] == 'closed') {
         _setVisible(false);
+        unawaited(_directTranslationChannel.invokeMethod<void>('disableDirectCapture'));
       }
     });
     await refreshStatus();
@@ -66,6 +70,21 @@ class AndroidOverlayService extends ChangeNotifier {
       );
     }
     try {
+      final accessibilityEnabled =
+          await _directTranslationChannel.invokeMethod<bool>('isAccessibilityEnabled') ?? false;
+      final allowed = await _directTranslationChannel.invokeMethod<List<dynamic>>(
+        'getAllowedPackages',
+      );
+      if (!accessibilityEnabled || allowed == null || allowed.whereType<String>().isEmpty) {
+        return const AndroidOverlayResult(
+          AndroidOverlayState.permissionDenied,
+          'فعّل Accessibility واختر تطبيقاً مسموحاً واحداً على الأقل قبل تشغيل الترجمة المباشرة.',
+        );
+      }
+      await _directTranslationChannel.invokeMethod<void>(
+        'setTargetLanguage',
+        PlatformDispatcher.instance.locale.languageCode,
+      );
       var permitted = await FlutterOverlayWindow.isPermissionGranted();
       if (!permitted) {
         permitted = await FlutterOverlayWindow.requestPermission() ?? false;
@@ -96,6 +115,16 @@ class AndroidOverlayService extends ChangeNotifier {
           'لم تبدأ الفقاعة رغم منح الإذن. أعد فتح التطبيق وحاول مرة أخرى.',
         );
       }
+      try {
+        await _directTranslationChannel.invokeMethod<void>('enableDirectCapture');
+      } catch (_) {
+        await FlutterOverlayWindow.closeOverlay();
+        _setVisible(false);
+        return const AndroidOverlayResult(
+          AndroidOverlayState.failed,
+          'تعذر تشغيل التقاط النص. لم تبدأ الترجمة المباشرة.',
+        );
+      }
       return const AndroidOverlayResult(
         AndroidOverlayState.started,
         'ظهرت الفقاعة مع إشعار foreground. الإدخال اليدوي متاح، والترجمة فوق نص التطبيقات تتطلب إذن Accessibility وقائمة سماح صريحة.',
@@ -116,6 +145,7 @@ class AndroidOverlayService extends ChangeNotifier {
       );
     }
     try {
+      await _directTranslationChannel.invokeMethod<void>('disableDirectCapture');
       await FlutterOverlayWindow.closeOverlay();
       _setVisible(false);
       return const AndroidOverlayResult(

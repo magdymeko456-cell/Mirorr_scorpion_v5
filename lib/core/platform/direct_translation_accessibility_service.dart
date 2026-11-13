@@ -43,6 +43,11 @@ class DirectTranslationAccessibilityService extends ChangeNotifier {
     await _channel.invokeMethod<void>('setTargetLanguage', code);
   }
 
+  Future<void> enableDirectCapture() async {
+    if (!isSupported) return;
+    await _channel.invokeMethod<void>('enableDirectCapture');
+  }
+
   Future<void> disableDirectCapture() async {
     if (!isSupported) return;
     await _channel.invokeMethod<void>('disableDirectCapture');

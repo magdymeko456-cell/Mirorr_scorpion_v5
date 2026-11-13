@@ -62,12 +62,14 @@ public class MirrorAccessibilityService extends AccessibilityService {
     @Override public void onServiceConnected() {
         super.onServiceConnected();
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
+        getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean("captureEnabled", false).apply();
         refreshAllowedPackages();
         handler.post(pollTranslation);
     }
 
     @Override public void onAccessibilityEvent(AccessibilityEvent event) {
         if (event == null) return;
+        if (!captureEnabled()) { clearTranslationState(); return; }
         final String packageName = event.getPackageName() == null ? "" : event.getPackageName().toString();
         Set<String> allowed = allowedPackages();
         refreshAllowedPackages();
@@ -111,6 +113,11 @@ public class MirrorAccessibilityService extends AccessibilityService {
         Set<String> result = new HashSet<>();
         result.addAll(getSharedPreferences(PREFS, MODE_PRIVATE).getStringSet("allowedPackages", new HashSet<String>()));
         return result;
+    }
+
+    private boolean captureEnabled() {
+        return getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean("captureEnabled", false)
+            && !allowedPackages().isEmpty();
     }
 
     private void refreshAllowedPackages() {
@@ -197,8 +204,8 @@ public class MirrorAccessibilityService extends AccessibilityService {
         }
     }
 
-    @Override public void onInterrupt() { removeTranslation(); }
-    @Override public boolean onUnbind(android.content.Intent intent) { removeTranslation(); handler.removeCallbacksAndMessages(null); return super.onUnbind(intent); }
+    @Override public void onInterrupt() { clearTranslationState(); }
+    @Override public boolean onUnbind(android.content.Intent intent) { getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean("captureEnabled", false).apply(); clearTranslationState(); handler.removeCallbacksAndMessages(null); return super.onUnbind(intent); }
 }
 EOF
 
@@ -252,8 +259,13 @@ class MainActivity : FlutterActivity() {
                     val packages = (call.arguments as? List<*>)?.filterIsInstance<String>()?.toSet() ?: emptySet()
                     prefs.edit().putStringSet("allowedPackages", packages).apply(); result.success(null)
                 }
-                "setTargetLanguage" -> { prefs.edit().putString("targetLanguage", call.arguments as? String ?: "ar").apply(); result.success(null) }
-                "disableDirectCapture" -> { prefs.edit().remove("text").remove("translation").putInt("translationGeneration", 0).apply(); result.success(null) }
+                "setTargetLanguage" -> { prefs.edit().putString("targetLanguage", call.arguments as? String ?: "en").apply(); result.success(null) }
+                "enableDirectCapture" -> {
+                    val packages = prefs.getStringSet("allowedPackages", emptySet<String>()) ?: emptySet()
+                    if (packages.isEmpty()) { result.error("NO_ALLOWLIST", "Choose at least one allowed app first.", null); return@setMethodCallHandler }
+                    prefs.edit().putBoolean("captureEnabled", true).apply(); result.success(null)
+                }
+                "disableDirectCapture" -> { prefs.edit().putBoolean("captureEnabled", false).remove("text").remove("translation").putInt("translationGeneration", 0).apply(); result.success(null) }
                 else -> result.notImplemented()
             }
         }

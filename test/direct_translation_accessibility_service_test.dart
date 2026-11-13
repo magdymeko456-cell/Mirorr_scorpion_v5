@@ -12,5 +12,9 @@ void main() {
     expect(source, contains('BIND_ACCESSIBILITY_SERVICE'));
     expect(source, contains('android:description="@string/mirror_accessibility_description"'));
     expect(source, contains('mirror_scorpion_strings.xml'));
+    expect(source, contains('captureEnabled'));
+    expect(source, contains('enableDirectCapture'));
+    expect(source, contains('putBoolean("captureEnabled", false)'));
+    expect(source, contains('NO_ALLOWLIST'));
   });
 }
