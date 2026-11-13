@@ -101,7 +101,7 @@ class AndroidOverlayService extends ChangeNotifier {
           width: 76,
           alignment: OverlayAlignment.centerRight,
           enableDrag: true,
-          flag: OverlayFlag.defaultFlag,
+          flag: OverlayFlag.focusPointer,
           positionGravity: PositionGravity.auto,
           startPosition: OverlayPosition(0, 156),
           overlayTitle: 'Mirror Scorpion',
@@ -239,15 +239,28 @@ class _MirrorScorpionOverlayScreenState
   }
 
   Future<void> _expand() async {
-    await FlutterOverlayWindow.updateFlag(OverlayFlag.focusPointer);
-    await FlutterOverlayWindow.resizeOverlay(344, 350, false);
+    try {
+      await FlutterOverlayWindow.updateFlag(OverlayFlag.focusPointer);
+    } catch (_) {}
+    try {
+      await FlutterOverlayWindow.resizeOverlay(344, 350, false);
+    } catch (_) {
+      // Keep the Flutter panel usable even if a vendor ROM rejects one
+      // window-layout update. The translation action remains available.
+    }
     if (mounted) setState(() => _expanded = true);
     unawaited(_centerExpandedPanel());
   }
 
   Future<void> _collapse() async {
-    await FlutterOverlayWindow.updateFlag(OverlayFlag.defaultFlag);
-    await FlutterOverlayWindow.resizeOverlay(84, 84, true);
+    try {
+      await FlutterOverlayWindow.updateFlag(OverlayFlag.focusPointer);
+    } catch (_) {}
+    try {
+      await FlutterOverlayWindow.resizeOverlay(84, 84, true);
+    } catch (_) {
+      // State is still collapsed locally; a later resize can recover it.
+    }
     if (mounted) {
       setState(() {
         _expanded = false;
