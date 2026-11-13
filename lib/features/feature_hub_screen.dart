@@ -3971,6 +3971,8 @@ class _BubblePrivacyPageState extends State<_BubblePrivacyPage> with WidgetsBind
   Future<void> _startBubble() async {
     setState(() => _isWorking = true);
     final accessibilityService = context.read<DirectTranslationAccessibilityService>();
+    final overlayService = context.read<AndroidOverlayService>();
+    final deviceLanguage = context.read<LanguagePreferences>().deviceLanguageCode;
     await accessibilityService.refresh();
     if (!accessibilityService.isEnabled || accessibilityService.allowedPackages.isEmpty) {
       if (!mounted) return;
@@ -3980,14 +3982,13 @@ class _BubblePrivacyPageState extends State<_BubblePrivacyPage> with WidgetsBind
       });
       return;
     }
-    final deviceLanguage = context.read<LanguagePreferences>().deviceLanguageCode;
     await accessibilityService.setTargetLanguage(deviceLanguage);
-    final result = await context.read<AndroidOverlayService>().showBubble();
+    final result = await overlayService.showBubble();
     if (result.isStarted) {
       try {
         await accessibilityService.enableDirectCapture();
       } catch (_) {
-        await context.read<AndroidOverlayService>().closeBubble();
+        await overlayService.closeBubble();
         if (!mounted) return;
         setState(() {
           _isWorking = false;

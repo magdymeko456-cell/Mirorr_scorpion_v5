@@ -182,7 +182,7 @@ class LocalLlmModelDownloader {
     } on FormatException catch (error) {
       return LocalLlmDownloadResult.failure(error.message);
     } on IOException catch (error) {
-      return LocalLlmDownloadResult.failure('Local model download failed: ${error.message}');
+      return LocalLlmDownloadResult.failure('Local model download failed: $error');
     } catch (error) {
       return LocalLlmDownloadResult.failure('Local model download failed: $error');
     } finally {
