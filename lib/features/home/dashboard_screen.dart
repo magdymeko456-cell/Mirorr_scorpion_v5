@@ -146,6 +146,14 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     if (!mounted) return;
     setState(() => _changingOverlay = false);
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result.message)));
+    if (enabled && result.state == AndroidOverlayState.permissionDenied && mounted) {
+      await Navigator.push<void>(
+        context,
+        MaterialPageRoute<void>(
+          builder: (_) => const FeatureHubScreen(kind: FeatureKind.settings),
+        ),
+      );
+    }
   }
 
   @override
