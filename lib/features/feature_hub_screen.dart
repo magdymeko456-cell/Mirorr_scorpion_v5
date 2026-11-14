@@ -20,7 +20,7 @@ import '../core/inspiration/inspiration_safety.dart';
 import '../core/documents/local_document_text_service.dart';
 import '../core/documents/translated_document_export_service.dart';
 import '../core/mlkit/on_device_ocr_service.dart';
-import '../core/mlkit/on_device_translation_service.dart
+import '../core/mlkit/on_device_translation_service.dart';
 import '../core/translation/translation_engine.dart';
 import '../core/platform/android_overlay_service.dart';
 import '../core/platform/direct_translation_accessibility_service.dart';

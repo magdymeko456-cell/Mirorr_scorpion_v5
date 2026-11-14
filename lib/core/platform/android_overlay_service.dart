@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 
-import '../mlkit/on_device_translation_service.dart
+import '../mlkit/on_device_translation_service.dart';
 import '../translation/translation_engine.dart';
 
 enum AndroidOverlayState {
