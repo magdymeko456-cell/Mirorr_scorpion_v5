@@ -273,7 +273,15 @@ jobs:
           }
           EOF
       - name: Generate scorpion Android launcher icon
-        run: dart run flutter_launcher_icons
+        run: |
+          dart run flutter_launcher_icons
+          ICON_FILE=$(find android/app/src/main/res -type f \( -name 'ic_launcher.png' -o -name 'ic_launcher.xml' \) -print -quit)
+          test -n "$ICON_FILE" || {
+            echo "Launcher icon generation produced no ic_launcher resource."
+            find android/app/src/main/res -maxdepth 3 -type f | sort
+            exit 1
+          }
+          echo "Launcher icon resource: $ICON_FILE"
       - name: Static analysis
         run: flutter analyze --no-fatal-infos
       - name: Unit and widget tests

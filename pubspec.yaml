@@ -44,7 +44,9 @@ dev_dependencies:
 
 flutter_launcher_icons:
   android: true
-  image_path: assets/images/scorpion_bg.jpeg
+  image_path: assets/images/scorpion_icon.png
+  adaptive_icon_background: "#102840"
+  adaptive_icon_foreground: assets/images/scorpion_icon.png
 
 flutter:
   generate: true

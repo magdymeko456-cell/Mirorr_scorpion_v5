@@ -6,7 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 
-import '../mlkit/on_device_translation_service.dart';
+import '../mlkit/on_device_translation_service.dart
+import '../translation/translation_engine.dart';
 
 enum AndroidOverlayState {
   started,
@@ -215,7 +216,7 @@ class _MirrorScorpionOverlayScreenState
     'mirror_scorpion/overlay_clipboard',
   );
   final _input = TextEditingController();
-  final _translationService = const OnDeviceTranslationService();
+  final _translationService = const MlKitTranslationEngine();
   bool _expanded = false;
   bool _isTranslating = false;
   String? _translatedText;

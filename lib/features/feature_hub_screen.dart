@@ -20,7 +20,8 @@ import '../core/inspiration/inspiration_safety.dart';
 import '../core/documents/local_document_text_service.dart';
 import '../core/documents/translated_document_export_service.dart';
 import '../core/mlkit/on_device_ocr_service.dart';
-import '../core/mlkit/on_device_translation_service.dart';
+import '../core/mlkit/on_device_translation_service.dart
+import '../core/translation/translation_engine.dart';
 import '../core/platform/android_overlay_service.dart';
 import '../core/platform/direct_translation_accessibility_service.dart';
 import '../core/platform/device_capability_service.dart';
@@ -164,7 +165,7 @@ class _TranslationPanel extends StatefulWidget {
 class _TranslationPanelState extends State<_TranslationPanel> {
   final _input = TextEditingController();
   final _output = TextEditingController();
-  final _translationService = const OnDeviceTranslationService();
+  final _translationService = const MlKitTranslationEngine();
   final _speechService = SystemTtsService(storageKey: 'translationpanelstate');
   final _capabilityService = DeviceCapabilityService();
   final _modelInstaller = WhisperModelInstaller();
@@ -986,7 +987,7 @@ class _DialoguePanel extends StatefulWidget {
 class _DialoguePanelState extends State<_DialoguePanel> {
   final _source = TextEditingController();
   final _translated = TextEditingController();
-  final _translationService = const OnDeviceTranslationService();
+  final _translationService = const MlKitTranslationEngine();
   final _speechService = SystemTtsService(storageKey: 'dialoguepanelstate');
   final _dialogueCapture = DialogueVoiceCaptureService();
   final _transcriber = AudioTranscriberService();
@@ -1598,7 +1599,7 @@ class _DocumentsPanelState extends State<_DocumentsPanel> {
   final _picker = ImagePicker();
   final _ocrService = const OnDeviceOcrService();
   final _documentTextService = const LocalDocumentTextService();
-  final _translationService = const OnDeviceTranslationService();
+  final _translationService = const MlKitTranslationEngine();
   final _documentExportService = const TranslatedDocumentExportService();
   bool _isScanning = false;
   bool _isTranslating = false;
@@ -3646,7 +3647,7 @@ class _OfflinePackagesPage extends StatefulWidget {
 class _OfflinePackagesPageState extends State<_OfflinePackagesPage> {
   final _storage = const OfflineContentStorage();
   final _catalogService = GitHubContentCatalogService();
-  final _translationService = const OnDeviceTranslationService();
+  final _translationService = const MlKitTranslationEngine();
   late Future<List<OfflinePackageRecord>> _packages;
   late Future<ContentCatalogLoadResult> _catalog;
   bool _isDownloading = false;
